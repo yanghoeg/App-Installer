@@ -1,15 +1,22 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/home/*)
+pkg update
+pkg upgrade -y
+pkg install thunderbird
 
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sed -i 's/noble/mantic/' $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/etc/apt/sources.list 
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sudo apt update
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sudo aptitude install thunderbird -y
-#proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sed -i 's/mantic/noble/g' $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/etc/apt/sources.list 
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sed -i 's/mantic/noble/' $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/etc/apt/sources.list 
+# Create the desktop entry
+echo "[Desktop Entry]
+Type=Application
+Name=Thunderbird
+GenericName=thunderbird
+Comment=Thunderbird mail
+Exec=thunderbird
+Categories=Office;
+Icon=Thunderbird
+Path=
+Terminal=true
+StartupNotify=false
+" > $HOME/Desktop/thunderbird.desktop
 
-cp $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/usr/share/applications/thunderbird.desktop $PREFIX/share/applications
-sed -i "s/^Exec=\(.*\)$/Exec=proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 \1/"   $PREFIX/share/applications/thunderbird.desktop
-
-chmod +x $PREFIX/share/applications/thunderbird.desktop 
-cp $PREFIX/share/applications/thunderbird.desktop $HOME/Desktop/thunderbird.desktop
+chmod +x $HOME/Desktop/thunderbird.desktop
+cp $HOME/Desktop/thunderbird.desktop $PREFIX/share/applications/thunderbird.desktop
