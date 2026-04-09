@@ -25,7 +25,6 @@ script_dir=$(realpath "$(dirname "$0")")
 # 경로 정의
 # -----------------------------------------------------------------------------
 installed_rootfs_dir="$PREFIX/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home"
-owncloud_desktop="$PREFIX/share/applications/owncloud.desktop"
 tor_desktop="$PREFIX/share/applications/tor.desktop"
 libreoffice_desktop="$PREFIX/share/applications/libreoffice-base.desktop"
 code_desktop="$PREFIX/share/applications/code.desktop"
@@ -51,7 +50,6 @@ _prun() {
 # -----------------------------------------------------------------------------
 check_burpsuite_installed()   { [ -e "$burpsuite_desktop" ]   && echo "Installed" || echo "Not Installed"; }
 check_miniforge_installed()   { [ -d "$miniforge_desktop" ]   && echo "Installed" || echo "Not Installed"; }
-check_owncloud_installed()    { [ -e "$owncloud_desktop" ]    && echo "Installed" || echo "Not Installed"; }
 check_tor_browser_installed() { [ -e "$tor_desktop" ]         && echo "Installed" || echo "Not Installed"; }
 check_libreoffice_installed() { [ -e "$libreoffice_desktop" ] && echo "Installed" || echo "Not Installed"; }
 check_code_installed()        { [ -e "$code_desktop" ]        && echo "Installed" || echo "Not Installed"; }
@@ -69,7 +67,6 @@ check_thorium_installed()     { [ -e "$thorium_desktop" ]     && echo "Installed
 # 설치 함수
 # -----------------------------------------------------------------------------
 install_burpsuite()   { "$script_dir/install_burpsuite.sh";   zenity --info --title="Installation Complete" --text="burpsuite has been installed successfully."; }
-install_owncloud()    { "$script_dir/install_owncloud.sh";    zenity --info --title="Installation Complete" --text="owncloud has been installed successfully."; }
 install_tor_browser() { "$script_dir/install_tor_browser.sh"; zenity --info --title="Installation Complete" --text="Tor Browser has been installed successfully."; }
 install_libreoffice() { "$script_dir/install_libreoffice.sh"; zenity --info --title="Installation Complete" --text="Libreoffice has been installed successfully."; }
 install_code()        { "$script_dir/install_vscode.sh";      zenity --info --title="Installation Complete" --text="Visual Studio Code has been installed successfully."; }
@@ -94,16 +91,6 @@ remove_burpsuite() {
         zenity --info --title="Removal Complete" --text="burpsuite has been removed successfully."
     else
         zenity --error --title="Removal Error" --text="burpsuite is not installed."
-    fi
-}
-
-remove_owncloud() {
-    if [ -e "$owncloud_desktop" ]; then
-        _prun sudo -S apt remove owncloud
-        rm -f "$HOME/Desktop/owncloud.desktop" "$owncloud_desktop"
-        zenity --info --title="Removal Complete" --text="owncloud has been removed successfully."
-    else
-        zenity --error --title="Removal Error" --text="owncloud is not installed."
     fi
 }
 
@@ -184,7 +171,7 @@ remove_nautilus() {
 
 remove_thunderbird() {
     if [ -e "$thunderbird_desktop" ]; then
-        apt purge thunderbird -y
+        pkg uninstall -y thunderbird
         rm -f "$HOME/Desktop/thunderbird.desktop" "$thunderbird_desktop"
         zenity --info --title="Removal Complete" --text="thunderbird has been removed successfully."
     else
@@ -262,7 +249,6 @@ export GTK_THEME=Adwaita:dark
 while true; do
     burpsuite_status=$(check_burpsuite_installed)
     miniforge_status=$(check_miniforge_installed)
-    owncloud_status=$(check_owncloud_installed)
     tor_browser_status=$(check_tor_browser_installed)
     libreoffice_status=$(check_libreoffice_installed)
     code_status=$(check_code_installed)
@@ -287,7 +273,6 @@ while true; do
 
     burpsuite_row=$(_action   "burpsuite"           "$burpsuite_status"   "A web hack application")
     miniforge_row=$(_action   "miniforge"            "$miniforge_status"   "miniforge3")
-    owncloud_row=$(_action    "owncloud"             "$owncloud_status"    "A cloud storage client")
     tor_row=$(_action         "Tor Browser"          "$tor_browser_status" "A web browser for anonymous browsing")
     libreoffice_row=$(_action "Libreoffice"          "$libreoffice_status" "A free office productivity suite")
     code_row=$(_action        "Visual Studio Code"   "$code_status"        "Code Editing. Redefined.")
@@ -309,7 +294,6 @@ while true; do
         --column="Select" --column="Action" --column="Description" \
         $(_row "$burpsuite_row") \
         $(_row "$miniforge_row") \
-        $(_row "$owncloud_row") \
         $(_row "$tor_row") \
         $(_row "$libreoffice_row") \
         $(_row "$code_row") \
@@ -331,8 +315,6 @@ while true; do
             [ "$burpsuite_status" = "Installed" ] && remove_burpsuite || install_burpsuite ;;
         "${miniforge_row%%|*}")
             [ "$miniforge_status" = "Installed" ] && remove_miniforge || install_miniforge ;;
-        "${owncloud_row%%|*}")
-            [ "$owncloud_status" = "Installed" ] && remove_owncloud || install_owncloud ;;
         "${tor_row%%|*}")
             [ "$tor_browser_status" = "Installed" ] && remove_tor_browser || install_tor_browser ;;
         "${libreoffice_row%%|*}")
