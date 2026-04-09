@@ -79,7 +79,7 @@ install_notion()      { "$script_dir/install_notion.sh";      zenity --info --ti
 install_nautilus()    { "$script_dir/install_nautilus.sh";    zenity --info --title="Installation Complete" --text="nautilus has been installed successfully."; }
 install_thunderbird() { "$script_dir/install_thunderbird.sh"; zenity --info --title="Installation Complete" --text="thunderbird has been installed successfully."; }
 install_sasm()        { "$script_dir/install_sasm.sh";        zenity --info --title="Installation Complete" --text="sasm has been installed successfully."; }
-install_wine()        { "$script_dir/install_wine.sh";        zenity --info --title="Installation Complete" --text="hangover-wine has been installed successfully."; }
+install_wine()        { "$script_dir/install_wine.sh";        zenity --info --title="설치 완료" --text="Wine (Box64 + Wine-Staging) 설치가 완료되었습니다."; }
 install_onepassword() { "$script_dir/install_1password.sh" --install; zenity --info --title="Installation Complete" --text="1password has been installed successfully."; }
 install_dbeaver()     { "$script_dir/install_dbeaver.sh" --install;   zenity --info --title="Installation Complete" --text="dbeaver has been installed successfully."; }
 install_thorium()     { "$script_dir/install_thorium.sh" --install;   zenity --info --title="Installation Complete" --text="Thorium has been installed successfully."; }
@@ -204,9 +204,23 @@ remove_sasm() {
 
 remove_wine() {
     if [ -e "$wine_desktop" ]; then
-        zenity --info --title="Removal Complete" --text="hangover-wine has been removed successfully."
+        if [ -n "${PROOT_DISTRO:-}" ] && [ -d "$PREFIX/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}" ]; then
+            _prun sudo bash -c "
+                rm -rf /opt/wine-staging
+                for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
+                    rm -f /usr/local/bin/\$bin
+                done
+                apt remove -y box64 2>/dev/null || true
+            " 2>/dev/null || true
+        else
+            rm -rf "$HOME/.wine-staging"
+        fi
+        rm -f "$wine_desktop" \
+              "$PREFIX/share/applications/winecfg.desktop" \
+              "$PREFIX/bin/wine"
+        zenity --info --title="제거 완료" --text="Wine이 제거되었습니다."
     else
-        zenity --error --title="Removal Error" --text="hangover-wine is not installed."
+        zenity --error --title="오류" --text="Wine이 설치되지 않았습니다."
     fi
 }
 
@@ -282,7 +296,7 @@ while true; do
     nautilus_row=$(_action    "nautilus"             "$nautilus_status"    "A Linux file manager")
     thunderbird_row=$(_action "thunderbird"          "$thunderbird_status" "A mail client")
     sasm_row=$(_action        "sasm"                 "$sasm_status"        "Simple assembler IDE")
-    wine_row=$(_action        "hangover-wine"        "$wine_status"        "Run x86_64 Linux/Windows programs")
+    wine_row=$(_action        "Wine (Box64+Staging)"  "$wine_status"        "Windows 앱 실행 (Box64 + Wine-Staging)")
     onepassword_row=$(_action "1password"            "$onepassword_status" "Go ahead. Forget your passwords.")
     dbeaver_row=$(_action     "Dbeaver"              "$dbeaver_status"     "Universal database client")
     thorium_row=$(_action     "Thorium"              "$thorium_status"     "The fastest browser on Earth")
