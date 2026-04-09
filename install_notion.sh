@@ -1,28 +1,35 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# Notion — proot 내부 AppImage
 
-varname=$(basename $HOME/../usr/var/lib/proot-distro/installed-rootfs/ubuntu/home/*)
+set -euo pipefail
 
-#Install Obsidian
+CONFIG="$HOME/.config/termux-xfce/config"
+[ -f "$CONFIG" ] && source "$CONFIG"
+PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+PROOT_USER="${PROOT_USER:-$(basename "$PREFIX/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* 2>/dev/null || echo "user")}"
 
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 sudo -S apt install zlib1g-dev -y
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 wget https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 chmod +x Notion-2.0.18-1-arm64.AppImage
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 ./Notion-2.0.18-1-arm64.AppImage --appimage-extract
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 mv squashfs-root notion
-proot-distro login --user $varname ubuntu --shared-tmp -- env DISPLAY=:1.0 rm Notion-2.0.18-1-arm64.AppImage
+_prun() { proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- env DISPLAY=:1.0 "$@"; }
 
-#Create Desktop Launcher
+_prun sudo apt install -y zlib1g-dev
+_prun wget https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage
+_prun chmod +x Notion-2.0.18-1-arm64.AppImage
+_prun ./Notion-2.0.18-1-arm64.AppImage --appimage-extract
+_prun mv squashfs-root notion
+_prun rm -f Notion-2.0.18-1-arm64.AppImage
 
-echo "[Desktop Entry]
+mkdir -p "$HOME/Desktop" "${PREFIX}/share/applications"
+
+cat > "$HOME/Desktop/notion.desktop" << EOF
+[Desktop Entry]
 Version=1.0
 Name=Notion
-Exec=proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe notion/./notion-app --no-sandbox
+Exec=proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe notion/./notion-app --no-sandbox
 StartupNotify=true
 Terminal=false
 Icon=notion
 Type=Application
 Categories=Office;
-" > $HOME/Desktop/notion.desktop
+EOF
 
-chmod +x $HOME/Desktop/notion.desktop
-cp $HOME/Desktop/notion.desktop $HOME/../usr/share/applications/notion.desktop 
+chmod +x "$HOME/Desktop/notion.desktop"
+cp "$HOME/Desktop/notion.desktop" "${PREFIX}/share/applications/notion.desktop"

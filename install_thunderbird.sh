@@ -1,18 +1,25 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# Thunderbird — Termux native 패키지 (proot 불필요)
 
-pkg update && pkg upgrade -y
-pkg install thunderbird -y
+set -euo pipefail
 
-echo "[Desktop Entry]
+pkg install -y thunderbird
+
+mkdir -p "$HOME/Desktop" "${PREFIX}/share/applications"
+
+cat > "$HOME/Desktop/thunderbird.desktop" << 'EOF'
+[Desktop Entry]
 Version=1.0
-Name=thunderbird
-Comment=thunderbird
-Exec=thunderbird
-StartupNotify=false
-Terminal=true
+Name=Thunderbird
+Comment=Email, news, RSS and more
+Exec=thunderbird %u
 Icon=thunderbird
+Terminal=false
 Type=Application
-Categories=Office;
-" > $HOME/Desktop/thunderbird.desktop
+Categories=Network;Email;News;
+MimeType=message/rfc822;x-scheme-handler/mailto;
+StartupNotify=true
+EOF
 
-chmod +x $HOME/Desktop/thunderbird.desktop 
+chmod +x "$HOME/Desktop/thunderbird.desktop"
+cp "$HOME/Desktop/thunderbird.desktop" "${PREFIX}/share/applications/thunderbird.desktop"

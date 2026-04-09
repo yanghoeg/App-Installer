@@ -1,88 +1,58 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# Thorium Browser — proot 내부 deb 설치
 
-#This script installs aarch64 .tar.xz or .tar.gz into ubuntu proot /opt directory and creates a desktop and menu launcher
+set -euo pipefail
 
-# Default values to edit
-#Enter URL to appimage
-url="https://github.com/Alex313031/Thorium-Raspi/releases/download/M124.0.6367.218/thorium-browser_124.0.6367.218_arm64.deb"
-#Enter name of app
+CONFIG="$HOME/.config/termux-xfce/config"
+[ -f "$CONFIG" ] && source "$CONFIG"
+PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+PROOT_USER="${PROOT_USER:-$(basename "$PREFIX/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* 2>/dev/null || echo "user")}"
+
 appname="thorium-browser"
-#Enter path to icon or system icon name
-#/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/ubuntu
-icon_path="thorium-browser"
-#Enter Categories for .desktop
-category="Network;"
-#Enter any dependencies
-depends=""
+url="https://github.com/Alex313031/Thorium-Raspi/releases/download/M124.0.6367.218/thorium-browser_124.0.6367.218_arm64.deb"
+deb="${url##*/}"
 
-#Do not edit below here unless required
-# Process command line arguments
+_prun() { proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- env DISPLAY=:1.0 "$@"; }
+
+# 인자 처리
+install_flag=false; uninstall_flag=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --install)
-            install=true
-            shift
-            ;;
-        --uninstall)
-            uninstall=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
+        --install)   install_flag=true;   shift ;;
+        --uninstall) uninstall_flag=true; shift ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
 
-if [ "$install" = true ]; then
-    download="wget $url"
-    install="prun sudo apt install -y "
+if [ "$install_flag" = true ]; then
+    _prun wget "$url" -O "$deb"
+    _prun sudo apt install -y "./$deb"
+    _prun rm -f "$deb"
 
-    varname=$(basename $HOME/../usr/var/lib/proot-distro/installed-rootfs/ubuntu/home/*)
-    prun="proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 $@"
+    mkdir -p "$HOME/Desktop" "${PREFIX}/share/applications"
+    desktop_file="$HOME/Desktop/${appname}.desktop"
 
-    $prun $download
-    $install $depends
-    $install ./${url##*/}
-    $prun rm ${url##*/}
-
-    installed_dir="$HOME/../usr/var/lib/proot-distro/installed-rootfs/ubuntu/$dir"
-    desktop_file="$HOME/Desktop/$appname.desktop"
-    binary=$(find "$installed_dir" -type f -executable -print -quit)
-
-    #If binary is different, specify it here after $installed_dir/ and use $alt_binary instead of $binary
-    alt_binary="$installed_dir/"
-
-    #If binary is sandboxed use $sandboxed at end of Exec command
-    sandboxed="--no-sandbox"
-
-#NOTE: Do not remove prun from Exec command
-cat > "$desktop_file" <<EOL
+    cat > "$desktop_file" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Thorium
-Comment=Thorium
-Exec=prun $appname $sandboxed
-Icon=$icon_path
-Categories=$category
+Comment=The fastest browser on Earth
+Exec=prun ${appname} --no-sandbox
+Icon=${appname}
+Categories=Network;
 Terminal=false
-EOL
+EOF
 
-chmod +x "$desktop_file"
-cp "$desktop_file" $HOME/../usr/share/applications
-echo "Installation completed."
+    chmod +x "$desktop_file"
+    cp "$desktop_file" "${PREFIX}/share/applications/${appname}.desktop"
+    echo "Installation completed."
 
-elif [ "$uninstall" = true ]; then
-    echo "Uninstalling..."
-    uninstall="prun sudo apt remove"
-    $uninstall $appname -y
-    desktop_file="$HOME/Desktop/$appname.desktop"
-    rm "$desktop_file"
-    rm "$HOME/../usr/share/applications/$appname.desktop"
-
+elif [ "$uninstall_flag" = true ]; then
+    _prun sudo apt remove -y "$appname"
+    rm -f "$HOME/Desktop/${appname}.desktop" "${PREFIX}/share/applications/${appname}.desktop"
     echo "Uninstallation completed."
 else
-    echo "No valid option provided. Use --install or --uninstall."
+    echo "No valid option provided. Use --install or --uninstall." >&2
     exit 1
 fi

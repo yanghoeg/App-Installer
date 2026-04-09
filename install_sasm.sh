@@ -1,27 +1,50 @@
 #!/data/data/com.termux/files/usr/bin/bash
-varname=$(basename $HOME/../usr/var/lib/proot-distro/installed-rootfs/ubuntu/home/*)
+# SASM — proot 내부 어셈블러 IDE
+# 주의: sasm은 Ubuntu 특정 codename repo 의존 — noble 이상은 mantic 폴백 사용
 
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sed -i 's/noble/mantic/' $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/etc/apt/sources.list 
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sudo apt update
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sudo aptitude install sasm
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 bash -c "echo \"alias sasm='QT_SCALE_FACTOR=2 sasm'\" >> $PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu/home/$varname/.bashrc"
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 curl -LO https://answers.launchpad.net/ubuntu/+source/sasm/3.14.0+ds-1/+build/26331457/+files/sasm-dbgsym_3.14.0+ds-1_arm64.ddeb
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 sudo dpkg -i sasm-dbgsym_3.14.0+ds-1_arm64.ddeb
-proot-distro login ubuntu --user $varname --shared-tmp -- env DISPLAY=:1.0 rm sasm-dbgsym_3.14.0+ds-1_arm64.ddeb
+set -euo pipefail
 
-# Create the desktop entry
-echo "[Desktop Entry]
+CONFIG="$HOME/.config/termux-xfce/config"
+[ -f "$CONFIG" ] && source "$CONFIG"
+PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+PROOT_USER="${PROOT_USER:-$(basename "$PREFIX/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* 2>/dev/null || echo "user")}"
+
+_prun() { proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- env DISPLAY=:1.0 "$@"; }
+
+ROOTFS="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+SOURCES_LIST="${ROOTFS}/etc/apt/sources.list"
+
+# sources.list codename 교체 (noble → mantic 폴백, 백업 후 수정)
+if [ -f "$SOURCES_LIST" ]; then
+    cp "${SOURCES_LIST}" "${SOURCES_LIST}.bak"
+    sed -i 's/noble/mantic/g' "$SOURCES_LIST"
+fi
+
+_prun sudo apt update
+_prun sudo apt install -y sasm
+
+# alias 추가 (중복 방지)
+local bashrc="${ROOTFS}/home/${PROOT_USER}/.bashrc"
+grep -q "alias sasm=" "$bashrc" 2>/dev/null || \
+    echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
+
+# sources.list 복원
+[ -f "${SOURCES_LIST}.bak" ] && mv "${SOURCES_LIST}.bak" "$SOURCES_LIST"
+
+mkdir -p "$HOME/Desktop" "${PREFIX}/share/applications"
+
+cat > "$HOME/Desktop/sasm.desktop" << 'EOF'
+[Desktop Entry]
 Type=Application
-Name=sasm
-GenericName=sasm
-Comment=sasm
+Name=SASM
+GenericName=Simple assembler IDE
+Comment=Simple crossplatform IDE for NASM, MASM, GAS, FASM
 Exec=prun QT_SCALE_FACTOR=2 sasm
 Categories=Development;
-Icon=naver-whale
-Path=
+Icon=sasm
 Terminal=false
 StartupNotify=false
-" > $HOME/Desktop/sasm.desktop
+EOF
 
-chmod +x $HOME/Desktop/sasm.desktop
-cp $HOME/Desktop/sasm.desktop $PREFIX/share/applications/sasm.desktop
+chmod +x "$HOME/Desktop/sasm.desktop"
+cp "$HOME/Desktop/sasm.desktop" "${PREFIX}/share/applications/sasm.desktop"
