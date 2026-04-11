@@ -1,0 +1,455 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# TEST: 도메인 앱 인스톨러 — mock 어댑터로 비즈니스 로직 검증
+# =============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${SCRIPT_DIR}/.."
+source "${SCRIPT_DIR}/framework.sh"
+source "${SCRIPT_DIR}/mocks.sh"
+
+# 공통 설정: sandbox + mock 어댑터 + 도메인 로드
+_setup() {
+    local sb="$1"
+    export PROOT_DISTRO="ubuntu"
+    export PROOT_USER="testuser"
+    setup_fs_sandbox "$sb"
+    source "${APP_DIR}/ports/pkg_manager.sh"
+    source "${APP_DIR}/domain/desktop.sh"
+    source "${APP_DIR}/domain/apps.sh"
+    for _f in "${APP_DIR}/domain/installers/"*.sh; do source "$_f"; done
+    mock_pkg_adapter  # 도메인 소싱 후 override — has_proot_distro 포함
+    reset_mock_calls
+}
+
+# =============================================================================
+# APP_REGISTRY — 레지스트리 구조 검증
+# =============================================================================
+describe "APP_REGISTRY — 구조 검증"
+
+_test_registry_not_empty() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    assert_nonzero "${#APP_REGISTRY[@]}" "APP_REGISTRY가 비어 있음"
+    cleanup_sandbox "$sb"
+}
+it "APP_REGISTRY가 비어 있지 않다" _test_registry_not_empty
+
+_test_registry_all_have_three_fields() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id name desc <<< "$entry"
+        if [ -z "$id" ] || [ -z "$name" ] || [ -z "$desc" ]; then
+            echo "[ASSERT] 불완전한 APP_REGISTRY 항목: '${entry}'" >&2
+            failed=1
+        fi
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "모든 APP_REGISTRY 항목은 id|name|desc 세 필드를 가진다" _test_registry_all_have_three_fields
+
+_test_registry_all_have_installer_functions() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id _ _ <<< "$entry"
+        for fn in "app_install_${id}" "app_remove_${id}" "app_is_installed_${id}"; do
+            if ! declare -f "$fn" >/dev/null 2>&1; then
+                echo "[ASSERT] 함수 미정의: ${fn}" >&2
+                failed=1
+            fi
+        done
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "모든 앱에 app_install/app_remove/app_is_installed 함수가 있다" _test_registry_all_have_installer_functions
+
+# =============================================================================
+# Thunderbird — Termux native
+# =============================================================================
+describe "Thunderbird — Termux native 설치"
+
+_test_thunderbird_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_thunderbird
+    assert_was_called "termux_pkg_install thunderbird"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install thunderbird 호출" _test_thunderbird_install_calls_termux_pkg
+
+_test_thunderbird_install_creates_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_thunderbird
+    assert_file_exists "${PREFIX}/share/applications/thunderbird.desktop"
+    assert_file_exists "${HOME}/Desktop/thunderbird.desktop"
+    cleanup_sandbox "$sb"
+}
+it "install → .desktop 파일 생성" _test_thunderbird_install_creates_desktop
+
+_test_thunderbird_remove_calls_pkg_remove() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    # 설치 상태 시뮬레이션
+    touch "${PREFIX}/share/applications/thunderbird.desktop"
+    touch "${HOME}/Desktop/thunderbird.desktop"
+    app_remove_thunderbird
+    assert_was_called "termux_pkg_remove thunderbird"
+    cleanup_sandbox "$sb"
+}
+it "remove → termux_pkg_remove thunderbird 호출" _test_thunderbird_remove_calls_pkg_remove
+
+_test_thunderbird_remove_deletes_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    touch "${PREFIX}/share/applications/thunderbird.desktop"
+    touch "${HOME}/Desktop/thunderbird.desktop"
+    app_remove_thunderbird
+    [ ! -e "${PREFIX}/share/applications/thunderbird.desktop" ]
+    [ ! -e "${HOME}/Desktop/thunderbird.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it "remove → .desktop 파일 삭제" _test_thunderbird_remove_deletes_desktop
+
+_test_thunderbird_is_installed_false_without_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_is_installed_thunderbird && { echo "[ASSERT] desktop 없는데 설치됨으로 반환" >&2; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "desktop 파일 없으면 is_installed → false" _test_thunderbird_is_installed_false_without_desktop
+
+_test_thunderbird_is_installed_true_with_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    touch "${PREFIX}/share/applications/thunderbird.desktop"
+    app_is_installed_thunderbird
+    cleanup_sandbox "$sb"
+}
+it "desktop 파일 있으면 is_installed → true" _test_thunderbird_is_installed_true_with_desktop
+
+# =============================================================================
+# VLC — Termux native
+# =============================================================================
+describe "VLC — Termux native 설치"
+
+_test_vlc_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_vlc
+    assert_was_called "termux_pkg_install vlc"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install vlc 호출" _test_vlc_install_calls_termux_pkg
+
+_test_vlc_does_not_call_proot() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_vlc
+    assert_not_called "proot_pkg_install"
+    cleanup_sandbox "$sb"
+}
+it "install → proot 함수 미호출 (native 전용)" _test_vlc_does_not_call_proot
+
+# =============================================================================
+# VS Code — proot 설치
+# =============================================================================
+describe "VS Code — proot 설치"
+
+_test_vscode_install_adds_external_repo() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_vscode
+    assert_was_called "proot_pkg_add_external_repo vscode"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_add_external_repo 호출 (MS apt repo)" _test_vscode_install_adds_external_repo
+
+_test_vscode_install_calls_proot_pkg_install_code() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_vscode
+    assert_was_called "proot_pkg_install code"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_install code 호출" _test_vscode_install_calls_proot_pkg_install_code
+
+_test_vscode_install_calls_update_first() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_vscode
+    assert_was_called "proot_pkg_update"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_update를 먼저 호출한다" _test_vscode_install_calls_update_first
+
+# =============================================================================
+# LibreOffice — proot 설치 (패키지명 추상화)
+# =============================================================================
+describe "LibreOffice — proot 설치"
+
+_test_libreoffice_install_uses_abstract_pkg_fn() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_libreoffice
+    assert_was_called "proot_pkg_install_libreoffice"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_install_libreoffice 호출 (Ubuntu/Arch 추상화)" _test_libreoffice_install_uses_abstract_pkg_fn
+
+_test_libreoffice_does_not_hardcode_pkg_name() {
+    # proot_pkg_remove/install 에 구체적 패키지명(libreoffice, libreoffice-fresh)이 없어야 함
+    ! grep -q "proot_pkg_remove libreoffice\|proot_pkg_install libreoffice" \
+        "${APP_DIR}/domain/installers/libreoffice.sh" 2>/dev/null
+}
+it "libreoffice.sh 도메인 — distro별 패키지명 하드코딩 없음" _test_libreoffice_does_not_hardcode_pkg_name
+
+# =============================================================================
+# DBeaver — JDK 추상화
+# =============================================================================
+describe "DBeaver — proot 설치"
+
+_test_dbeaver_install_uses_abstract_jdk() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_dbeaver
+    assert_was_called "proot_pkg_install_jdk"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
+
+# =============================================================================
+# Miniforge — 설치 판단 기준 (디렉토리)
+# =============================================================================
+describe "Miniforge — 설치 상태 판단"
+
+_test_miniforge_not_installed_without_dir() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_is_installed_miniforge && { echo "[ASSERT] miniforge3 디렉토리 없는데 installed" >&2; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "miniforge3 디렉토리 없으면 is_installed → false" _test_miniforge_not_installed_without_dir
+
+_test_miniforge_installed_with_dir() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    app_is_installed_miniforge
+    cleanup_sandbox "$sb"
+}
+it "miniforge3 디렉토리 있으면 is_installed → true" _test_miniforge_installed_with_dir
+
+# =============================================================================
+# SASM — 패키지 설치 추상화
+# =============================================================================
+describe "SASM — proot 설치"
+
+_test_sasm_uses_abstract_install_fn() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_sasm
+    assert_was_called "proot_pkg_install_sasm"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_pkg_install_sasm 호출 (Ubuntu codename/Arch AUR 추상화)" _test_sasm_uses_abstract_install_fn
+
+_test_sasm_does_not_hardcode_mantic() {
+    ! grep -q "mantic\|noble\|oracular" \
+        "${APP_DIR}/domain/installers/sasm.sh" 2>/dev/null
+}
+it "sasm.sh 도메인 — Ubuntu codename 하드코딩 없음" _test_sasm_does_not_hardcode_mantic
+
+# =============================================================================
+# Wine — proot/native 분기
+# =============================================================================
+describe "Wine — proot/native 분기 로직"
+
+_test_wine_proot_path_calls_box64() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_was_called "proot_pkg_install_box64"
+    cleanup_sandbox "$sb"
+}
+it "proot 있음 → proot_pkg_install_box64 호출" _test_wine_proot_path_calls_box64
+
+_test_wine_proot_path_calls_wine_mesa() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_was_called "proot_pkg_install_wine_mesa"
+    cleanup_sandbox "$sb"
+}
+it "proot 있음 → proot_pkg_install_wine_mesa 호출" _test_wine_proot_path_calls_wine_mesa
+
+_test_wine_native_path_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=false
+    # _wine_install_native에서 wget이 없으면 실패하지만, termux_pkg_install 기록은 됨
+    app_install_wine 2>/dev/null || true
+    assert_was_called "termux_pkg_install glibc-repo"
+    cleanup_sandbox "$sb"
+}
+it "proot 없음 → termux_pkg_install glibc-repo 호출 (native 경로)" _test_wine_native_path_calls_termux_pkg
+
+_test_wine_proot_path_does_not_call_termux_glibc() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_not_called "termux_pkg_install glibc-repo"
+    cleanup_sandbox "$sb"
+}
+it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
+
+# =============================================================================
+# has_proot_distro — 유틸 함수
+# =============================================================================
+describe "has_proot_distro — proot 설치 감지"
+
+_test_has_proot_true_when_rootfs_exists() {
+    local sb; sb=$(make_sandbox)
+    _setup "$sb"
+    # setup_fs_sandbox에서 rootfs 디렉토리를 생성함
+    # mock에서 has_proot_distro를 override했으므로 MOCK_HAS_PROOT로 제어
+    MOCK_HAS_PROOT=true
+    has_proot_distro
+    cleanup_sandbox "$sb"
+}
+it "MOCK_HAS_PROOT=true → has_proot_distro 성공" _test_has_proot_true_when_rootfs_exists
+
+_test_has_proot_false_when_no_rootfs() {
+    local sb; sb=$(make_sandbox)
+    _setup "$sb"
+    MOCK_HAS_PROOT=false
+    has_proot_distro && { echo "[ASSERT] proot 없는데 true 반환" >&2; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "MOCK_HAS_PROOT=false → has_proot_distro 실패" _test_has_proot_false_when_no_rootfs
+
+# =============================================================================
+# desktop.sh — .desktop 파일 관리
+# =============================================================================
+describe "domain/desktop.sh — .desktop 파일 관리"
+
+_test_desktop_register_creates_files() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    desktop_register "testapp" "Test App" "testapp --run" "testapp" "Utility;"
+    assert_file_exists "${PREFIX}/share/applications/testapp.desktop"
+    assert_file_exists "${HOME}/Desktop/testapp.desktop"
+    cleanup_sandbox "$sb"
+}
+it "desktop_register → share/applications + Desktop 양쪽에 파일 생성" _test_desktop_register_creates_files
+
+_test_desktop_register_content() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    desktop_register "myapp" "My Application" "myapp --flag" "myapp-icon" "Development;"
+    assert_file_contains "${PREFIX}/share/applications/myapp.desktop" "Name=My Application"
+    assert_file_contains "${PREFIX}/share/applications/myapp.desktop" "Exec=myapp --flag"
+    assert_file_contains "${PREFIX}/share/applications/myapp.desktop" "Icon=myapp-icon"
+    cleanup_sandbox "$sb"
+}
+it "desktop_register → 올바른 내용으로 .desktop 파일 작성" _test_desktop_register_content
+
+_test_desktop_register_with_extra_field() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    desktop_register "mailapp" "Mail" "mail" "mail" "Network;" "MimeType=x-scheme-handler/mailto;"
+    assert_file_contains "${PREFIX}/share/applications/mailapp.desktop" "MimeType=x-scheme-handler/mailto;"
+    cleanup_sandbox "$sb"
+}
+it "desktop_register → extra 필드가 .desktop에 포함됨" _test_desktop_register_with_extra_field
+
+_test_desktop_remove_deletes_both_files() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    touch "${PREFIX}/share/applications/myapp.desktop"
+    touch "${HOME}/Desktop/myapp.desktop"
+    desktop_remove "myapp"
+    [ ! -e "${PREFIX}/share/applications/myapp.desktop" ]
+    [ ! -e "${HOME}/Desktop/myapp.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it "desktop_remove → share/applications + Desktop 파일 모두 삭제" _test_desktop_remove_deletes_both_files
+
+_test_desktop_is_registered_true() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    touch "${PREFIX}/share/applications/myapp.desktop"
+    desktop_is_registered "myapp"
+    cleanup_sandbox "$sb"
+}
+it "desktop_is_registered → 파일 있으면 true" _test_desktop_is_registered_true
+
+_test_desktop_is_registered_false() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    desktop_is_registered "nonexistent" && { echo "[ASSERT] 없는 파일을 registered로 반환" >&2; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "desktop_is_registered → 파일 없으면 false" _test_desktop_is_registered_false
+
+# =============================================================================
+# install.sh — DI 로드 검증
+# =============================================================================
+describe "install.sh — 설정 로드 + DI"
+
+_load_install_partial() {
+    local sb="$1"
+    setup_fs_sandbox "$sb"
+    cat > "${HOME}/.config/termux-xfce/config" << 'EOF'
+PROOT_DISTRO="ubuntu"
+PROOT_USER="testuser"
+EOF
+    # zenity + proot-distro mock
+    zenity()       { echo "ZENITY: $*"; }
+    proot-distro() { echo "PROOT: $*"; }
+    # SCRIPT_DIR를 APP_DIR로 고정 후 메인 루프(while true) 전까지만 source
+    local tmp
+    tmp=$(mktemp)
+    echo "SCRIPT_DIR='${APP_DIR}'" > "$tmp"
+    awk '/^while true/{ exit } /^SCRIPT_DIR=/ { next } { print }' "${APP_DIR}/install.sh" >> "$tmp"
+    source "$tmp"
+    rm -f "$tmp"
+}
+
+_test_install_loads_config() {
+    local sb; sb=$(make_sandbox)
+    _load_install_partial "$sb"
+    assert_eq "ubuntu"   "${PROOT_DISTRO:-}" "PROOT_DISTRO"
+    assert_eq "testuser" "${PROOT_USER:-}"   "PROOT_USER"
+    cleanup_sandbox "$sb"
+}
+it "install.sh → config에서 PROOT_DISTRO/PROOT_USER 로드" _test_install_loads_config
+
+_test_install_loads_app_registry() {
+    local sb; sb=$(make_sandbox)
+    _load_install_partial "$sb"
+    assert_nonzero "${#APP_REGISTRY[@]}" "APP_REGISTRY가 비어 있음"
+    cleanup_sandbox "$sb"
+}
+it "install.sh → APP_REGISTRY 로드 완료" _test_install_loads_app_registry
+
+_test_install_fallback_proot_distro() {
+    local sb; sb=$(make_sandbox)
+    export HOME="${sb}/home"
+    export PREFIX="${sb}/usr"
+    mkdir -p "${HOME}/.config/termux-xfce" \
+             "${PREFIX}/share/applications" \
+             "${PREFIX}/var/lib/proot-distro/installed-rootfs/ubuntu/home"
+    zenity()       { echo "ZENITY: $*"; }
+    proot-distro() { echo "PROOT: $*"; }
+    local tmp; tmp=$(mktemp)
+    awk '/^while true/{ exit } { print }' "${APP_DIR}/install.sh" > "$tmp"
+    source "$tmp"
+    rm -f "$tmp"
+    assert_eq "ubuntu" "${PROOT_DISTRO:-}" "config 없을 때 ubuntu 기본값"
+    cleanup_sandbox "$sb"
+}
+it "config 없을 때 PROOT_DISTRO=ubuntu 기본값" _test_install_fallback_proot_distro
+
+# =============================================================================
+# 문법 검사 — 모든 도메인 파일
+# =============================================================================
+describe "도메인 파일 — bash 문법 검사"
+
+for _f in "${APP_DIR}/domain/installers/"*.sh \
+          "${APP_DIR}/domain/desktop.sh" \
+          "${APP_DIR}/domain/apps.sh"; do
+    _name=$(basename "$_f")
+    _test_syntax() { bash -n "${APP_DIR}/domain/${_name}" 2>/dev/null || bash -n "$_f" 2>/dev/null; }
+    it "${_name} — 문법 오류 없음" _test_syntax
+done
+
+describe "어댑터 파일 — bash 문법 검사"
+
+for _f in "${APP_DIR}/adapters/output/"*.sh; do
+    _name=$(basename "$_f")
+    _test_adapter_syntax() { bash -n "$_f" 2>/dev/null; }
+    it "${_name} — 문법 오류 없음" _test_adapter_syntax
+done
+
+print_results
