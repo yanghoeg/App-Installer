@@ -50,16 +50,29 @@ proot_pkg_install_sasm() {
     local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
     local sources="${rootfs}/etc/apt/sources.list"
 
-    # noble 이상은 sasm 미지원 → mantic 폴백
-    if [ -f "$sources" ]; then
-        cp "$sources" "${sources}.bak"
-        sed -i 's/noble/mantic/g; s/oracular/mantic/g; s/plucky/mantic/g' "$sources"
+    # universe repo 활성화 후 현재 버전에서 먼저 시도
+    proot_exec sudo bash -c "
+        apt-get install -y software-properties-common 2>/dev/null || true
+        add-apt-repository universe -y 2>/dev/null || true
+        apt-get update
+    "
+    if proot_exec sudo apt-get install -y sasm 2>/dev/null; then
+        return 0
     fi
 
-    proot_pkg_update
-    proot_pkg_install sasm
+    # 실패 시 jammy(22.04 LTS) 폴백 — mantic(23.10)은 EOL
+    echo "[WARN] 현재 버전에서 sasm 미지원, jammy(22.04) 폴백 시도" >&2
+    if [ -f "$sources" ]; then
+        cp "$sources" "${sources}.bak"
+        sed -i 's/noble/jammy/g; s/oracular/jammy/g; s/plucky/jammy/g; s/mantic/jammy/g' "$sources"
+    fi
+
+    proot_exec sudo apt update
+    proot_exec sudo apt-get install -y sasm || \
+        echo "[WARN] SASM 설치 실패 — arm64 바이너리 미지원 가능성 있음" >&2
 
     [ -f "${sources}.bak" ] && mv "${sources}.bak" "$sources"
+    proot_exec sudo apt update
 }
 
 proot_pkg_install_box64() {

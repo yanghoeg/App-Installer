@@ -14,7 +14,7 @@ app_install_notion() {
     "
 
     desktop_register "notion" "Notion" \
-        "proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe notion/./notion-app --no-sandbox" \
+        "proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink notion/./notion-app --no-sandbox" \
         "notion" "Office;"
 }
 

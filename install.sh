@@ -14,8 +14,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # -----------------------------------------------------------------------------
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
-    [ -f "$config" ] && source "$config"
-    PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+    if [ -f "$config" ]; then
+        source "$config"
+        # config에 PROOT_DISTRO=""이면 그대로 유지 (사용자가 proot 없음 선택)
+        # env var(PROOT_DISTRO=archlinux bash app-installer/install.sh)로 override 가능
+    else
+        # config 없을 때만 ubuntu 기본값 적용
+        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+    fi
     PROOT_USER="${PROOT_USER:-$(
         basename "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* \
         2>/dev/null || echo "user"
