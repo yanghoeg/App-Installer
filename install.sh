@@ -50,6 +50,10 @@ done
 # -----------------------------------------------------------------------------
 # GUI 메인 루프
 # -----------------------------------------------------------------------------
+# zenity/GTK 텍스트 렌더링 버그 회피: Zink GPU 변수와 GTK font 렌더링 충돌
+unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG ZINK_DESCRIPTORS \
+      MESA_NO_ERROR MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE 2>/dev/null || true
+
 export GTK_THEME=Adwaita:dark
 
 while true; do
