@@ -10,6 +10,25 @@ proot_exec() {
         --shared-tmp -- env DISPLAY="${DISPLAY:-:0.0}" "$@"
 }
 
+# sudo PATH 초기화 문제 해결:
+# sudo(및 sudo-rs)는 PATH를 secure_path로 초기화 → Termux wget/curl 사라짐
+# 해결: proot 내부 /usr/local/bin에 Termux 핵심 툴 symlink 생성
+# /usr/local/bin은 sudo secure_path에 기본 포함되어 있음
+proot_setup_sudo_path() {
+    local termux_bin="${PREFIX}/bin"
+    proot_exec sudo bash -c "
+        mkdir -p /usr/local/bin
+        for tool in wget curl tar xz; do
+            src='${termux_bin}'/\"\$tool\"
+            dst=\"/usr/local/bin/\$tool\"
+            [ -f \"\$src\" ] && [ ! -e \"\$dst\" ] && ln -sf \"\$src\" \"\$dst\" || true
+        done
+    " 2>/dev/null || true
+}
+
+# Tor Browser 의존성 — distro별로 패키지명이 다름 (override in distro adapter)
+proot_pkg_install_tor_deps() { proot_pkg_install curl dbus-glib; }
+
 # proot 내부에 bwrap 스텁 설치 — GTK4 앱이 glycin(SVG 로더)을 쓸 때 필요
 # bwrap는 user namespace가 필요하지만 proot에선 없음 → 스텁으로 샌드박스 없이 직접 exec
 proot_setup_bwrap() {

@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
 proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
 proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
-proot_pkg_update()       { proot_exec sudo pacman -Sy --noconfirm; }
+proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Sy --noconfirm; }
 proot_pkg_autoremove() {
     proot_exec sudo bash -c \
         'orphans=$(pacman -Qdtq 2>/dev/null); [ -n "$orphans" ] && pacman -Rns --noconfirm $orphans || true'

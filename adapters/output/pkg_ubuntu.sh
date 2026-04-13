@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 proot_pkg_install()      { proot_exec sudo apt install -y "$@"; }
 proot_pkg_remove()       { proot_exec sudo apt remove -y "$@"; }
 proot_pkg_purge()        { proot_exec sudo apt purge -y "$@"; }
-proot_pkg_update()       { proot_exec sudo apt update; }
+proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo apt update; }
 proot_pkg_autoremove()   { proot_exec sudo apt autoremove -y; }
 proot_pkg_is_installed() { proot_exec dpkg -s "$1" &>/dev/null; }
 
@@ -38,6 +38,9 @@ proot_pkg_add_external_repo() {
 
 proot_pkg_install_libreoffice() { proot_pkg_install libreoffice; }
 proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice; }
+
+# Ubuntu: dbus-glib 패키지명이 Arch와 다름
+proot_pkg_install_tor_deps() { proot_pkg_install curl libdbus-glib-1-2; }
 
 proot_pkg_install_vscode() {
     proot_pkg_add_external_repo "vscode" \
