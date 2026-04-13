@@ -19,6 +19,10 @@ _wine_tarball_url() {
 }
 
 # proot 내부: Wine-Staging tarball 설치
+# binfmt_misc 없는 proot 환경 대응:
+#   1. wine ELF를 wine.elf로 저장
+#   2. wine 스크립트가 box64를 통해 wine.elf 실행
+#   3. wineserver.elf도 동일하게 처리
 _wine_install_tarball_proot() {
     local wine_url
     wine_url=$(_wine_tarball_url)
@@ -28,7 +32,20 @@ _wine_install_tarball_proot() {
         wget -q '${wine_url}' -O /tmp/wine-staging.tar.xz
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
         rm -f /tmp/wine-staging.tar.xz
-        for bin in wine wine64 wineboot winecfg wineserver msiexec regedit; do
+
+        # x86-64 ELF 파일들을 .elf로 이름 변경하고 box64 wrapper 생성
+        # (proot에 binfmt_misc 없어서 x86-64 ELF 자동 실행 불가)
+        cd /opt/wine-staging/bin
+        for f in wine wine64 wineserver wineboot winedbg; do
+            if [ -f \"\$f\" ] && file \"\$f\" 2>/dev/null | grep -q 'x86-64'; then
+                mv \"\$f\" \"\${f}.elf\"
+                printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/%s.elf \"\$@\"\n' \"\$f\" > \"\$f\"
+                chmod +x \"\$f\"
+            fi
+        done
+
+        # /usr/local/bin 심링크 (symlink 방식 대신 직접 복사 — cat으로 덮어써지는 문제 방지)
+        for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
             [ -f /opt/wine-staging/bin/\$bin ] && \
                 ln -sf /opt/wine-staging/bin/\$bin /usr/local/bin/\$bin || true
         done
@@ -122,11 +139,11 @@ Version=1.0
 Type=Application
 Name=Wine
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=wine %f
+Exec=bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine %f </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
-StartupNotify=true
+StartupNotify=false
 Terminal=false
 EOF
 
@@ -136,12 +153,19 @@ Version=1.0
 Type=Application
 Name=Wine 설정
 Comment=Wine 환경 구성 (winecfg)
-Exec=wine winecfg
+Exec=bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine winecfg </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
 Categories=System;Emulator;
 Terminal=false
 StartupNotify=false
 EOF
+
+    # Desktop 아이콘 복사
+    cp "$_WINE_DESKTOP" "${HOME}/Desktop/wine64.desktop" 2>/dev/null || true
+    cp "$_WINECFG_DESKTOP" "${HOME}/Desktop/winecfg.desktop" 2>/dev/null || true
+    chmod +x "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" 2>/dev/null || true
+    gio set "${HOME}/Desktop/wine64.desktop" metadata::trusted true 2>/dev/null || true
+    gio set "${HOME}/Desktop/winecfg.desktop" metadata::trusted true 2>/dev/null || true
 }
 
 app_install_wine() {

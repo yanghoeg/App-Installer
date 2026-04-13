@@ -6,7 +6,7 @@ _TOR_URL="https://sourceforge.net/projects/tor-browser-ports/files/${_TOR_VER}/t
 
 app_install_tor_browser() {
     proot_pkg_update
-    proot_pkg_install curl
+    proot_pkg_install curl dbus-glib
 
     proot_exec bash -c "
         curl -L '${_TOR_URL}' -o tor.tar.xz

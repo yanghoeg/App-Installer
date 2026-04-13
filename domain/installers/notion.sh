@@ -14,7 +14,7 @@ app_install_notion() {
     "
 
     desktop_register "notion" "Notion" \
-        "prun env MESA_LOADER_DRIVER_OVERRIDE=zink notion/./notion-app --no-sandbox" \
+        'bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink ~/notion/notion-app --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "notion" "Office;"
 }
 
