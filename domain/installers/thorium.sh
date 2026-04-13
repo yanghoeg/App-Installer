@@ -7,7 +7,8 @@ _THORIUM_DEB_URL="https://github.com/Alex313031/Thorium-Raspi/releases/download/
 app_install_thorium() {
     proot_pkg_install_deb_or_aur "$_THORIUM_DEB_URL" "thorium-browser"
 
-    desktop_register "thorium-browser" "Thorium" "prun thorium-browser --no-sandbox" \
+    desktop_register "thorium-browser" "Thorium" \
+        'bash -c "prun thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "thorium-browser" "Network;"
 }
 

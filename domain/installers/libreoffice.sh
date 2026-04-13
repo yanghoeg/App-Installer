@@ -5,6 +5,7 @@
 app_install_libreoffice() {
     proot_pkg_update
     proot_pkg_install_libreoffice
+    proot_setup_bwrap
     desktop_copy_from_proot "libreoffice"
 }
 

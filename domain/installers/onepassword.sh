@@ -7,7 +7,8 @@ _1PASSWORD_DEB_URL="https://downloads.1password.com/linux/debian/arm64/stable/1p
 app_install_onepassword() {
     proot_pkg_install_deb_or_aur "$_1PASSWORD_DEB_URL" "1password"
 
-    desktop_register "1password" "1Password" "prun 1password --no-sandbox" \
+    desktop_register "1password" "1Password" \
+        'bash -c "prun 1password --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "1password" "Office;Security;"
 }
 

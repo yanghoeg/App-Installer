@@ -43,7 +43,7 @@ desktop_copy_from_proot() {
         fname=$(basename "$desktop")
         cp "$desktop" "${PREFIX}/share/applications/${fname}"
         sed -i \
-            "s|^Exec=\(.*\)$|Exec=prun \1|" \
+            "s|^Exec=\(.*\)$|Exec=bash -c \"prun \1 </dev/null >/dev/null 2>\&1 \&\"|" \
             "${PREFIX}/share/applications/${fname}"
     done
 }

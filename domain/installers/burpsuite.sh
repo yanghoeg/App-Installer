@@ -9,7 +9,8 @@ app_install_burpsuite() {
     proot_exec sudo ./burpsuite_community_linux_arm64.sh
     proot_exec rm -f ./burpsuite_community_linux_arm64.sh
 
-    desktop_register "burpsuite" "Burp Suite Community" "prun BurpSuiteCommunity" \
+    desktop_register "burpsuite" "Burp Suite Community" \
+        'bash -c "prun BurpSuiteCommunity </dev/null >/dev/null 2>&1 &"' \
         "burpsuite" "Security;Network;"
 }
 

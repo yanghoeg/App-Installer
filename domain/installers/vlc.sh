@@ -3,7 +3,7 @@
 
 app_install_vlc() {
     termux_pkg_install vlc
-    desktop_register "vlc" "VLC media player" "vlc --started-from-file %f" "vlc" \
+    desktop_register "vlc" "VLC media player" "vlc --no-cli" "vlc" \
         "AudioVideo;Player;Recorder;" \
         "MimeType=video/mpeg;video/x-avi;audio/mpeg;"
 }

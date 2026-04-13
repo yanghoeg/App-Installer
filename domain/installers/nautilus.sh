@@ -4,7 +4,10 @@
 app_install_nautilus() {
     proot_pkg_update
     proot_pkg_install nautilus
-    desktop_copy_from_proot "nautilus"
+    proot_setup_bwrap
+    desktop_register "nautilus" "Nautilus" \
+        'bash -c "prun dbus-run-session -- nautilus </dev/null >/dev/null 2>&1 &"' \
+        "org.gnome.Nautilus" "System;FileManager;"
 }
 
 app_remove_nautilus() {

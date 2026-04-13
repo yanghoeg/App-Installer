@@ -11,7 +11,9 @@ app_install_sasm() {
     grep -q "alias sasm=" "$bashrc" 2>/dev/null || \
         echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
 
-    desktop_register "sasm" "SASM" "prun QT_SCALE_FACTOR=2 sasm" "sasm" "Development;"
+    desktop_register "sasm" "SASM" \
+        'bash -c "prun env QT_SCALE_FACTOR=2 sasm </dev/null >/dev/null 2>&1 &"' \
+        "sasm" "Development;"
 }
 
 app_remove_sasm() {

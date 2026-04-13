@@ -22,7 +22,8 @@ app_install_teams() {
 
     proot_pkg_install_deb_or_aur "$latest_url" "teams-for-linux"
 
-    desktop_register "teams" "Microsoft Teams" "prun teams-for-linux --no-sandbox" \
+    desktop_register "teams" "Microsoft Teams" \
+        'bash -c "prun teams-for-linux --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "teams-for-linux" "Network;InstantMessaging;"
 }
 
