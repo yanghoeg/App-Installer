@@ -47,6 +47,10 @@ proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 # Arch: codename 없음 → AUR sasm
 proot_pkg_install_sasm() { proot_pkg_install_aur sasm; }
 
+# Arch: code는 공식 repo 없음 → AUR visual-studio-code-bin
+proot_pkg_install_vscode() { proot_pkg_install_aur visual-studio-code-bin; }
+proot_pkg_remove_vscode()  { proot_pkg_remove visual-studio-code-bin 2>/dev/null || proot_pkg_remove code 2>/dev/null || true; }
+
 proot_pkg_install_box64() {
     proot_exec sudo bash -c "
         pacman -S --noconfirm box64 2>/dev/null && exit 0

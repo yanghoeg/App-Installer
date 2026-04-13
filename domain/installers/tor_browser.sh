@@ -16,7 +16,7 @@ app_install_tor_browser() {
     "
 
     desktop_register "tor" "Tor Browser" \
-        "proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 /opt/tor-browser/Browser/start-tor-browser --no-sandbox" \
+        "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox" \
         "tor" "Network;WebBrowser;Security;"
 }
 

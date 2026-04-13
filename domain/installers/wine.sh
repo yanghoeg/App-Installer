@@ -84,7 +84,7 @@ _wine_install_native() {
 
     cat > "$_WINE_BIN" << 'WRAPEOF'
 #!/data/data/com.termux/files/usr/bin/bash
-export DISPLAY="${DISPLAY:-:1.0}"
+export DISPLAY="${DISPLAY:-:0.0}"
 export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-zink}"
 export TU_DEBUG=noconform
 export ZINK_DESCRIPTORS=lazy
@@ -94,7 +94,7 @@ exec grun "$HOME/.wine-staging/bin/wine64" "$@"
 WRAPEOF
     chmod +x "$_WINE_BIN"
 
-    DISPLAY=:1.0 wine wineboot --init 2>/dev/null || true
+    DISPLAY="${DISPLAY:-:0.0}" wine wineboot --init 2>/dev/null || true
 }
 
 # .desktop + proot 래퍼 스크립트 생성
@@ -104,7 +104,7 @@ _wine_create_launchers() {
 #!/data/data/com.termux/files/usr/bin/bash
 # Wine proot 래퍼 — XFCE에서 .exe 파일을 열 때 사용
 proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- \\
-    env DISPLAY=:1.0 \\
+    env DISPLAY="${DISPLAY:-:0.0}" \\
         MESA_LOADER_DRIVER_OVERRIDE=zink \\
         TU_DEBUG=noconform \\
         ZINK_DESCRIPTORS=lazy \\

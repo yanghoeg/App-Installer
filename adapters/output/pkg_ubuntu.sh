@@ -39,6 +39,14 @@ proot_pkg_add_external_repo() {
 proot_pkg_install_libreoffice() { proot_pkg_install libreoffice; }
 proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice; }
 
+proot_pkg_install_vscode() {
+    proot_pkg_add_external_repo "vscode" \
+        "https://packages.microsoft.com/keys/microsoft.asc" \
+        "deb [arch=arm64 signed-by=/usr/share/keyrings/vscode.gpg] https://packages.microsoft.com/repos/code stable main"
+    proot_pkg_install code
+}
+proot_pkg_remove_vscode() { proot_pkg_remove code; }
+
 proot_pkg_install_jdk() {
     proot_pkg_install openjdk-21-jdk 2>/dev/null || proot_pkg_install openjdk-11-jdk
 }

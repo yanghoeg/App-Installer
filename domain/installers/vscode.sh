@@ -5,16 +5,13 @@
 
 app_install_vscode() {
     proot_pkg_update
-    proot_pkg_add_external_repo "vscode" \
-        "https://packages.microsoft.com/keys/microsoft.asc" \
-        "deb [arch=arm64 signed-by=/usr/share/keyrings/vscode.gpg] https://packages.microsoft.com/repos/code stable main"
-    proot_pkg_install code
+    proot_pkg_install_vscode
     desktop_register "code" "Visual Studio Code" "prun code --no-sandbox" \
         "visual-studio-code" "Development;"
 }
 
 app_remove_vscode() {
-    proot_pkg_remove code
+    proot_pkg_remove_vscode
     proot_pkg_autoremove
     desktop_remove "code"
 }

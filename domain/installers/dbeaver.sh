@@ -16,7 +16,7 @@ app_install_dbeaver() {
     "
 
     desktop_register "dbeaver" "DBeaver" \
-        "proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 dbeaver --no-sandbox" \
+        "prun dbeaver --no-sandbox" \
         "dbeaver" "Development;Database;"
 }
 

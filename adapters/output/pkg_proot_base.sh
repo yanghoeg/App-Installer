@@ -7,13 +7,13 @@
 
 proot_exec() {
     proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
-        --shared-tmp -- env DISPLAY="${DISPLAY:-:1.0}" "$@"
+        --shared-tmp -- env DISPLAY="${DISPLAY:-:0.0}" "$@"
 }
 
 proot_exec_wine() {
     proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
         --shared-tmp -- env \
-            DISPLAY="${DISPLAY:-:1.0}" \
+            DISPLAY="${DISPLAY:-:0.0}" \
             MESA_LOADER_DRIVER_OVERRIDE=zink \
             TU_DEBUG=noconform \
             ZINK_DESCRIPTORS=lazy \
