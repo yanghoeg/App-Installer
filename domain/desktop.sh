@@ -27,6 +27,7 @@ desktop_register() {
 
     cp "$desktop_file" "${HOME}/Desktop/${app_id}.desktop"
     chmod +x "${HOME}/Desktop/${app_id}.desktop"
+    gio set "${HOME}/Desktop/${app_id}.desktop" metadata::trusted true 2>/dev/null || true
 }
 
 # proot 내부 .desktop 파일을 Termux 메뉴로 복사 후 Exec 재작성
@@ -42,7 +43,7 @@ desktop_copy_from_proot() {
         fname=$(basename "$desktop")
         cp "$desktop" "${PREFIX}/share/applications/${fname}"
         sed -i \
-            "s|^Exec=\(.*\)$|Exec=proot-distro login ${PROOT_DISTRO} --user ${PROOT_USER} --shared-tmp -- env DISPLAY=:1.0 \1|" \
+            "s|^Exec=\(.*\)$|Exec=prun \1|" \
             "${PREFIX}/share/applications/${fname}"
     done
 }
