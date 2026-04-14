@@ -28,22 +28,38 @@ app-installer
 
 ## Supported Apps
 
-| App | Description | Install target |
-|-----|-------------|----------------|
-| **VS Code** | Visual Studio Code (arm64 deb) | proot |
-| **LibreOffice** | Office suite | proot |
-| **Thunderbird** | Email client | Termux native |
-| **VLC** | Multimedia player | proot |
-| **Nautilus** | GNOME file manager | proot |
-| **Notion** | Notes & productivity | proot |
-| **Wine** | Run Windows apps (Box64 + Wine-Staging) | proot / native |
-| **Miniforge** | Conda package manager | proot |
-| **DBeaver** | Universal database client | proot |
-| **Thorium** | High-performance Chromium-based browser | proot |
-| **Tor Browser** | Anonymous browser | proot |
-| **SASM** | Assembly IDE | proot |
-| **Burp Suite** | Web security testing tool | proot |
-| **1Password** | Password manager | proot |
+| App | Description | Install target | Notes |
+|-----|-------------|----------------|-------|
+| **VS Code** | Visual Studio Code | proot | `--disable-gpu` applied |
+| **LibreOffice** | Office suite | proot | bwrap stub installed |
+| **Thunderbird** | Email client | Termux native | |
+| **VLC** | Multimedia player | Termux native | |
+| **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
+| **Notion** | Notes & productivity | proot | AppImage extracted |
+| **Teams** | Microsoft Teams for Linux | proot | community Electron client |
+| **Wine** | Run Windows apps (Box64 + Wine-Staging) | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Miniforge** | Conda package manager | proot | CLI only |
+| **DBeaver** | Universal database client | proot | |
+| **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
+| **Tor Browser** | Anonymous browser | proot | arm64 port |
+| **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
+| **Burp Suite** | Web security testing tool | proot | arm64 installer |
+| **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
+
+## arm64 Compatibility Notes
+
+Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds applied automatically:
+
+| Issue | Workaround |
+|-------|-----------|
+| GTK4 apps crash (glycin/bwrap) | `proot_setup_bwrap`: installs no-op bwrap stub in proot |
+| `sudo` resets PATH (sudo-rs) | `proot_setup_sudo_path`: symlinks Termux tools to `/usr/local/bin` |
+| Nautilus MIT-SHM BadAccess | `GSK_RENDERER=cairo GDK_RENDERING=image` forces software renderer |
+| VS Code GPU process crash | `--disable-gpu` + `dbus-run-session` |
+| Wine x86-64 ELF not auto-run (no binfmt_misc) | rename to `.elf`, create `box64` wrapper script |
+| Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
+| SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
+| 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
 
 ## Wine (Box64 + Wine-Staging)
 
@@ -75,13 +91,20 @@ PROOT_USER=yanghoeg
 
 Falls back to `ubuntu` if the config file is missing.
 
-proot apps are launched as:
+proot apps are launched via `prun`:
 
 ```bash
-proot-distro login <distro> --user <user> --shared-tmp -- env DISPLAY=:1.0 <command>
+proot-distro login <distro> --user <user> --shared-tmp -- env DISPLAY=:0.0 <command>
 ```
 
 After installation, a `.desktop` file is written to `$PREFIX/share/applications/` so the app appears in the XFCE menu automatically.
+
+You can also enter the proot shell directly:
+
+```bash
+ubuntu          # enter Ubuntu proot interactive shell
+ubuntu <cmd>    # run single command in Ubuntu proot
+```
 
 ## File Structure
 
@@ -92,6 +115,7 @@ app-installer/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/
 │   └── output/
+│       ├── pkg_proot_base.sh   ← shared proot helpers (bwrap stub, sudo path)
 │       ├── pkg_termux.sh       ← Termux pkg adapter
 │       ├── pkg_ubuntu.sh       ← Ubuntu apt adapter
 │       └── pkg_arch.sh         ← Arch pacman adapter

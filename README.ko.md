@@ -28,22 +28,38 @@ app-installer
 
 ## 지원 앱 목록
 
-| 앱 | 설명 | 설치 위치 |
-|----|------|-----------|
-| **VS Code** | Visual Studio Code (arm64 deb) | proot |
-| **LibreOffice** | 오피스 스위트 | proot |
-| **Thunderbird** | 이메일 클라이언트 | Termux native |
-| **VLC** | 멀티미디어 플레이어 | proot |
-| **Nautilus** | GNOME 파일 관리자 | proot |
-| **Notion** | 메모·생산성 앱 | proot |
-| **Wine** | Windows 앱 실행 (Box64 + Wine-Staging) | proot / native |
-| **Miniforge** | Conda 패키지 관리자 | proot |
-| **DBeaver** | 유니버설 데이터베이스 클라이언트 | proot |
-| **Thorium** | 고성능 Chromium 기반 브라우저 | proot |
-| **Tor Browser** | 익명 브라우저 | proot |
-| **SASM** | 어셈블리 IDE | proot |
-| **Burp Suite** | 웹 보안 테스트 도구 | proot |
-| **1Password** | 패스워드 매니저 | proot |
+| 앱 | 설명 | 설치 위치 | 비고 |
+|----|------|-----------|------|
+| **VS Code** | Visual Studio Code | proot | `--disable-gpu` 자동 적용 |
+| **LibreOffice** | 오피스 스위트 | proot | bwrap 스텁 설치 |
+| **Thunderbird** | 이메일 클라이언트 | Termux native | |
+| **VLC** | 멀티미디어 플레이어 | Termux native | |
+| **Nautilus** | GNOME 파일 관리자 | proot | 소프트웨어 렌더러 (MIT-SHM 우회) |
+| **Notion** | 메모·생산성 앱 | proot | AppImage 추출 방식 |
+| **Teams** | Microsoft Teams for Linux | proot | 커뮤니티 Electron 클라이언트 |
+| **Wine** | Windows 앱 실행 (Box64 + Wine-Staging) | proot / native | ELF→box64 래퍼 (binfmt_misc 없음) |
+| **Miniforge** | Conda 패키지 관리자 | proot | CLI 전용 |
+| **DBeaver** | 유니버설 데이터베이스 클라이언트 | proot | |
+| **Thorium** | Chromium 기반 고성능 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
+| **Tor Browser** | 익명 브라우저 | proot | arm64 포트 |
+| **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
+| **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
+| **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
+
+## arm64 호환성 비고
+
+실기기(Ubuntu 25.10 / Arch Linux ARM)에서 테스트 완료 — 아래 우회법이 자동 적용됩니다:
+
+| 문제 | 우회법 |
+|------|--------|
+| GTK4 앱 충돌 (glycin/bwrap) | `proot_setup_bwrap`: proot 내 no-op bwrap 스텁 설치 |
+| `sudo` PATH 초기화 (sudo-rs) | `proot_setup_sudo_path`: Termux 툴을 `/usr/local/bin`에 심링크 |
+| Nautilus MIT-SHM BadAccess | `GSK_RENDERER=cairo GDK_RENDERING=image` 소프트웨어 렌더러 강제 |
+| VS Code GPU 프로세스 crash | `--disable-gpu` + `dbus-run-session` |
+| Wine x86-64 ELF 자동 실행 불가 (binfmt_misc 없음) | `.elf`로 이름 변경 후 `box64` 래퍼 스크립트 생성 |
+| Thorium AUR은 x86 전용 | `ar`로 arm64 .deb 직접 추출 |
+| SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
+| 1Password GUI arm64 미지원 | `1password-cli`(`op`) 설치 |
 
 ## Wine (Box64 + Wine-Staging)
 
@@ -75,13 +91,20 @@ PROOT_USER=yanghoeg
 
 config가 없으면 `ubuntu`를 기본값으로 사용합니다.
 
-proot 앱은 아래 방식으로 실행됩니다:
+proot 앱은 `prun`을 통해 실행됩니다:
 
 ```bash
-proot-distro login <distro> --user <user> --shared-tmp -- env DISPLAY=:1.0 <command>
+proot-distro login <distro> --user <user> --shared-tmp -- env DISPLAY=:0.0 <command>
 ```
 
 설치 후 `.desktop` 파일이 `$PREFIX/share/applications/`에 생성되어 XFCE 메뉴에 자동 등록됩니다.
+
+proot 셸에 직접 진입할 수도 있습니다:
+
+```bash
+ubuntu          # Ubuntu proot 인터랙티브 셸 진입
+ubuntu <명령>   # Ubuntu proot에서 단일 명령 실행
+```
 
 ## 파일 구조
 
@@ -92,6 +115,7 @@ app-installer/
 │   └── pkg_manager.sh          ← 패키지 관리 계약 (인터페이스)
 ├── adapters/
 │   └── output/
+│       ├── pkg_proot_base.sh   ← 공통 proot 헬퍼 (bwrap 스텁, sudo path)
 │       ├── pkg_termux.sh       ← Termux pkg 어댑터
 │       ├── pkg_ubuntu.sh       ← Ubuntu apt 어댑터
 │       └── pkg_arch.sh         ← Arch pacman 어댑터
