@@ -1,22 +1,29 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # DOMAIN: 1Password — proot 내부 설치
-# Ubuntu: 공식 arm64 .deb / Arch: AUR 1password → adapter가 처리
-
-_1PASSWORD_DEB_URL="https://downloads.1password.com/linux/debian/arm64/stable/1password-latest.deb"
+# arm64: GUI 미지원 → CLI(op) + apt repo 방식
+# Arch: AUR 1password (x86 only, skip on arm64)
 
 app_install_onepassword() {
-    proot_pkg_install_deb_or_aur "$_1PASSWORD_DEB_URL" "1password"
-
-    desktop_register "1password" "1Password" \
-        'bash -c "prun 1password --no-sandbox </dev/null >/dev/null 2>&1 &"' \
-        "1password" "Office;Security;"
+    # apt repo 등록 후 1password-cli 설치 (arm64에서는 GUI 미지원)
+    proot_exec sudo bash -c "
+        apt install -y gpg curl 2>/dev/null
+        curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+            | gpg --dearmor > /usr/share/keyrings/1password-archive-keyring.gpg
+        echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/arm64 stable main' \
+            > /etc/apt/sources.list.d/1password.list
+        apt update -qq
+        apt install -y 1password-cli
+    "
+    echo "[INFO] 1Password GUI는 arm64 미지원 — CLI(op) 설치됨"
+    echo "[INFO] 사용법: prun op --help"
 }
 
 app_remove_onepassword() {
-    proot_pkg_remove 1password 2>/dev/null || true
-    desktop_remove "1password"
+    proot_pkg_remove 1password-cli 2>/dev/null || true
+    proot_exec sudo rm -f /etc/apt/sources.list.d/1password.list \
+        /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
 }
 
 app_is_installed_onepassword() {
-    desktop_is_registered "1password"
+    proot_exec which op &>/dev/null
 }

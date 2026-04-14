@@ -8,8 +8,8 @@ app_install_vscode() {
     proot_pkg_install_vscode
     local exec_cmd
     case "${PROOT_DISTRO:-}" in
-        archlinux) exec_cmd='bash -c "prun /opt/visual-studio-code/code --no-sandbox </dev/null >/dev/null 2>&1 &"' ;;
-        ubuntu)    exec_cmd='bash -c "prun /usr/share/code/code --no-sandbox </dev/null >/dev/null 2>&1 &"' ;;
+        archlinux) exec_cmd='bash -c "prun dbus-run-session -- /opt/visual-studio-code/code --no-sandbox --disable-gpu </dev/null >/dev/null 2>&1 &"' ;;
+        ubuntu)    exec_cmd='bash -c "prun dbus-run-session -- /usr/share/code/code --no-sandbox --disable-gpu </dev/null >/dev/null 2>&1 &"' ;;
         *)         exec_cmd='bash -c "prun code --no-sandbox </dev/null >/dev/null 2>&1 &"' ;;
     esac
     desktop_register "code" "Visual Studio Code" "$exec_cmd" \

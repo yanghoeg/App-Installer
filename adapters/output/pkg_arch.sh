@@ -44,8 +44,17 @@ proot_pkg_install_jdk()         { proot_pkg_install jdk-openjdk; }
 proot_pkg_install_python_pip()  { proot_pkg_install python python-pip; }
 proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 
-# Arch: codename 없음 → AUR sasm
-proot_pkg_install_sasm() { proot_pkg_install_aur sasm; }
+# Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
+proot_pkg_install_sasm() {
+    proot_exec sudo bash -c "
+        pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
+        [ -f /usr/local/bin/sasm ] && exit 0
+        git clone https://github.com/Dman95/SASM.git /tmp/sasm-src
+        cd /tmp/sasm-src && qmake SASM.pro && make -j4
+        cp sasm /usr/local/bin/sasm
+        rm -rf /tmp/sasm-src
+    "
+}
 
 # Arch: code는 공식 repo 없음 → AUR visual-studio-code-bin
 proot_pkg_install_vscode() { proot_pkg_install_aur visual-studio-code-bin; }

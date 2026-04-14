@@ -6,7 +6,7 @@ app_install_nautilus() {
     proot_pkg_install nautilus
     proot_setup_bwrap
     desktop_register "nautilus" "Nautilus" \
-        'bash -c "prun dbus-run-session -- nautilus </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun env XDG_SESSION_TYPE=x11 GSK_RENDERER=cairo GDK_RENDERING=image dbus-run-session -- nautilus </dev/null >/dev/null 2>&1 &"' \
         "org.gnome.Nautilus" "System;FileManager;"
 }
 
