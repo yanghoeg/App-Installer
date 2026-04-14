@@ -56,9 +56,25 @@ proot_pkg_install_sasm() {
     "
 }
 
-# Arch: code는 공식 repo 없음 → AUR visual-studio-code-bin
-proot_pkg_install_vscode() { proot_pkg_install_aur visual-studio-code-bin; }
-proot_pkg_remove_vscode()  { proot_pkg_remove visual-studio-code-bin 2>/dev/null || proot_pkg_remove code 2>/dev/null || true; }
+# Arch: AUR visual-studio-code-bin은 x86_64 전용 → Microsoft 공식 arm64 tar.gz 직접 설치
+proot_pkg_install_vscode() {
+    proot_exec sudo bash -c "
+        [ -f /opt/visual-studio-code/code ] && exit 0
+        pacman -S --noconfirm --needed curl libsecret libxkbfile
+        curl -fL 'https://update.code.visualstudio.com/latest/linux-arm64/stable' \
+            -o /tmp/vscode-arm64.tar.gz
+        mkdir -p /opt/visual-studio-code
+        tar -xzf /tmp/vscode-arm64.tar.gz --strip-components=1 -C /opt/visual-studio-code
+        rm -f /tmp/vscode-arm64.tar.gz
+        ln -sf /opt/visual-studio-code/code /usr/local/bin/code
+    "
+}
+proot_pkg_remove_vscode() {
+    proot_exec sudo bash -c "
+        rm -rf /opt/visual-studio-code
+        rm -f /usr/local/bin/code /usr/bin/code /usr/sbin/code
+    "
+}
 
 proot_pkg_install_box64() {
     proot_exec sudo bash -c "

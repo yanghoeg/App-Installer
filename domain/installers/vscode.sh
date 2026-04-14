@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # DOMAIN: Visual Studio Code — proot 내부 설치, prun으로 실행
-# Arch: AUR visual-studio-code-bin (yay 사용)
-# Ubuntu: Microsoft 공식 arm64 repo 추가 후 설치
+# Arch: Microsoft 공식 arm64 tar.gz → /opt/visual-studio-code/
+# Ubuntu: Microsoft 공식 arm64 apt repo → /usr/share/code/
 
 app_install_vscode() {
     proot_pkg_update
@@ -23,6 +23,10 @@ app_remove_vscode() {
 }
 
 app_is_installed_vscode() {
-    # proot 안에 실제 binary가 있는지 확인 (desktop 파일만으론 부족)
-    proot_exec bash -c "command -v code" &>/dev/null
+    # 실제 binary 경로로 확인 (command -v는 wrapper/잔재 스크립트를 잡을 수 있음)
+    case "${PROOT_DISTRO:-}" in
+        archlinux) proot_exec bash -c "[ -f /opt/visual-studio-code/code ]" &>/dev/null ;;
+        ubuntu)    proot_exec bash -c "[ -f /usr/share/code/code ]" &>/dev/null ;;
+        *)         proot_exec bash -c "command -v code" &>/dev/null ;;
+    esac
 }
