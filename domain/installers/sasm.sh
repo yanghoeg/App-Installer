@@ -17,6 +17,8 @@ app_install_sasm() {
 }
 
 app_remove_sasm() {
+    # Arch: 소스 빌드 → 직접 삭제 / Ubuntu: apt purge
+    proot_exec sudo rm -f /usr/local/bin/sasm 2>/dev/null || true
     proot_pkg_purge sasm 2>/dev/null || true
     desktop_remove "sasm"
 }
