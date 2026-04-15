@@ -54,57 +54,91 @@ for _installer in "${SCRIPT_DIR}/domain/installers/"*.sh; do
 done
 
 # -----------------------------------------------------------------------------
-# GUI 메인 루프
+# GUI 메인 루프 (yad 기반 — 앱 이름/설명 증분 검색 지원)
 # -----------------------------------------------------------------------------
-# zenity/GTK 텍스트 렌더링 버그 회피: Zink GPU 변수와 GTK font 렌더링 충돌
+# Zink GPU 변수와 GTK font 렌더링 충돌 회피
 unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG ZINK_DESCRIPTORS \
       MESA_NO_ERROR MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE 2>/dev/null || true
 
 export GTK_THEME=Adwaita:dark
 
+# yad/zenity 자동 선택 (yad 우선)
+if command -v yad >/dev/null 2>&1; then
+    UI=yad
+elif command -v zenity >/dev/null 2>&1; then
+    UI=zenity
+else
+    echo "[ERROR] yad 또는 zenity가 필요합니다." >&2
+    exit 1
+fi
+
+_notify_info() {
+    local title="$1" body="$2"
+    if [ "$UI" = yad ]; then
+        yad --info --title="$title" --text="$body" --button=OK:0 --center --width=400 2>/dev/null || true
+    else
+        zenity --info --title="$title" --text="$body" 2>/dev/null || true
+    fi
+}
+_notify_error() {
+    local title="$1" body="$2"
+    if [ "$UI" = yad ]; then
+        yad --error --title="$title" --text="$body" --button=OK:0 --center --width=400 2>/dev/null || true
+    else
+        zenity --error --title="$title" --text="$body" 2>/dev/null || true
+    fi
+}
+
 while true; do
     rows=()
-    row_ids=()
 
     for _entry in "${APP_REGISTRY[@]}"; do
-        IFS='|' read -r _id _name _desc <<< "$_entry"
+        IFS='|' read -r _id _name _category _desc <<< "$_entry"
         if app_is_installed "$_id"; then
-            _action="Remove ${_name} (Installed)"
+            _status="✅ 설치됨"
         else
-            _action="Install ${_name} (Not Installed)"
+            _status="⬜ 미설치"
         fi
-        rows+=("FALSE" "$_action" "$_desc" "$_id")
-        row_ids+=("${_action}:${_id}")
+        rows+=("$_status" "$_category" "$_name" "$_desc" "$_id")
     done
 
-    # --hide-column=4: app_id 컬럼 숨김
-    # --print-column=4: 선택 시 app_id 반환
-    chosen_id=$(zenity --list --radiolist \
-        --title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})" \
-        --text="앱을 선택하세요:" \
-        --column="Select" --column="Action" --column="Description" --column="ID" \
-        --hide-column=4 \
-        --print-column=4 \
-        "${rows[@]}" \
-        --width=900 --height=500 2>/dev/null) || exit 0
+    if [ "$UI" = yad ]; then
+        # --search-column=3: "이름" 컬럼 기준 타이핑 즉시 필터링
+        # --print-column=5 : ID 컬럼(숨김) 반환
+        chosen_id=$(yad --list \
+            --title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})" \
+            --text="앱을 검색/선택하세요 (이름/설명 입력 시 필터링):" \
+            --column="상태" --column="카테고리" --column="이름" --column="설명" --column="ID":HD \
+            --search-column=3 \
+            --print-column=5 \
+            --separator="" \
+            --width=1000 --height=600 --center \
+            --button="설치/제거!gtk-apply:0" --button="취소!gtk-cancel:1" \
+            "${rows[@]}" 2>/dev/null) || exit 0
+    else
+        # zenity fallback — 검색 기능 없음, 레거시 경로
+        chosen_id=$(zenity --list --radiolist \
+            --title="App Installer (proot: ${PROOT_DISTRO:-none})" \
+            --text="앱을 선택하세요:" \
+            --column="Select" --column="상태" --column="카테고리" --column="이름" --column="설명" --column="ID" \
+            --hide-column=6 --print-column=6 \
+            $(for r in "${rows[@]}"; do echo "FALSE"; echo "$r"; done) \
+            --width=1000 --height=600 2>/dev/null) || exit 0
+    fi
 
     [ -z "$chosen_id" ] && continue
 
     if app_is_installed "$chosen_id"; then
         if app_remove "$chosen_id"; then
-            zenity --info --title="제거 완료" \
-                --text="${chosen_id} 제거가 완료되었습니다." 2>/dev/null || true
+            _notify_info "제거 완료" "${chosen_id} 제거가 완료되었습니다."
         else
-            zenity --error --title="오류" \
-                --text="${chosen_id} 제거 중 오류가 발생했습니다." 2>/dev/null || true
+            _notify_error "오류" "${chosen_id} 제거 중 오류가 발생했습니다."
         fi
     else
         if app_install "$chosen_id"; then
-            zenity --info --title="설치 완료" \
-                --text="${chosen_id} 설치가 완료되었습니다." 2>/dev/null || true
+            _notify_info "설치 완료" "${chosen_id} 설치가 완료되었습니다."
         else
-            zenity --error --title="오류" \
-                --text="${chosen_id} 설치 중 오류가 발생했습니다." 2>/dev/null || true
+            _notify_error "오류" "${chosen_id} 설치 중 오류가 발생했습니다."
         fi
     fi
 done

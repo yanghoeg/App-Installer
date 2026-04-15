@@ -2,25 +2,29 @@
 # =============================================================================
 # DOMAIN: apps.sh — 앱 레지스트리 + 설치 라우팅
 # =============================================================================
-# 형식: "id|이름|설명"
+# 형식: "id|이름|카테고리|설명"
 # id는 domain/installers/${id}.sh의 app_install_${id}/app_remove_${id}/app_is_installed_${id} 와 매핑
+# 카테고리: 그래픽 | 미디어 | 오피스 | 브라우저 | 개발 | 보안 | 유틸 | 소통
 
 APP_REGISTRY=(
-    "thunderbird|Thunderbird|이메일 클라이언트 (Termux native)"
-    "vlc|VLC|미디어 플레이어 (Termux native)"
-    "vscode|Visual Studio Code|코드 에디터 (proot)"
-    "libreoffice|LibreOffice|오픈소스 오피스 (proot)"
-    "burpsuite|Burp Suite|웹 보안 테스트 도구 (proot)"
-    "tor_browser|Tor Browser|익명 웹 브라우저 (proot)"
-    "notion|Notion|노트 및 협업 도구 (proot AppImage)"
-    "dbeaver|DBeaver|범용 데이터베이스 클라이언트 (proot)"
-    "miniforge|Miniforge3|Python conda 환경 (proot)"
-    "sasm|SASM|어셈블러 IDE (proot)"
-    "nautilus|Nautilus|파일 관리자 (proot)"
-    "wine|Wine (Box64+Staging)|Windows 앱 실행"
-    "teams|Microsoft Teams|팀 협업 도구 (proot)"
-    "thorium|Thorium|고속 웹 브라우저 (proot)"
-    "onepassword|1Password|패스워드 관리자 (proot)"
+    "thunderbird|Thunderbird|소통|이메일 클라이언트 (Termux native)"
+    "vlc|VLC|미디어|미디어 플레이어 (Termux native)"
+    "gimp|GIMP|그래픽|이미지 편집 (Termux native)"
+    "inkscape|Inkscape|그래픽|벡터 그래픽 편집 (Termux native)"
+    "audacity|Audacity|미디어|오디오 편집 (Termux native)"
+    "vscode|Visual Studio Code|개발|코드 에디터 (proot)"
+    "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
+    "burpsuite|Burp Suite|보안|웹 보안 테스트 도구 (proot)"
+    "tor_browser|Tor Browser|브라우저|익명 웹 브라우저 (proot)"
+    "notion|Notion|오피스|노트 및 협업 도구 (proot AppImage)"
+    "dbeaver|DBeaver|개발|범용 데이터베이스 클라이언트 (proot)"
+    "miniforge|Miniforge3|개발|Python conda 환경 (proot)"
+    "sasm|SASM|개발|어셈블러 IDE (proot)"
+    "nautilus|Nautilus|유틸|파일 관리자 (proot)"
+    "wine|Wine (Box64+Staging)|유틸|Windows 앱 실행"
+    "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
+    "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
+    "onepassword|1Password|유틸|패스워드 관리자 (proot)"
 )
 
 # proot 설치 여부 확인
