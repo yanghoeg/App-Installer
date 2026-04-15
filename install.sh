@@ -105,10 +105,15 @@ while true; do
     if [ "$UI" = yad ]; then
         # --search-column=3: "이름" 컬럼 기준 타이핑 즉시 필터링
         # --print-column=5 : ID 컬럼(숨김) 반환
+        # 타입(:TEXT/:HD)은 전체를 따옴표로 감싸야 일부 yad 빌드에서 안전하게 파싱됨
         chosen_id=$(yad --list \
             --title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})" \
             --text="앱을 검색/선택하세요 (이름/설명 입력 시 필터링):" \
-            --column="상태" --column="카테고리" --column="이름" --column="설명" --column="ID":HD \
+            --column='상태:TEXT' \
+            --column='카테고리:TEXT' \
+            --column='이름:TEXT' \
+            --column='설명:TEXT' \
+            --column='ID:HD' \
             --search-column=3 \
             --print-column=5 \
             --separator="" \
@@ -117,12 +122,18 @@ while true; do
             "${rows[@]}" 2>/dev/null) || exit 0
     else
         # zenity fallback — 검색 기능 없음, 레거시 경로
+        # rows는 5셀/행(상태,카테고리,이름,설명,ID)이므로 5개마다 "FALSE"(선택칼럼) 한 번만 삽입
+        zenity_rows=()
+        for ((_i=0; _i<${#rows[@]}; _i+=5)); do
+            zenity_rows+=("FALSE" \
+                "${rows[_i]}" "${rows[_i+1]}" "${rows[_i+2]}" "${rows[_i+3]}" "${rows[_i+4]}")
+        done
         chosen_id=$(zenity --list --radiolist \
             --title="App Installer (proot: ${PROOT_DISTRO:-none})" \
             --text="앱을 선택하세요:" \
             --column="Select" --column="상태" --column="카테고리" --column="이름" --column="설명" --column="ID" \
             --hide-column=6 --print-column=6 \
-            $(for r in "${rows[@]}"; do echo "FALSE"; echo "$r"; done) \
+            "${zenity_rows[@]}" \
             --width=1000 --height=600 2>/dev/null) || exit 0
     fi
 

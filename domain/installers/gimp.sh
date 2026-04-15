@@ -14,5 +14,5 @@ app_remove_gimp() {
 }
 
 app_is_installed_gimp() {
-    desktop_is_registered "gimp"
+    termux_pkg_is_installed gimp && desktop_is_registered "gimp"
 }

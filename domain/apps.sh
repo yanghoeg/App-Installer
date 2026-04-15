@@ -8,7 +8,7 @@
 
 APP_REGISTRY=(
     "thunderbird|Thunderbird|소통|이메일 클라이언트 (Termux native)"
-    "vlc|VLC|미디어|미디어 플레이어 (Termux native)"
+    "vlc|VLC|미디어|미디어 플레이어 (proot)"
     "gimp|GIMP|그래픽|이미지 편집 (Termux native)"
     "inkscape|Inkscape|그래픽|벡터 그래픽 편집 (Termux native)"
     "audacity|Audacity|미디어|오디오 편집 (Termux native)"

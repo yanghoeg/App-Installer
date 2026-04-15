@@ -14,5 +14,5 @@ app_remove_thunderbird() {
 }
 
 app_is_installed_thunderbird() {
-    desktop_is_registered "thunderbird"
+    termux_pkg_is_installed thunderbird && desktop_is_registered "thunderbird"
 }

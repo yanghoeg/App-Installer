@@ -14,5 +14,5 @@ app_remove_audacity() {
 }
 
 app_is_installed_audacity() {
-    desktop_is_registered "audacity"
+    termux_pkg_is_installed audacity && desktop_is_registered "audacity"
 }

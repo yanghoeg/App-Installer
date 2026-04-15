@@ -14,5 +14,5 @@ app_remove_inkscape() {
 }
 
 app_is_installed_inkscape() {
-    desktop_is_registered "inkscape"
+    termux_pkg_is_installed inkscape && desktop_is_registered "inkscape"
 }
