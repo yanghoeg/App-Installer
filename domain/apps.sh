@@ -24,7 +24,6 @@ APP_REGISTRY=(
     "wine|Wine (Box64+Staging)|유틸|Windows 앱 실행"
     "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
     "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
-    "onepassword|1Password|유틸|패스워드 관리자 (proot)"
 )
 
 # proot 설치 여부 확인

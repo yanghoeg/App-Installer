@@ -44,7 +44,6 @@ app-installer
 | **Tor Browser** | Anonymous browser | proot | arm64 port |
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
-| **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
 
 ## arm64 Compatibility Notes
 
@@ -59,7 +58,6 @@ Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds app
 | Wine x86-64 ELF not auto-run (no binfmt_misc) | rename to `.elf`, create `box64` wrapper script |
 | Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
-| 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
 
 ## Wine (Box64 + Wine-Staging)
 

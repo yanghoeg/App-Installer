@@ -44,7 +44,6 @@ app-installer
 | **Tor Browser** | 익명 브라우저 | proot | arm64 포트 |
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
-| **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
 
 ## arm64 호환성 비고
 
@@ -59,7 +58,6 @@ app-installer
 | Wine x86-64 ELF 자동 실행 불가 (binfmt_misc 없음) | `.elf`로 이름 변경 후 `box64` 래퍼 스크립트 생성 |
 | Thorium AUR은 x86 전용 | `ar`로 arm64 .deb 직접 추출 |
 | SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
-| 1Password GUI arm64 미지원 | `1password-cli`(`op`) 설치 |
 
 ## Wine (Box64 + Wine-Staging)
 

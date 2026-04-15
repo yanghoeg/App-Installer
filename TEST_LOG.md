@@ -21,7 +21,6 @@
 | thunderbird (native) | ⬜ | — |
 | sasm | ⬜ | ⬜ |
 | wine | ⬜ | ⬜ |
-| 1password | ⬜ | ⬜ |
 | dbeaver | ⬜ | ⬜ |
 | thorium | ⬜ | ⬜ |
 | teams | ⬜ | ⬜ |
