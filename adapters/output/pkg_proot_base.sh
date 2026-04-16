@@ -10,10 +10,20 @@ proot_exec() {
         --shared-tmp -- env DISPLAY="${DISPLAY:-:0.0}" "$@"
 }
 
+proot_exec_wine() {
+    proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
+        --shared-tmp -- env \
+            DISPLAY="${DISPLAY:-:0.0}" \
+            MESA_LOADER_DRIVER_OVERRIDE=zink \
+            TU_DEBUG=noconform \
+            ZINK_DESCRIPTORS=lazy \
+            MESA_NO_ERROR=1 \
+        "$@"
+}
+
 # sudo PATH 초기화 문제 해결:
 # sudo(및 sudo-rs)는 PATH를 secure_path로 초기화 → Termux wget/curl 사라짐
 # 해결: proot 내부 /usr/local/bin에 Termux 핵심 툴 symlink 생성
-# /usr/local/bin은 sudo secure_path에 기본 포함되어 있음
 proot_setup_sudo_path() {
     local termux_bin="${PREFIX}/bin"
     proot_exec sudo bash -c "
@@ -26,15 +36,11 @@ proot_setup_sudo_path() {
     " 2>/dev/null || true
 }
 
-# Tor Browser 의존성 — distro별로 패키지명이 다름 (override in distro adapter)
-proot_pkg_install_tor_deps() { proot_pkg_install curl dbus-glib; }
-
-# proot 내부에 bwrap 스텁 설치 — GTK4 앱이 glycin(SVG 로더)을 쓸 때 필요
-# bwrap는 user namespace가 필요하지만 proot에선 없음 → 스텁으로 샌드박스 없이 직접 exec
+# GTK4 앱이 glycin(SVG 로더)을 쓸 때 bwrap sandbox 필요 →
+# proot에선 user namespace 없음 → 스텁으로 직접 exec
 proot_setup_bwrap() {
     proot_exec sudo bash -c 'cat > /usr/local/bin/bwrap << '"'"'BWRAP_EOF'"'"'
 #!/bin/bash
-# proot용 bwrap 스텁 — 샌드박스 없이 명령 직접 실행
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --ro-bind|--bind|--dev-bind|--bind-try|--ro-bind-try|--dev-bind-try|--bind-data|--ro-bind-data|--symlink)
@@ -54,13 +60,34 @@ BWRAP_EOF
 chmod +x /usr/local/bin/bwrap'
 }
 
-proot_exec_wine() {
-    proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
-        --shared-tmp -- env \
-            DISPLAY="${DISPLAY:-:0.0}" \
-            MESA_LOADER_DRIVER_OVERRIDE=zink \
-            TU_DEBUG=noconform \
-            ZINK_DESCRIPTORS=lazy \
-            MESA_NO_ERROR=1 \
-        "$@"
+# --- proot_dep / proot_dep_remove 공통 구현 ---
+# 어댑터(ubuntu/arch)가 PROOT_DEP_MAP 배열을 정의하면
+# 이 함수가 논리명 → 실제 패키지명 해석 후 설치/제거
+proot_dep() {
+    local key="$1"
+    for entry in "${PROOT_DEP_MAP[@]}"; do
+        if [[ "${entry%%:*}" == "$key" ]]; then
+            local pkgs="${entry#*:}"
+            proot_pkg_install $pkgs
+            return
+        fi
+    done
+    echo "[PORT] proot_dep: 알 수 없는 의존성 '$key'" >&2
+    return 1
 }
+
+proot_dep_remove() {
+    local key="$1"
+    for entry in "${PROOT_DEP_MAP[@]}"; do
+        if [[ "${entry%%:*}" == "$key" ]]; then
+            local pkgs="${entry#*:}"
+            proot_pkg_remove $pkgs
+            return
+        fi
+    done
+    echo "[PORT] proot_dep_remove: 알 수 없는 의존성 '$key'" >&2
+    return 1
+}
+
+# Tor Browser 의존성 — distro별로 패키지명이 다름 (PROOT_DEP_MAP으로 해석)
+proot_pkg_install_tor_deps() { proot_dep "tor_deps"; }

@@ -202,13 +202,13 @@ it "remove → termux_pkg_remove burpsuite 호출" _test_burpsuite_remove_calls_
 # =============================================================================
 describe "LibreOffice — proot 설치"
 
-_test_libreoffice_install_uses_abstract_pkg_fn() {
+_test_libreoffice_install_uses_proot_dep() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_libreoffice
-    assert_was_called "proot_pkg_install_libreoffice"
+    assert_was_called "proot_dep libreoffice"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_install_libreoffice 호출 (Ubuntu/Arch 추상화)" _test_libreoffice_install_uses_abstract_pkg_fn
+it "install → proot_dep libreoffice 호출 (DEP_MAP 추상화)" _test_libreoffice_install_uses_proot_dep
 
 _test_libreoffice_does_not_hardcode_pkg_name() {
     # proot_pkg_remove/install 에 구체적 패키지명(libreoffice, libreoffice-fresh)이 없어야 함
@@ -222,13 +222,13 @@ it "libreoffice.sh 도메인 — distro별 패키지명 하드코딩 없음" _te
 # =============================================================================
 describe "DBeaver — proot 설치"
 
-_test_dbeaver_install_uses_abstract_jdk() {
+_test_dbeaver_install_uses_proot_dep_jdk() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_dbeaver
-    assert_was_called "proot_pkg_install_jdk"
+    assert_was_called "proot_dep jdk"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
+it "install → proot_dep jdk 호출 (DEP_MAP 추상화)" _test_dbeaver_install_uses_proot_dep_jdk
 
 # =============================================================================
 # Miniforge — 설치 판단 기준 (디렉토리)

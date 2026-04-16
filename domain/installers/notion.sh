@@ -3,7 +3,7 @@
 # zlib 패키지명 차이(zlib1g-dev vs zlib)는 adapter가 흡수
 
 app_install_notion() {
-    proot_pkg_install_zlib
+    proot_dep "zlib"
 
     proot_exec bash -c "
         wget https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage

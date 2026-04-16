@@ -6,8 +6,7 @@
 app_install_sasm() {
     proot_pkg_install_sasm
 
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
-    local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
+    local bashrc="$(proot_home)/.bashrc"
     grep -q "alias sasm=" "$bashrc" 2>/dev/null || \
         echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
 

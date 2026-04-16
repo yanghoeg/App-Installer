@@ -4,6 +4,7 @@
 # =============================================================================
 source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 
+# --- 기본 패키지 관리 ---
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
 proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
 proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
@@ -14,6 +15,17 @@ proot_pkg_autoremove() {
 }
 proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 
+# --- 의존성 매핑 (논리명 → Arch 패키지명) ---
+PROOT_DEP_MAP=(
+    "jdk:jdk-openjdk"
+    "python:python python-pip"
+    "zlib:zlib"
+    "tor_deps:curl dbus-glib"
+    "libreoffice:libreoffice-fresh"
+    "mesa_vulkan:mesa vulkan-freedreno lib32-mesa"
+)
+
+# --- 확장 설치 전략 ---
 proot_pkg_install_aur() {
     local pkg="$1"
     proot_exec bash -c "
@@ -28,23 +40,17 @@ proot_pkg_install_aur() {
 }
 
 proot_pkg_install_deb_or_aur() {
-    local _deb_url="$1"  # Arch에서는 미사용
+    local _deb_url="$1"
     local aur_pkg="$2"
     proot_pkg_install_aur "$aur_pkg"
 }
 
-# Arch에는 APT 저장소 개념 없음 — no-op
 proot_pkg_add_external_repo() {
     echo "[INFO] Arch: proot_pkg_add_external_repo 불필요 (no-op)" >&2
 }
 
-proot_pkg_install_libreoffice() { proot_pkg_install libreoffice-fresh; }
-proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice-fresh; }
-proot_pkg_install_jdk()         { proot_pkg_install jdk-openjdk; }
-proot_pkg_install_python_pip()  { proot_pkg_install python python-pip; }
-proot_pkg_install_zlib()        { proot_pkg_install zlib; }
+# --- 복잡한 앱별 설치 ---
 
-# Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
 proot_pkg_install_sasm() {
     proot_exec sudo bash -c "
         pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
@@ -56,31 +62,10 @@ proot_pkg_install_sasm() {
     "
 }
 
-# Arch: AUR visual-studio-code-bin은 x86_64 전용 → Microsoft 공식 arm64 tar.gz 직접 설치
-proot_pkg_install_vscode() {
-    proot_exec sudo bash -c "
-        [ -f /opt/visual-studio-code/code ] && exit 0
-        pacman -S --noconfirm --needed curl libsecret libxkbfile
-        curl -fL 'https://update.code.visualstudio.com/latest/linux-arm64/stable' \
-            -o /tmp/vscode-arm64.tar.gz
-        mkdir -p /opt/visual-studio-code
-        tar -xzf /tmp/vscode-arm64.tar.gz --strip-components=1 -C /opt/visual-studio-code
-        rm -f /tmp/vscode-arm64.tar.gz
-        ln -sf /opt/visual-studio-code/code /usr/local/bin/code
-    "
-}
-proot_pkg_remove_vscode() {
-    proot_exec sudo bash -c "
-        rm -rf /opt/visual-studio-code
-        rm -f /usr/local/bin/code /usr/bin/code /usr/sbin/code
-    "
-}
-
 proot_pkg_install_box64() {
     proot_exec sudo bash -c "
         pacman -S --noconfirm box64 2>/dev/null && exit 0
 
-        # Chaotic-AUR 추가
         pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com 2>/dev/null || true
         pacman-key --lsign-key 3056513887B78AEB 2>/dev/null || true
         pacman -U --noconfirm \
@@ -90,10 +75,4 @@ proot_pkg_install_box64() {
             printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
         pacman -Sy --noconfirm box64 2>/dev/null || echo '[WARN] Box64 설치 실패'
     " 2>/dev/null || true
-}
-
-proot_pkg_install_wine_mesa() {
-    proot_pkg_install \
-        mesa vulkan-freedreno lib32-mesa 2>/dev/null || \
-        echo "[WARN] Mesa 일부 패키지 실패"
 }

@@ -49,14 +49,11 @@ mock_pkg_adapter() {
     proot_pkg_install_aur()       { _record_call "proot_pkg_install_aur $*"; }
     proot_pkg_install_deb_or_aur(){ _record_call "proot_pkg_install_deb_or_aur $*"; }
     proot_pkg_add_external_repo() { _record_call "proot_pkg_add_external_repo $*"; }
-    proot_pkg_install_libreoffice(){ _record_call "proot_pkg_install_libreoffice"; }
-    proot_pkg_remove_libreoffice() { _record_call "proot_pkg_remove_libreoffice"; }
-    proot_pkg_install_jdk()       { _record_call "proot_pkg_install_jdk"; }
-    proot_pkg_install_python_pip(){ _record_call "proot_pkg_install_python_pip"; }
-    proot_pkg_install_zlib()      { _record_call "proot_pkg_install_zlib"; }
+    proot_dep()                   { _record_call "proot_dep $*"; }
+    proot_dep_remove()            { _record_call "proot_dep_remove $*"; }
+    proot_setup_bwrap()           { _record_call "proot_setup_bwrap"; }
     proot_pkg_install_sasm()      { _record_call "proot_pkg_install_sasm"; }
     proot_pkg_install_box64()     { _record_call "proot_pkg_install_box64"; }
-    proot_pkg_install_wine_mesa() { _record_call "proot_pkg_install_wine_mesa"; }
     termux_pkg_install()          { _record_call "termux_pkg_install $*"; }
     termux_pkg_remove()           { _record_call "termux_pkg_remove $*"; }
     termux_pkg_is_installed()     { echo "$MOCK_INSTALLED_PKGS" | grep -qw "$1"; }

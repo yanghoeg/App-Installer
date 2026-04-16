@@ -179,7 +179,7 @@ app_install_wine() {
             proot_pkg_update
             proot_pkg_install_box64
             _wine_install_tarball_proot
-            proot_pkg_install_wine_mesa
+            proot_dep "mesa_vulkan"
             _wine_install_winetricks_proot
             _wine_init_prefix_proot
         fi
