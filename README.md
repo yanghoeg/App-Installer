@@ -84,7 +84,7 @@ This file is created automatically by the Termux_XFCE installer.
 
 ```
 PROOT_DISTRO=ubuntu
-PROOT_USER=yanghoeg
+PROOT_USER=<username>
 ```
 
 Falls back to `ubuntu` if the config file is missing.

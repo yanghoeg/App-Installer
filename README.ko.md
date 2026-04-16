@@ -84,7 +84,7 @@ Termux_XFCE 설치 시 자동 생성됩니다.
 
 ```
 PROOT_DISTRO=ubuntu
-PROOT_USER=yanghoeg
+PROOT_USER=<username>
 ```
 
 config가 없으면 `ubuntu`를 기본값으로 사용합니다.
