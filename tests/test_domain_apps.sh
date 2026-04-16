@@ -147,33 +147,55 @@ _test_vlc_does_not_call_proot() {
 it "install → proot 함수 미호출 (native 전용)" _test_vlc_does_not_call_proot
 
 # =============================================================================
-# VS Code — proot 설치
+# VS Code — Termux native (code-oss)
 # =============================================================================
-describe "VS Code — proot 설치"
+describe "VS Code — Termux native 설치"
 
-_test_vscode_install_adds_external_repo() {
+_test_vscode_install_calls_termux_pkg() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_vscode
-    assert_was_called "proot_pkg_add_external_repo vscode"
+    assert_was_called "termux_pkg_install code-oss"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_add_external_repo 호출 (MS apt repo)" _test_vscode_install_adds_external_repo
+it "install → termux_pkg_install code-oss 호출" _test_vscode_install_calls_termux_pkg
 
-_test_vscode_install_calls_proot_pkg_install_code() {
+_test_vscode_install_registers_desktop() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_vscode
-    assert_was_called "proot_pkg_install code"
+    [ -f "${PREFIX}/share/applications/code-oss.desktop" ] || { echo "[ASSERT] desktop file not created" >&2; cleanup_sandbox "$sb"; return 1; }
+    grep -q "no-sandbox" "${PREFIX}/share/applications/code-oss.desktop" || { echo "[ASSERT] --no-sandbox flag missing" >&2; cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_install code 호출" _test_vscode_install_calls_proot_pkg_install_code
+it "install → desktop 파일 생성 (--no-sandbox 포함)" _test_vscode_install_registers_desktop
 
-_test_vscode_install_calls_update_first() {
+_test_vscode_remove_calls_termux_pkg() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_vscode
-    assert_was_called "proot_pkg_update"
+    app_remove_vscode
+    assert_was_called "termux_pkg_remove code-oss"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_update를 먼저 호출한다" _test_vscode_install_calls_update_first
+it "remove → termux_pkg_remove code-oss 호출" _test_vscode_remove_calls_termux_pkg
+
+# =============================================================================
+# Burp Suite — Termux native (tur-packages)
+# =============================================================================
+describe "Burp Suite — Termux native 설치"
+
+_test_burpsuite_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_burpsuite
+    assert_was_called "termux_pkg_install burpsuite"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install burpsuite 호출" _test_burpsuite_install_calls_termux_pkg
+
+_test_burpsuite_remove_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_remove_burpsuite
+    assert_was_called "termux_pkg_remove burpsuite"
+    cleanup_sandbox "$sb"
+}
+it "remove → termux_pkg_remove burpsuite 호출" _test_burpsuite_remove_calls_termux_pkg
 
 # =============================================================================
 # LibreOffice — proot 설치 (패키지명 추상화)

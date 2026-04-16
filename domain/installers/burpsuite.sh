@@ -1,33 +1,18 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# DOMAIN: Burp Suite Community — proot 내부 설치 (arm64 바이너리, distro-agnostic)
+# DOMAIN: Burp Suite Community — Termux native (tur-packages)
+# tur-repo가 메인 install.sh의 _setup_termux_repos에서 이미 활성화되어 있음.
 
 app_install_burpsuite() {
-    proot_pkg_update
-    proot_exec bash -c "
-        curl -L -o /tmp/burpsuite.sh \
-            'https://portswigger.net/burp/releases/startdownload?product=community&version=2024.11.2&type=linuxarm64'
-        chmod +x /tmp/burpsuite.sh
-        /tmp/burpsuite.sh -q
-        rm -f /tmp/burpsuite.sh
-    "
-
-    desktop_register "burpsuite" "Burp Suite Community" \
-        'bash -c "prun BurpSuiteCommunity </dev/null >/dev/null 2>&1 &"' \
-        "burpsuite" "Security;Network;"
+    termux_pkg_install burpsuite
+    desktop_register "burpsuite" "Burp Suite Community" "burpsuite" "burpsuite" \
+        "Network;Security;"
 }
 
 app_remove_burpsuite() {
-    # installer puts it in user's home dir, uninstall script there
-    proot_exec bash -c "
-        if [ -f ~/BurpSuiteCommunity/uninstall ]; then
-            ~/BurpSuiteCommunity/uninstall -q 2>/dev/null || true
-        fi
-        rm -rf ~/BurpSuiteCommunity
-        sudo rm -f /usr/local/bin/BurpSuiteCommunity
-    " 2>/dev/null || true
+    termux_pkg_remove burpsuite
     desktop_remove "burpsuite"
 }
 
 app_is_installed_burpsuite() {
-    desktop_is_registered "burpsuite"
+    termux_pkg_is_installed burpsuite && desktop_is_registered "burpsuite"
 }
