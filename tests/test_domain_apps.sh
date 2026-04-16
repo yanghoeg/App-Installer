@@ -283,14 +283,14 @@ _test_wine_proot_path_calls_box64() {
 }
 it "proot 있음 → proot_pkg_install_box64 호출" _test_wine_proot_path_calls_box64
 
-_test_wine_proot_path_calls_wine_mesa() {
+_test_wine_proot_path_calls_mesa_vulkan_dep() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     MOCK_HAS_PROOT=true
     app_install_wine
-    assert_was_called "proot_pkg_install_wine_mesa"
+    assert_was_called "proot_dep mesa_vulkan"
     cleanup_sandbox "$sb"
 }
-it "proot 있음 → proot_pkg_install_wine_mesa 호출" _test_wine_proot_path_calls_wine_mesa
+it "proot 있음 → proot_dep mesa_vulkan 호출 (DEP_MAP 추상화)" _test_wine_proot_path_calls_mesa_vulkan_dep
 
 _test_wine_native_path_calls_termux_pkg() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -310,6 +310,109 @@ _test_wine_proot_path_does_not_call_termux_glibc() {
     cleanup_sandbox "$sb"
 }
 it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
+
+# =============================================================================
+# Notion — zlib 추상화
+# =============================================================================
+describe "Notion — proot 설치"
+
+_test_notion_install_uses_proot_dep_zlib() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_notion
+    assert_was_called "proot_dep zlib"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_dep zlib 호출 (DEP_MAP 추상화)" _test_notion_install_uses_proot_dep_zlib
+
+_test_notion_does_not_hardcode_zlib_pkg() {
+    # zlib1g-dev / zlib 같은 distro별 패키지명이 도메인에 없어야 함
+    ! grep -qE "proot_pkg_install (zlib1g-dev|zlib\b)" \
+        "${APP_DIR}/domain/installers/notion.sh" 2>/dev/null
+}
+it "notion.sh 도메인 — distro별 zlib 패키지명 하드코딩 없음" _test_notion_does_not_hardcode_zlib_pkg
+
+# =============================================================================
+# Tor Browser — tor_deps 추상화
+# =============================================================================
+describe "Tor Browser — proot 설치"
+
+_test_tor_install_uses_proot_dep() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_tor_browser
+    assert_was_called "proot_dep tor_deps"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_dep tor_deps 호출 (DEP_MAP 추상화)" _test_tor_install_uses_proot_dep
+
+# =============================================================================
+# Nautilus — bwrap 스텁 설정
+# =============================================================================
+describe "Nautilus — proot 설치"
+
+_test_nautilus_install_sets_up_bwrap() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_nautilus
+    assert_was_called "proot_setup_bwrap"
+    cleanup_sandbox "$sb"
+}
+it "install → proot_setup_bwrap 호출 (GTK4 glycin 대응)" _test_nautilus_install_sets_up_bwrap
+
+# =============================================================================
+# GIMP/Inkscape/Audacity — Termux native (x11-repo)
+# =============================================================================
+describe "GIMP — Termux native 설치"
+
+_test_gimp_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_gimp
+    assert_was_called "termux_pkg_install gimp"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install gimp 호출" _test_gimp_install_calls_termux_pkg
+
+_test_gimp_does_not_call_proot() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_gimp
+    assert_not_called "proot_pkg_install"
+    cleanup_sandbox "$sb"
+}
+it "install → proot 함수 미호출 (native 전용)" _test_gimp_does_not_call_proot
+
+describe "Inkscape — Termux native 설치"
+
+_test_inkscape_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_inkscape
+    assert_was_called "termux_pkg_install inkscape"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install inkscape 호출" _test_inkscape_install_calls_termux_pkg
+
+_test_inkscape_does_not_call_proot() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_inkscape
+    assert_not_called "proot_pkg_install"
+    cleanup_sandbox "$sb"
+}
+it "install → proot 함수 미호출 (native 전용)" _test_inkscape_does_not_call_proot
+
+describe "Audacity — Termux native 설치"
+
+_test_audacity_install_calls_termux_pkg() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_audacity
+    assert_was_called "termux_pkg_install audacity"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install audacity 호출" _test_audacity_install_calls_termux_pkg
+
+_test_audacity_does_not_call_proot() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_audacity
+    assert_not_called "proot_pkg_install"
+    cleanup_sandbox "$sb"
+}
+it "install → proot 함수 미호출 (native 전용)" _test_audacity_does_not_call_proot
 
 # =============================================================================
 # has_proot_distro — 유틸 함수

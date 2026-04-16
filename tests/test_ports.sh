@@ -8,6 +8,8 @@ APP_DIR="${SCRIPT_DIR}/.."
 source "${SCRIPT_DIR}/framework.sh"
 
 # 모든 어댑터가 구현해야 할 포트 함수 목록
+# 단순 패키지명 차이는 PROOT_DEP_MAP + proot_dep()로 추상화 →
+# 개별 wrapper(jdk, python_pip, zlib, libreoffice, wine_mesa, tor_deps) 제거
 PKG_PROOT_CONTRACTS=(
     proot_exec
     proot_exec_wine
@@ -20,14 +22,11 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_install_aur
     proot_pkg_install_deb_or_aur
     proot_pkg_add_external_repo
-    proot_pkg_install_libreoffice
-    proot_pkg_remove_libreoffice
-    proot_pkg_install_jdk
-    proot_pkg_install_python_pip
-    proot_pkg_install_zlib
     proot_pkg_install_sasm
     proot_pkg_install_box64
-    proot_pkg_install_wine_mesa
+    proot_dep
+    proot_dep_remove
+    proot_setup_bwrap
 )
 
 PKG_TERMUX_CONTRACTS=(
@@ -140,29 +139,86 @@ _test_ubuntu_proot_install_uses_apt() {
 it "pkg_ubuntu.sh의 proot_pkg_install은 apt를 호출한다" _test_ubuntu_proot_install_uses_apt
 
 # =============================================================================
-# distro별 패키지명 분기 검증
+# distro별 패키지명 분기 — PROOT_DEP_MAP 해석 검증
 # =============================================================================
-describe "어댑터 — distro별 패키지명 차이"
+describe "어댑터 — PROOT_DEP_MAP distro별 패키지명"
 
-_test_ubuntu_libreoffice_pkg() {
+# entry 포맷 "key:pkg1 pkg2..." 에서 key가 일치하는 항목의 pkg 문자열 추출
+_lookup_dep() {
+    local key="$1"
+    for e in "${PROOT_DEP_MAP[@]}"; do
+        if [[ "${e%%:*}" == "$key" ]]; then
+            echo "${e#*:}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+_test_ubuntu_libreoffice_dep_map() {
     (
-        PROOT_DISTRO=ubuntu; PROOT_USER=user; PREFIX=/tmp
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        # proot_pkg_install_libreoffice가 'libreoffice'(fresh 아님)를 설치하는지
-        declare -f proot_pkg_install_libreoffice | grep -q "libreoffice[^-]"
+        local pkgs; pkgs=$(_lookup_dep "libreoffice")
+        # Ubuntu는 'libreoffice' (fresh 접미사 없음)
+        [[ "$pkgs" == "libreoffice" ]]
     )
 }
-it "Ubuntu: proot_pkg_install_libreoffice → libreoffice (not fresh)" _test_ubuntu_libreoffice_pkg
+it "Ubuntu: PROOT_DEP_MAP[libreoffice] = 'libreoffice' (not fresh)" _test_ubuntu_libreoffice_dep_map
 
-_test_arch_libreoffice_pkg() {
+_test_arch_libreoffice_dep_map() {
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_libreoffice | grep -q "libreoffice-fresh"
+        local pkgs; pkgs=$(_lookup_dep "libreoffice")
+        [[ "$pkgs" == *"libreoffice-fresh"* ]]
     )
 }
-it "Arch: proot_pkg_install_libreoffice → libreoffice-fresh" _test_arch_libreoffice_pkg
+it "Arch: PROOT_DEP_MAP[libreoffice] = 'libreoffice-fresh'" _test_arch_libreoffice_dep_map
+
+_test_ubuntu_jdk_dep_map() {
+    (
+        source "${APP_DIR}/ports/pkg_manager.sh"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        local pkgs; pkgs=$(_lookup_dep "jdk")
+        [[ "$pkgs" == *"openjdk"* ]]
+    )
+}
+it "Ubuntu: PROOT_DEP_MAP[jdk] → openjdk-* 계열" _test_ubuntu_jdk_dep_map
+
+_test_arch_jdk_dep_map() {
+    (
+        source "${APP_DIR}/ports/pkg_manager.sh"
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        local pkgs; pkgs=$(_lookup_dep "jdk")
+        [[ "$pkgs" == *"jdk"* ]]
+    )
+}
+it "Arch: PROOT_DEP_MAP[jdk] → jdk-openjdk 계열" _test_arch_jdk_dep_map
+
+_test_proot_dep_resolves_via_map() {
+    (
+        source "${APP_DIR}/ports/pkg_manager.sh"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        # proot_pkg_install 호출을 가로채서 해석된 패키지 기록
+        RESOLVED=""
+        proot_pkg_install() { RESOLVED="$*"; }
+        proot_dep "jdk" >/dev/null 2>&1
+        [[ "$RESOLVED" == "openjdk-21-jdk" ]]
+    )
+}
+it "proot_dep → PROOT_DEP_MAP 조회 후 proot_pkg_install 위임" _test_proot_dep_resolves_via_map
+
+_test_proot_dep_unknown_key_fails() {
+    (
+        source "${APP_DIR}/ports/pkg_manager.sh"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_pkg_install() { :; }
+        proot_dep "nonexistent_key" 2>/dev/null
+        [ $? -ne 0 ]
+    )
+}
+it "proot_dep → 알 수 없는 키 시 오류 반환" _test_proot_dep_unknown_key_fails
 
 _test_arch_add_external_repo_is_noop() {
     (

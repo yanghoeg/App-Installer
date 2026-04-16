@@ -74,14 +74,17 @@ _test_ubuntu_add_repo_uses_gpg() {
 }
 it "proot_pkg_add_external_repo → GPG 키 처리 포함" _test_ubuntu_add_repo_uses_gpg
 
-_test_ubuntu_jdk_has_fallback() {
+_test_ubuntu_dep_map_defined() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        # openjdk-21 실패 시 openjdk-11 폴백
-        declare -f proot_pkg_install_jdk | grep -q "11"
+        # PROOT_DEP_MAP이 Ubuntu 어댑터에서 정의되고 핵심 키를 포함해야 함
+        [ "${#PROOT_DEP_MAP[@]}" -gt 0 ] && \
+        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^jdk:' && \
+        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^libreoffice:' && \
+        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^mesa_vulkan:'
     )
 }
-it "proot_pkg_install_jdk → openjdk-11 폴백 있음" _test_ubuntu_jdk_has_fallback
+it "PROOT_DEP_MAP 정의 + jdk/libreoffice/mesa_vulkan 키 포함" _test_ubuntu_dep_map_defined
 
 # =============================================================================
 # pkg_arch.sh — proot Arch

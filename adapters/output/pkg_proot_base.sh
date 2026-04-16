@@ -88,6 +88,3 @@ proot_dep_remove() {
     echo "[PORT] proot_dep_remove: 알 수 없는 의존성 '$key'" >&2
     return 1
 }
-
-# Tor Browser 의존성 — distro별로 패키지명이 다름 (PROOT_DEP_MAP으로 해석)
-proot_pkg_install_tor_deps() { proot_dep "tor_deps"; }
