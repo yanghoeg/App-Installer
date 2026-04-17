@@ -16,7 +16,7 @@ app_install_tor_browser() {
     "
 
     desktop_register "tor" "Tor Browser" \
-        'bash -c "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun-gui \"Tor Browser\" -- /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "tor" "Network;WebBrowser;Security;"
 }
 

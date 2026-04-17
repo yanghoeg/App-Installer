@@ -29,7 +29,7 @@ app_install_thorium() {
     "
 
     desktop_register "thorium-browser" "Thorium" \
-        'bash -c "prun thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun-gui Thorium -- thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "thorium-browser" "Network;"
 }
 

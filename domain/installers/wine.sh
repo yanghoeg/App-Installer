@@ -139,7 +139,7 @@ Version=1.0
 Type=Application
 Name=Wine
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine %f </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "prun-gui Wine -- env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine %f </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
@@ -153,7 +153,7 @@ Version=1.0
 Type=Application
 Name=Wine 설정
 Comment=Wine 환경 구성 (winecfg)
-Exec=bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine winecfg </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "prun-gui \"Wine 설정\" -- env MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform WINEDEBUG=-all wine winecfg </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
 Categories=System;Emulator;
 Terminal=false

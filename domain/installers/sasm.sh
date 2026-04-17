@@ -11,7 +11,7 @@ app_install_sasm() {
         echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
 
     desktop_register "sasm" "SASM" \
-        'bash -c "prun env QT_SCALE_FACTOR=2 sasm </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun-gui SASM -- env QT_SCALE_FACTOR=2 sasm </dev/null >/dev/null 2>&1 &"' \
         "sasm" "Development;"
 }
 

@@ -16,7 +16,7 @@ app_install_dbeaver() {
     "
 
     desktop_register "dbeaver" "DBeaver" \
-        "prun dbeaver --no-sandbox" \
+        'bash -c "prun-gui DBeaver -- dbeaver --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "dbeaver" "Development;Database;"
 }
 
