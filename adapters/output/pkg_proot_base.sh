@@ -18,6 +18,15 @@ proot_exec_wine() {
             TU_DEBUG=noconform \
             ZINK_DESCRIPTORS=lazy \
             MESA_NO_ERROR=1 \
+            MESA_GL_VERSION_OVERRIDE=4.6COMPAT \
+            MESA_GLSL_VERSION_OVERRIDE=460 \
+            MESA_GLES_VERSION_OVERRIDE=3.2 \
+            WINEESYNC=1 \
+            BOX64_MMAP32=1 \
+            BOX64_X11THREADS=1 \
+            BOX64_DYNAREC_SAFEFLAGS=2 \
+            DXVK_ASYNC=1 \
+            DXVK_STATE_CACHE=reset \
         "$@"
 }
 

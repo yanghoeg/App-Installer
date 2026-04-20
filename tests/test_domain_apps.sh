@@ -311,6 +311,125 @@ _test_wine_proot_path_does_not_call_termux_glibc() {
 }
 it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
 
+_test_wine_launcher_creates_desktop_without_shell() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_file_exists "${PREFIX}/share/applications/wine64.desktop"
+    # explorer /desktop=shell은 Box64에서 먹통 → wine explorer만 사용
+    if grep -q '/desktop=shell' "${PREFIX}/share/applications/wine64.desktop"; then
+        echo "[ASSERT] desktop에 /desktop=shell 포함됨 (Box64 호환 불가)" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "proot 있음 → desktop 파일에 /desktop=shell 미포함" _test_wine_launcher_creates_desktop_without_shell
+
+_test_wine_wrapper_has_dpi_sync() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_file_contains "${PREFIX}/bin/wine" "WINE_DPI"
+    assert_file_contains "${PREFIX}/bin/wine" "LogPixels"
+    cleanup_sandbox "$sb"
+}
+it "proot 있음 → wine wrapper에 DPI 동기화 로직 포함" _test_wine_wrapper_has_dpi_sync
+
+# =============================================================================
+# KakaoTalk — Wine 앱
+# =============================================================================
+describe "KakaoTalk — Wine 앱 설치"
+
+_test_kakaotalk_requires_wine() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    # wine 미설치 상태 → wine부터 설치해야 함
+    app_install_kakaotalk
+    assert_was_called "proot_pkg_install_box64"
+    cleanup_sandbox "$sb"
+}
+it "Wine 미설치 시 Wine 먼저 설치" _test_kakaotalk_requires_wine
+
+_test_kakaotalk_install_creates_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_kakaotalk
+    assert_file_exists "${PREFIX}/share/applications/kakaotalk.desktop"
+    assert_file_exists "${HOME}/Desktop/kakaotalk.desktop"
+    cleanup_sandbox "$sb"
+}
+it "install → .desktop 파일 생성" _test_kakaotalk_install_creates_desktop
+
+_test_kakaotalk_desktop_uses_wine_wrapper() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_kakaotalk
+    assert_file_contains "${PREFIX}/share/applications/kakaotalk.desktop" "wine"
+    assert_file_contains "${PREFIX}/share/applications/kakaotalk.desktop" "KakaoTalk"
+    cleanup_sandbox "$sb"
+}
+it "desktop Exec에 wine wrapper 사용" _test_kakaotalk_desktop_uses_wine_wrapper
+
+_test_kakaotalk_remove_deletes_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    touch "${PREFIX}/share/applications/kakaotalk.desktop"
+    touch "${HOME}/Desktop/kakaotalk.desktop"
+    app_remove_kakaotalk
+    [ ! -e "${PREFIX}/share/applications/kakaotalk.desktop" ]
+    [ ! -e "${HOME}/Desktop/kakaotalk.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it "remove → .desktop 파일 삭제" _test_kakaotalk_remove_deletes_desktop
+
+# =============================================================================
+# Notepad++ — Wine 앱
+# =============================================================================
+describe "Notepad++ — Wine 앱 설치"
+
+_test_notepadpp_install_creates_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_notepadpp
+    assert_file_exists "${PREFIX}/share/applications/notepadpp.desktop"
+    cleanup_sandbox "$sb"
+}
+it "install → .desktop 파일 생성" _test_notepadpp_install_creates_desktop
+
+_test_notepadpp_desktop_supports_file_open() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_notepadpp
+    assert_file_contains "${PREFIX}/share/applications/notepadpp.desktop" "%f"
+    assert_file_contains "${PREFIX}/share/applications/notepadpp.desktop" "text/plain"
+    cleanup_sandbox "$sb"
+}
+it "desktop에 파일 열기(%f) 및 MimeType 포함" _test_notepadpp_desktop_supports_file_open
+
+# =============================================================================
+# 7-Zip — Wine 앱
+# =============================================================================
+describe "7-Zip — Wine 앱 설치"
+
+_test_sevenzip_install_creates_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_sevenzip
+    assert_file_exists "${PREFIX}/share/applications/sevenzip.desktop"
+    cleanup_sandbox "$sb"
+}
+it "install → .desktop 파일 생성" _test_sevenzip_install_creates_desktop
+
+_test_sevenzip_desktop_has_archive_mimetypes() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_sevenzip
+    assert_file_contains "${PREFIX}/share/applications/sevenzip.desktop" "application/zip"
+    assert_file_contains "${PREFIX}/share/applications/sevenzip.desktop" "application/x-7z-compressed"
+    cleanup_sandbox "$sb"
+}
+it "desktop에 압축 MimeType 포함" _test_sevenzip_desktop_has_archive_mimetypes
+
 # =============================================================================
 # Notion — zlib 추상화
 # =============================================================================

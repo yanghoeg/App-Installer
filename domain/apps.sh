@@ -22,6 +22,9 @@ APP_REGISTRY=(
     "sasm|SASM|개발|어셈블러 IDE (proot)"
     "nautilus|Nautilus|유틸|파일 관리자 (proot)"
     "wine|Wine (Box64+Staging)|유틸|Windows 앱 실행"
+    "kakaotalk|KakaoTalk|소통|카카오톡 PC (Wine)"
+    "notepadpp|Notepad++|개발|텍스트 에디터 (Wine)"
+    "sevenzip|7-Zip|유틸|파일 압축/해제 (Wine)"
     "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
     "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
 )

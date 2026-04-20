@@ -52,10 +52,15 @@ it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distr
 _test_ubuntu_exec_wine_has_mesa_env() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_exec_wine | grep -q "MESA_LOADER_DRIVER_OVERRIDE"
+        local fn
+        fn=$(declare -f proot_exec_wine)
+        echo "$fn" | grep -q "MESA_LOADER_DRIVER_OVERRIDE" && \
+        echo "$fn" | grep -q "WINEESYNC" && \
+        echo "$fn" | grep -q "BOX64_MMAP32" && \
+        echo "$fn" | grep -q "DXVK_ASYNC"
     )
 }
-it "proot_exec_wine → MESA_LOADER_DRIVER_OVERRIDE 포함" _test_ubuntu_exec_wine_has_mesa_env
+it "proot_exec_wine → Mesa·Wine·Box64·DXVK 환경변수 포함" _test_ubuntu_exec_wine_has_mesa_env
 
 _test_ubuntu_sasm_has_codename_workaround() {
     (
