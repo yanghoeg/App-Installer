@@ -25,6 +25,8 @@ APP_REGISTRY=(
     "kakaotalk|KakaoTalk|소통|카카오톡 PC (Wine)"
     "notepadpp|Notepad++|개발|텍스트 에디터 (Wine)"
     "sevenzip|7-Zip|유틸|파일 압축/해제 (Wine)"
+    "sumatrapdf|Sumatra PDF|오피스|PDF/EPUB/MOBI 뷰어 (Wine)"
+    "winmerge|WinMerge|개발|파일/폴더 비교·병합 (Wine)"
     "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
     "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
 )

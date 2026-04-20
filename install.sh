@@ -2,12 +2,17 @@
 # =============================================================================
 # App Installer — 진입점 + DI 컨테이너
 # =============================================================================
-# 사용법: bash install.sh
+# 사용법: bash install.sh [wine]
+#   wine  — Wine 앱만 표시 (Windows 프로그램 설치 UI)
 # 환경변수: PROOT_DISTRO, PROOT_USER (없으면 config 파일에서 로드)
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+_FILTER=""
+case "${1:-}" in
+    wine|Wine) _FILTER="Wine" ;;
+esac
 
 # -----------------------------------------------------------------------------
 # 설정 로드
@@ -94,6 +99,10 @@ while true; do
 
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
+        # Wine 필터: 설명에 "(Wine)" 포함된 항목만 표시
+        if [ -n "$_FILTER" ] && [[ "$_desc" != *"($_FILTER)"* ]]; then
+            continue
+        fi
         if app_is_installed "$_id"; then
             _status="✅ 설치됨"
         else
@@ -102,13 +111,22 @@ while true; do
         rows+=("$_status" "$_category" "$_name" "$_desc" "$_id")
     done
 
+    local _title _text
+    if [ -n "$_FILTER" ]; then
+        _title="Wine App Installer"
+        _text="Windows 프로그램을 선택하세요:"
+    else
+        _title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})"
+        _text="앱을 검색/선택하세요 (이름/설명 입력 시 필터링):"
+    fi
+
     if [ "$UI" = yad ]; then
         # --search-column=3: "이름" 컬럼 기준 타이핑 즉시 필터링
         # --print-column=5 : ID 컬럼(숨김) 반환
         # 타입(:TEXT/:HD)은 전체를 따옴표로 감싸야 일부 yad 빌드에서 안전하게 파싱됨
         chosen_id=$(yad --list \
-            --title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})" \
-            --text="앱을 검색/선택하세요 (이름/설명 입력 시 필터링):" \
+            --title="$_title" \
+            --text="$_text" \
             --column='상태:TEXT' \
             --column='카테고리:TEXT' \
             --column='이름:TEXT' \
@@ -129,8 +147,8 @@ while true; do
                 "${rows[_i]}" "${rows[_i+1]}" "${rows[_i+2]}" "${rows[_i+3]}" "${rows[_i+4]}")
         done
         chosen_id=$(zenity --list --radiolist \
-            --title="App Installer (proot: ${PROOT_DISTRO:-none})" \
-            --text="앱을 선택하세요:" \
+            --title="$_title" \
+            --text="$_text" \
             --column="Select" --column="상태" --column="카테고리" --column="이름" --column="설명" --column="ID" \
             --hide-column=6 --print-column=6 \
             "${zenity_rows[@]}" \

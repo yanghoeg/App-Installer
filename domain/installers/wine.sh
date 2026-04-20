@@ -8,6 +8,7 @@
 _WINE_BIN="${PREFIX}/bin/wine"
 _WINE_DESKTOP="${PREFIX}/share/applications/wine64.desktop"
 _WINECFG_DESKTOP="${PREFIX}/share/applications/winecfg.desktop"
+_WINE_APPS_DESKTOP="${PREFIX}/share/applications/wine-apps.desktop"
 _WINE_NATIVE_DIR="${HOME}/.wine-staging"
 
 # GitHub Releases에서 최신 Wine-Staging URL 조회
@@ -212,10 +213,26 @@ Terminal=false
 StartupNotify=false
 EOF
 
+    # Wine 앱 설치 런처 (install.sh wine 모드)
+    cat > "$_WINE_APPS_DESKTOP" << EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Wine 앱 설치
+Comment=Windows 프로그램 설치/제거
+Exec=bash ${SCRIPT_DIR}/install.sh wine
+Icon=wine
+Categories=System;
+Terminal=false
+StartupNotify=false
+EOF
+
     # Desktop 아이콘 복사
     cp "$_WINE_DESKTOP" "${HOME}/Desktop/wine64.desktop" 2>/dev/null || true
     cp "$_WINECFG_DESKTOP" "${HOME}/Desktop/winecfg.desktop" 2>/dev/null || true
-    chmod +x "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" 2>/dev/null || true
+    cp "$_WINE_APPS_DESKTOP" "${HOME}/Desktop/wine-apps.desktop" 2>/dev/null || true
+    chmod +x "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
+        "${HOME}/Desktop/wine-apps.desktop" 2>/dev/null || true
     gio set "${HOME}/Desktop/wine64.desktop" metadata::trusted true 2>/dev/null || true
     gio set "${HOME}/Desktop/winecfg.desktop" metadata::trusted true 2>/dev/null || true
 }
@@ -263,8 +280,9 @@ app_remove_wine() {
         rm -rf "$_WINE_NATIVE_DIR"
     fi
 
-    rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP"
-    rm -f "${HOME}/Desktop/wine64.desktop"
+    rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP"
+    rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
+        "${HOME}/Desktop/wine-apps.desktop"
 }
 
 app_is_installed_wine() {
