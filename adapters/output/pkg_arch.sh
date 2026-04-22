@@ -29,13 +29,13 @@ PROOT_DEP_MAP=(
 proot_pkg_install_aur() {
     local pkg="$1"
     proot_exec bash -c "
-        if ! command -v yay &>/dev/null; then
+        if ! command -v paru &>/dev/null; then
             sudo pacman -S --noconfirm --needed git base-devel
-            git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
-            cd /tmp/yay-bin && makepkg -si --noconfirm
-            rm -rf /tmp/yay-bin
+            git clone https://aur.archlinux.org/paru-bin.git /tmp/paru-bin
+            cd /tmp/paru-bin && makepkg -si --noconfirm
+            rm -rf /tmp/paru-bin
         fi
-        yay -S --noconfirm --needed '${pkg}'
+        paru -S --noconfirm --needed '${pkg}'
     "
 }
 

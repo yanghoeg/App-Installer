@@ -112,13 +112,13 @@ _test_arch_autoremove_handles_orphans() {
 }
 it "proot_pkg_autoremove → pacman orphan 처리" _test_arch_autoremove_handles_orphans
 
-_test_arch_aur_installs_yay_if_missing() {
+_test_arch_aur_installs_paru_if_missing() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_aur | grep -q "yay"
+        declare -f proot_pkg_install_aur | grep -q "paru"
     )
 }
-it "proot_pkg_install_aur → yay 없으면 자동 설치" _test_arch_aur_installs_yay_if_missing
+it "proot_pkg_install_aur → paru 없으면 자동 설치" _test_arch_aur_installs_paru_if_missing
 
 _test_arch_box64_tries_chaotic_aur() {
     (
