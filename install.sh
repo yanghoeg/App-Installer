@@ -17,6 +17,20 @@ esac
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
+# proot home/ 첫 번째 사용자 디렉토리명 추출
+# - glob 미매치 시 literal "*"가 남는 함정을 for 루프 + [ -d ]로 차단
+# - PROOT_DISTRO 미설정/proot 미설치 시 "user" 폴백
+_detect_proot_user() {
+    local home_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO:-}/home"
+    local d
+    for d in "$home_dir"/*/; do
+        [ -d "$d" ] || continue
+        basename "$d"
+        return
+    done
+    echo "user"
+}
+
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then
@@ -27,10 +41,7 @@ _load_config() {
         # config 없을 때만 ubuntu 기본값 적용
         PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
     fi
-    PROOT_USER="${PROOT_USER:-$(
-        basename "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* \
-        2>/dev/null || echo "user"
-    )}"
+    PROOT_USER="${PROOT_USER:-$(_detect_proot_user)}"
 }
 
 _load_config
