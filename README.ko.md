@@ -44,6 +44,7 @@ app-installer
 | **Tor Browser** | 익명 브라우저 | proot | arm64 포트 |
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
+| **Claude Code** | Anthropic AI 코딩 어시스턴트 CLI | Termux native | glibc-runner로 native ELF 실행, npm 우회 + 자체 self-update 차단 |
 
 ## arm64 호환성 비고
 
@@ -58,6 +59,7 @@ app-installer
 | Wine x86-64 ELF 자동 실행 불가 (binfmt_misc 없음) | `.elf`로 이름 변경 후 `box64` 래퍼 스크립트 생성 |
 | Thorium AUR은 x86 전용 | `ar`로 arm64 .deb 직접 추출 |
 | SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
+| Claude Code v2.1.114+ native ELF (glibc 동적 링커 요구) | npm 우회 — tarball 직접 다운로드 후 `grun` wrapper로 실행 |
 
 ## Wine (Box64 + Wine-Staging)
 

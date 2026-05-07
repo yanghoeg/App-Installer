@@ -534,6 +534,107 @@ _test_audacity_does_not_call_proot() {
 it "install → proot 함수 미호출 (native 전용)" _test_audacity_does_not_call_proot
 
 # =============================================================================
+# Claude Code — Termux native + glibc-runner
+# =============================================================================
+describe "Claude Code — Termux native + glibc-runner"
+
+# 외부 호출(curl/tar/npm) override — 실제 네트워크 미사용
+_claude_code_mock_externals() {
+    _claude_code_fetch_latest_version() { echo "9.9.9"; }
+    _claude_code_download_native()      {
+        mkdir -p "${CLAUDE_CODE_PREFIX}"
+        touch "${CLAUDE_CODE_PREFIX}/claude"
+        chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    }
+    _claude_code_remove_npm_wrapper()   { :; }
+}
+
+_test_claude_code_install_calls_glibc_runner() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_mock_externals
+    app_install_claude_code
+    assert_was_called "termux_pkg_install glibc-runner"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install glibc-runner 호출" _test_claude_code_install_calls_glibc_runner
+
+_test_claude_code_install_calls_glibc_repo() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_mock_externals
+    app_install_claude_code
+    assert_was_called "termux_pkg_install glibc-repo"
+    cleanup_sandbox "$sb"
+}
+it "install → termux_pkg_install glibc-repo 호출 (의존성)" _test_claude_code_install_calls_glibc_repo
+
+_test_claude_code_install_creates_wrapper() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_mock_externals
+    app_install_claude_code
+    assert_file_exists "${CLAUDE_CODE_BIN_PATH}"
+    assert_file_contains "${CLAUDE_CODE_BIN_PATH}" "exec grun"
+    cleanup_sandbox "$sb"
+}
+it "install → wrapper script 생성 (grun 호출)" _test_claude_code_install_creates_wrapper
+
+_test_claude_code_install_creates_settings_when_absent() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_mock_externals
+    app_install_claude_code
+    assert_file_contains "${HOME}/.claude/settings.json" "DISABLE_AUTOUPDATER"
+    cleanup_sandbox "$sb"
+}
+it "install → settings.json 부재 시 DISABLE_AUTOUPDATER 자동 작성" _test_claude_code_install_creates_settings_when_absent
+
+_test_claude_code_install_preserves_existing_settings() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_mock_externals
+    mkdir -p "${HOME}/.claude"
+    echo '{"theme":"dark"}' > "${HOME}/.claude/settings.json"
+    app_install_claude_code
+    assert_file_contains "${HOME}/.claude/settings.json" '"theme":"dark"'
+    cleanup_sandbox "$sb"
+}
+it "install → 기존 settings.json 보존 (덮어쓰지 않음)" _test_claude_code_install_preserves_existing_settings
+
+_test_claude_code_install_fails_on_version_lookup_error() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_remove_npm_wrapper()    { :; }
+    _claude_code_fetch_latest_version()  { echo ""; }   # 빈 응답 시뮬레이션
+    app_install_claude_code 2>/dev/null && { echo "[ASSERT] 빈 버전인데 성공" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "버전 조회 실패 시 install → 비정상 종료" _test_claude_code_install_fails_on_version_lookup_error
+
+_test_claude_code_remove_deletes_wrapper_and_native() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${CLAUDE_CODE_PREFIX}"
+    touch "${CLAUDE_CODE_BIN_PATH}" "${CLAUDE_CODE_PREFIX}/claude"
+    app_remove_claude_code
+    [ ! -e "${CLAUDE_CODE_BIN_PATH}" ] || { echo "[ASSERT] wrapper 미삭제" >&2; cleanup_sandbox "$sb"; return 1; }
+    [ ! -e "${CLAUDE_CODE_PREFIX}/claude" ] || { echo "[ASSERT] native 미삭제" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "remove → wrapper + native binary 삭제" _test_claude_code_remove_deletes_wrapper_and_native
+
+_test_claude_code_is_installed_false_default() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_is_installed_claude_code && { echo "[ASSERT] wrapper 없는데 installed" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "wrapper/native 미존재 → is_installed false" _test_claude_code_is_installed_false_default
+
+_test_claude_code_is_installed_true_when_present() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${CLAUDE_CODE_PREFIX}"
+    echo "#!/bin/sh" > "${CLAUDE_CODE_BIN_PATH}"; chmod +x "${CLAUDE_CODE_BIN_PATH}"
+    touch "${CLAUDE_CODE_PREFIX}/claude"; chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    app_is_installed_claude_code
+    cleanup_sandbox "$sb"
+}
+it "wrapper + native 모두 있으면 is_installed true" _test_claude_code_is_installed_true_when_present
+
+# =============================================================================
 # has_proot_distro — 유틸 함수
 # =============================================================================
 describe "has_proot_distro — proot 설치 감지"
