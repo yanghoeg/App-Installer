@@ -18,12 +18,24 @@ Select an app from the zenity dialog and it installs automatically into proot (U
 
 ## Usage
 
+### GUI
+
 ```bash
 # From Termux terminal after Termux_XFCE is installed
 app-installer
 
 # From XFCE desktop
 # Desktop icon → App Installer  or  Application menu → App Installer
+```
+
+### CLI
+
+```bash
+bash app-install.sh list              # List all apps with install status
+bash app-install.sh list 개발         # Filter by category
+bash app-install.sh install claude_code  # Install an app
+bash app-install.sh remove vlc          # Remove an app
+bash app-install.sh status claude_code   # Check install status
 ```
 
 ## Supported Apps
@@ -110,7 +122,8 @@ ubuntu <cmd>    # run single command in Ubuntu proot
 
 ```
 app-installer/
-├── install.sh                  ← zenity GUI main (install/remove loop)
+├── install.sh                  ← GUI main (yad/zenity, install/remove loop)
+├── app-install.sh              ← CLI interface (list/install/remove/status)
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/
