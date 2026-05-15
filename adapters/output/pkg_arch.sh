@@ -63,16 +63,29 @@ proot_pkg_install_sasm() {
 }
 
 proot_pkg_install_box64() {
-    proot_exec sudo bash -c "
-        pacman -S --noconfirm box64 2>/dev/null && exit 0
+    if proot_exec which box64 &>/dev/null; then
+        echo "[Box64] 이미 설치되어 있습니다."
+        return 0
+    fi
 
-        pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com 2>/dev/null || true
-        pacman-key --lsign-key 3056513887B78AEB 2>/dev/null || true
-        pacman -U --noconfirm \
-            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
-            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' 2>/dev/null || true
-        grep -q '\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null || \
-            printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
-        pacman -Sy --noconfirm box64 2>/dev/null || echo '[WARN] Box64 설치 실패'
-    " 2>/dev/null || true
+    # chaotic-aur는 x86_64 전용 → ARM64 proot에서는 소스 빌드가 유일한 방법
+    echo "[Box64] GitHub 소스에서 빌드 중... (수분 소요)"
+    proot_exec sudo bash -c '
+        set -e
+        pacman -S --noconfirm --needed cmake gcc make git python
+        rm -rf /tmp/box64-build
+        git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-build
+        cd /tmp/box64-build && mkdir build && cd build
+        cmake .. -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc)
+        make install
+        rm -rf /tmp/box64-build
+    '
+
+    if proot_exec which box64 &>/dev/null; then
+        echo "[Box64] 설치 완료."
+    else
+        echo "[ERROR] Box64 설치 실패 — Wine 실행 불가" >&2
+        return 1
+    fi
 }

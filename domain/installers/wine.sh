@@ -247,6 +247,10 @@ app_install_wine() {
         else
             proot_pkg_update
             proot_pkg_install_box64
+            if ! proot_exec which box64 &>/dev/null; then
+                echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
+                return 1
+            fi
             _wine_install_tarball_proot
             proot_dep "mesa_vulkan"
             _wine_install_winetricks_proot

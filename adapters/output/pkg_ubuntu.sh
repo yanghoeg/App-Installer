@@ -78,6 +78,11 @@ proot_pkg_install_sasm() {
 }
 
 proot_pkg_install_box64() {
+    if proot_exec which box64 &>/dev/null; then
+        echo "[Box64] 이미 설치되어 있습니다."
+        return 0
+    fi
+
     local rootfs; rootfs="$(proot_rootfs)"
     local codename
     codename=$(grep "^VERSION_CODENAME=" "${rootfs}/etc/os-release" 2>/dev/null \
@@ -88,12 +93,34 @@ proot_pkg_install_box64() {
         | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "")
 
     if [ -n "$box64_tag" ]; then
+        echo "[Box64] GitHub 릴리스에서 .deb 설치 시도... (${codename})"
         local box64_url="https://github.com/ptitSeb/box64/releases/download/${box64_tag}/box64_Ubuntu_${codename}_arm64.deb"
         proot_exec sudo bash -c "
-            wget -q '${box64_url}' -O /tmp/box64.deb 2>/dev/null \
-            && dpkg -i /tmp/box64.deb && rm -f /tmp/box64.deb
-        " || proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
+            wget -q '${box64_url}' -O /tmp/box64.deb \
+            && dpkg -i /tmp/box64.deb; rm -f /tmp/box64.deb
+        " 2>/dev/null || true
+    fi
+
+    # .deb 실패 시 소스 빌드 fallback
+    if ! proot_exec which box64 &>/dev/null; then
+        echo "[Box64] .deb 설치 실패, 소스 빌드로 전환... (수분 소요)"
+        proot_exec sudo bash -c '
+            set -e
+            apt install -y cmake gcc g++ make git python3
+            rm -rf /tmp/box64-build
+            git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-build
+            cd /tmp/box64-build && mkdir build && cd build
+            cmake .. -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+            make -j$(nproc)
+            make install
+            rm -rf /tmp/box64-build
+        '
+    fi
+
+    if proot_exec which box64 &>/dev/null; then
+        echo "[Box64] 설치 완료."
     else
-        proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
+        echo "[ERROR] Box64 설치 실패 — Wine 실행 불가" >&2
+        return 1
     fi
 }
