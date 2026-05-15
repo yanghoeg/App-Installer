@@ -38,10 +38,16 @@ desktop_copy_from_proot() {
 
     mkdir -p "${PREFIX}/share/applications"
     for desktop in "${rootfs}/usr/share/applications"/${app_prefix}*.desktop; do
-        [ -f "$desktop" ] || continue
-        local fname app_name
+        [ -e "$desktop" ] || [ -L "$desktop" ] || continue
+        local fname app_name src="$desktop"
         fname=$(basename "$desktop")
-        cp "$desktop" "${PREFIX}/share/applications/${fname}"
+        if [ -L "$desktop" ]; then
+            local target
+            target=$(readlink "$desktop")
+            [[ "$target" == /* ]] && src="${rootfs}${target}"
+        fi
+        [ -f "$src" ] || continue
+        cp "$src" "${PREFIX}/share/applications/${fname}"
         # .desktop Name= 필드에서 앱 이름 추출 → prun-gui 로딩 알림에 사용
         app_name=$(grep -m1 '^Name=' "${PREFIX}/share/applications/${fname}" | cut -d= -f2-)
         app_name="${app_name:-${app_prefix}}"
