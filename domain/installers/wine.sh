@@ -34,16 +34,20 @@ _wine_install_tarball_proot() {
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
         rm -f /tmp/wine-staging.tar.xz
 
-        # x86-64 ELF 파일들을 .elf로 이름 변경하고 box64 wrapper 생성
-        # (proot에 binfmt_misc 없어서 x86-64 ELF 자동 실행 불가)
+        # x86-64 ELF를 .elf/ 서브디렉토리로 이동 후 box64 wrapper 생성
+        # argv[0] 보존: box64가 basename(경로)="wine"을 argv[0]으로 전달
         cd /opt/wine-staging/bin
+        mkdir -p .elf
         for f in wine wine64 wineserver wineboot winedbg; do
             if [ -f \"\$f\" ] && file \"\$f\" 2>/dev/null | grep -q 'x86-64'; then
-                mv \"\$f\" \"\${f}.elf\"
-                printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/%s.elf \"\$@\"\n' \"\$f\" > \"\$f\"
+                mv \"\$f\" \".elf/\$f\"
+                printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/.elf/%s \"\$@\"\n' \"\$f\" > \"\$f\"
                 chmod +x \"\$f\"
             fi
         done
+        # ELF의 상대경로 ../lib, ../share 가 올바른 위치를 가리키도록 symlink
+        ln -sf ../lib /opt/wine-staging/bin/lib
+        ln -sf ../share /opt/wine-staging/bin/share
 
         # /usr/local/bin 심링크 (symlink 방식 대신 직접 복사 — cat으로 덮어써지는 문제 방지)
         for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
@@ -166,6 +170,7 @@ if [ -f "$_reg" ]; then
 fi
 
 exec prun env DISPLAY="${DISPLAY:-:0}" \
+    WINEDATADIR=/opt/wine-staging/share/wine \
     MESA_LOADER_DRIVER_OVERRIDE=zink \
     TU_DEBUG=noconform \
     ZINK_DESCRIPTORS=lazy \
@@ -173,6 +178,7 @@ exec prun env DISPLAY="${DISPLAY:-:0}" \
     MESA_GL_VERSION_OVERRIDE=4.6COMPAT \
     MESA_GLSL_VERSION_OVERRIDE=460 \
     MESA_GLES_VERSION_OVERRIDE=3.2 \
+    WINELOADERNOEXEC=1 \
     WINEESYNC=1 \
     WINEDEBUG=-all \
     BOX64_MMAP32=1 \
@@ -192,7 +198,7 @@ Version=1.0
 Type=Application
 Name=Wine
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=bash -c "prun-gui Wine -- env DISPLAY=:0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
@@ -206,7 +212,7 @@ Version=1.0
 Type=Application
 Name=Wine 설정
 Comment=Wine 환경 구성 (winecfg)
-Exec=bash -c "prun-gui 'Wine 설정' -- env DISPLAY=:0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
 Categories=Settings;System;
 Terminal=false

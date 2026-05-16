@@ -75,8 +75,10 @@ proot_pkg_install_box64() {
         pacman -S --noconfirm --needed cmake gcc make git python
         rm -rf /tmp/box64-build
         git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-build
+        # Wine SharedUserData(0x7FFE0000) 충돌 방지: prereserve 영역 분할
+        sed -i "s/{(void\*)0x7f000000, 0x03000000}, {0, 0}, {0, 0}}/{(void*)0x7f000000, 0x00FE0000}, {(void*)0x7FFF0000, 0x02010000}, {0, 0}, {0, 0}}/" /tmp/box64-build/src/tools/wine_tools.c
         cd /tmp/box64-build && mkdir build && cd build
-        cmake .. -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake .. -DARM_DYNAREC=ON -DNOLOADADDR=ON -DBAD_SIGNAL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
         make -j$(nproc)
         make install
         rm -rf /tmp/box64-build

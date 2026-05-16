@@ -14,6 +14,7 @@ proot_exec_wine() {
     proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
         --shared-tmp -- env \
             DISPLAY="${DISPLAY:-:0.0}" \
+            WINEDATADIR=/opt/wine-staging/share/wine \
             MESA_LOADER_DRIVER_OVERRIDE=zink \
             TU_DEBUG=noconform \
             ZINK_DESCRIPTORS=lazy \
@@ -21,6 +22,7 @@ proot_exec_wine() {
             MESA_GL_VERSION_OVERRIDE=4.6COMPAT \
             MESA_GLSL_VERSION_OVERRIDE=460 \
             MESA_GLES_VERSION_OVERRIDE=3.2 \
+            WINELOADERNOEXEC=1 \
             WINEESYNC=1 \
             BOX64_MMAP32=1 \
             BOX64_X11THREADS=1 \
