@@ -2,6 +2,7 @@
 # =============================================================================
 # DOMAIN: KakaoTalk — Wine 앱
 # =============================================================================
+# NSIS installer는 Box64에서 실패 → native 7z로 추출
 
 _KAKAOTALK_DESKTOP="${PREFIX}/share/applications/kakaotalk.desktop"
 _KAKAOTALK_URL="https://app-pc.kakaocdn.net/talk/win32/KakaoTalk_Setup.exe"
@@ -12,12 +13,12 @@ app_install_kakaotalk() {
         app_install_wine
     fi
 
-    echo "[KakaoTalk] 다운로드 및 설치 중..."
-    proot_exec_wine bash -c "
+    echo "[KakaoTalk] 다운로드 및 7z 추출 중..."
+    proot_exec bash -c "
         wget -q '${_KAKAOTALK_URL}' -O /tmp/kakaotalk_setup.exe || \
             curl -fsSL '${_KAKAOTALK_URL}' -o /tmp/kakaotalk_setup.exe
-        echo '[KakaoTalk] 설치 중 (silent)...'
-        WINEDEBUG=-all wine /tmp/kakaotalk_setup.exe /S 2>/dev/null || true
+        mkdir -p \"\$HOME/.wine/drive_c/Program Files/Kakao/KakaoTalk\"
+        7z x /tmp/kakaotalk_setup.exe -o\"\$HOME/.wine/drive_c/Program Files/Kakao/KakaoTalk\" -y >/dev/null
         rm -f /tmp/kakaotalk_setup.exe
     "
 
@@ -32,7 +33,7 @@ app_install_kakaotalk() {
 }
 
 app_remove_kakaotalk() {
-    proot_exec_wine bash -c "
+    proot_exec bash -c "
         rm -rf \"\$HOME/.wine/drive_c/Program Files/Kakao\" 2>/dev/null
     " 2>/dev/null || true
     desktop_remove "kakaotalk"

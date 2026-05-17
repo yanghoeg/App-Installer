@@ -2,9 +2,11 @@
 # =============================================================================
 # DOMAIN: 7-Zip — Wine 앱
 # =============================================================================
+# Wine /S 설치 시 기본 경로: C:\7-Zip (Program Files 아님)
 
 _SEVENZIP_DESKTOP="${PREFIX}/share/applications/sevenzip.desktop"
-_SEVENZIP_URL="https://www.7-zip.org/a/7z2514-x64.exe"
+_SEVENZIP_URL="https://www.7-zip.org/a/7z2601-x64.exe"
+_SEVENZIP_WIN_PATH='C:\7-Zip\7zFM.exe'
 
 app_install_sevenzip() {
     if ! app_is_installed_wine; then
@@ -16,8 +18,7 @@ app_install_sevenzip() {
     proot_exec_wine bash -c "
         wget -q '${_SEVENZIP_URL}' -O /tmp/7z_install.exe || \
             curl -fsSL '${_SEVENZIP_URL}' -o /tmp/7z_install.exe
-        echo '[7-Zip] 설치 중 (silent)...'
-        WINEDEBUG=-all wine /tmp/7z_install.exe /S 2>/dev/null || true
+        wine /tmp/7z_install.exe /S 2>/dev/null || true
         rm -f /tmp/7z_install.exe
     "
 
@@ -28,7 +29,7 @@ Version=1.0
 Type=Application
 Name=7-Zip
 Comment=파일 압축/해제 (Wine)
-Exec=bash -c "wine 'C:\\Program Files\\7-Zip\\7zFM.exe' %f </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "wine 'C:\\7-Zip\\7zFM.exe' %f </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=Utility;Archiving;
 MimeType=application/zip;application/x-7z-compressed;application/gzip;application/x-tar;application/x-rar;
@@ -46,7 +47,7 @@ EOF
 
 app_remove_sevenzip() {
     proot_exec_wine bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/Program Files/7-Zip\" 2>/dev/null
+        rm -rf \"\$HOME/.wine/drive_c/7-Zip\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_SEVENZIP_DESKTOP" "${HOME}/Desktop/sevenzip.desktop"
 }
