@@ -349,53 +349,6 @@ _test_wine_wrapper_has_dpi_sync() {
 it "proot 있음 → wine wrapper에 DPI 동기화 로직 포함" _test_wine_wrapper_has_dpi_sync
 
 # =============================================================================
-# KakaoTalk — Wine 앱
-# =============================================================================
-describe "KakaoTalk — Wine 앱 설치"
-
-_test_kakaotalk_requires_wine() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    # wine 미설치 상태 → wine부터 설치해야 함
-    app_install_kakaotalk
-    assert_was_called "proot_pkg_install_box64"
-    cleanup_sandbox "$sb"
-}
-it "Wine 미설치 시 Wine 먼저 설치" _test_kakaotalk_requires_wine
-
-_test_kakaotalk_install_creates_desktop() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_kakaotalk
-    assert_file_exists "${PREFIX}/share/applications/kakaotalk.desktop"
-    assert_file_exists "${HOME}/Desktop/kakaotalk.desktop"
-    cleanup_sandbox "$sb"
-}
-it "install → .desktop 파일 생성" _test_kakaotalk_install_creates_desktop
-
-_test_kakaotalk_desktop_uses_wine_wrapper() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_kakaotalk
-    assert_file_contains "${PREFIX}/share/applications/kakaotalk.desktop" "wine"
-    assert_file_contains "${PREFIX}/share/applications/kakaotalk.desktop" "KakaoTalk"
-    cleanup_sandbox "$sb"
-}
-it "desktop Exec에 wine wrapper 사용" _test_kakaotalk_desktop_uses_wine_wrapper
-
-_test_kakaotalk_remove_deletes_desktop() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    touch "${PREFIX}/share/applications/kakaotalk.desktop"
-    touch "${HOME}/Desktop/kakaotalk.desktop"
-    app_remove_kakaotalk
-    [ ! -e "${PREFIX}/share/applications/kakaotalk.desktop" ]
-    [ ! -e "${HOME}/Desktop/kakaotalk.desktop" ]
-    cleanup_sandbox "$sb"
-}
-it "remove → .desktop 파일 삭제" _test_kakaotalk_remove_deletes_desktop
-
-# =============================================================================
 # Notepad++ — Wine 앱
 # =============================================================================
 describe "Notepad++ — Wine 앱 설치"

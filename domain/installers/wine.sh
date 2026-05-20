@@ -11,12 +11,13 @@ _WINECFG_DESKTOP="${PREFIX}/share/applications/winecfg.desktop"
 _WINE_APPS_DESKTOP="${PREFIX}/share/applications/wine-apps.desktop"
 _WINE_NATIVE_DIR="${HOME}/.wine-staging"
 
-# GitHub Releases에서 최신 Wine-Staging URL 조회
+# GitHub Releases에서 최신 Wine-Staging WoW64 URL 조회
+# wow64 빌드: 64-bit wine만으로 32-bit PE 실행 (Box64 환경 필수)
 _wine_tarball_url() {
     local ver
     ver=$(curl -sf "https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "9.22")
-    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${ver}/wine-${ver}-staging-amd64.tar.xz"
+        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "11.9")
+    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${ver}/wine-${ver}-staging-amd64-wow64.tar.xz"
 }
 
 # proot 내부: Wine-Staging tarball 설치
@@ -72,6 +73,8 @@ _wine_init_prefix_proot() {
     echo "[Wine] WINEPREFIX 초기화 중..."
     proot_exec_wine bash -c \
         "WINEPREFIX=\$HOME/.wine WINEDEBUG=-all wine wineboot --init 2>/dev/null || true" || true
+    # wineserver persistent: 후속 실행 속도 향상 (prefix 초기화 상태 유지)
+    proot_exec_wine bash -c "wineserver -p 2>/dev/null &" || true
 }
 
 # Termux native: glibc-runner + box64-glibc + Wine-Staging tarball
@@ -111,6 +114,9 @@ _wine_install_native() {
 
 WINE_DPI="${WINE_DPI:-240}"
 
+# Android CPU ���로틀링 방지
+termux-wake-lock 2>/dev/null
+
 # Wine 레지스트리 DPI 동기화
 _reg="${WINEPREFIX:-$HOME/.wine}/user.reg"
 if [ -f "$_reg" ]; then
@@ -138,6 +144,7 @@ export BOX64_DYNAREC_SAFEFLAGS=2
 # DXVK
 export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
+grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
 exec grun "$HOME/.wine-staging/bin/wine64" "$@"
 WRAPEOF
     chmod +x "$_WINE_BIN"
@@ -154,6 +161,9 @@ _wine_create_launchers() {
 # WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
 
 WINE_DPI="${WINE_DPI:-240}"
+
+# Android CPU 쓰로틀링 방지
+termux-wake-lock 2>/dev/null
 
 # prun 설정에서 rootfs 경로 계산
 _conf="$HOME/.config/termux-xfce/config"
@@ -186,7 +196,7 @@ exec prun env DISPLAY="${DISPLAY:-:0}" \
     BOX64_DYNAREC_SAFEFLAGS=2 \
     DXVK_ASYNC=1 \
     DXVK_STATE_CACHE=reset \
-    wine "$@"
+    bash -c 'wineserver -p 2>/dev/null & wine "$@"' _ "$@"
 WRAPEOF
         chmod +x "$_WINE_BIN"
     fi
