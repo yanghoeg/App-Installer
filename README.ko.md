@@ -42,21 +42,36 @@ bash app-install.sh status claude_code   # 설치 여부 확인
 
 | 앱 | 설명 | 설치 위치 | 비고 |
 |----|------|-----------|------|
-| **VS Code** | Visual Studio Code | proot | `--disable-gpu` 자동 적용 |
-| **LibreOffice** | 오피스 스위트 | proot | bwrap 스텁 설치 |
 | **Thunderbird** | 이메일 클라이언트 | Termux native | |
-| **VLC** | 멀티미디어 플레이어 | Termux native | |
-| **Nautilus** | GNOME 파일 관리자 | proot | 소프트웨어 렌더러 (MIT-SHM 우회) |
-| **Notion** | 메모·생산성 앱 | proot | AppImage 추출 방식 |
-| **Teams** | Microsoft Teams for Linux | proot | 커뮤니티 Electron 클라이언트 |
-| **Wine** | Windows 앱 실행 (Box64 + Wine-Staging) | proot / native | ELF→box64 래퍼 (binfmt_misc 없음) |
-| **Miniforge** | Conda 패키지 관리자 | proot | CLI 전용 |
-| **DBeaver** | 유니버설 데이터베이스 클라이언트 | proot | |
-| **Thorium** | Chromium 기반 고성능 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
+| **VLC** | 미디어 플레이어 | proot | |
+| **GIMP** | 이미지 편집 | Termux native | |
+| **Inkscape** | 벡터 그래픽 편집 | Termux native | |
+| **Audacity** | 오디오 편집 | Termux native | |
+| **VS Code** | Visual Studio Code | Termux native | |
+| **Claude Code** | AI 코딩 어시스턴트 CLI | Termux native | glibc-runner + npm 우회 |
+| **LibreOffice** | 오피스 스위트 | proot | bwrap 스텁 설치 |
+| **Burp Suite** | 웹 보안 테스트 도구 | Termux native | arm64 인스톨러 |
 | **Tor Browser** | 익명 브라우저 | proot | arm64 포트 |
+| **Notion** | 메모·생산성 앱 | proot | AppImage 추출 방식 |
+| **DBeaver** | 데이터베이스 클라이언트 | proot | |
+| **Miniforge** | Conda 패키지 관리자 | proot | CLI 전용 |
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
-| **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
-| **Claude Code** | Anthropic AI 코딩 어시스턴트 CLI | Termux native | glibc-runner로 native ELF 실행, npm 우회 + 자체 self-update 차단 |
+| **Nautilus** | GNOME 파일 관리자 | proot | 소프트웨어 렌더러 (MIT-SHM 우회) |
+| **Wine** | Windows 앱 실행 (Box64 + Wine-Staging WoW64) | proot / native | 32/64-bit PE 지원 |
+| **Notepad++** | 텍스트 에디터 | Wine | portable zip |
+| **7-Zip** | 파일 압축/해제 | Wine | |
+| **Sumatra PDF** | PDF/EPUB/MOBI 뷰어 | Wine | |
+| **WinMerge** | 파일/폴더 비교·병합 | Wine | |
+| **Teams** | Microsoft Teams | proot | 커뮤니티 Electron 클라이언트 |
+| **Thorium** | 고속 웹 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
+| **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | Snapdragon 전용 |
+| **GPU 가속 (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon 전용 |
+| **한글 입력기** | fcitx5-hangul | Termux native | |
+| **한글 로케일** | force_gettext.so UI 한글화 | Termux native | 한글 렌더링: [미코(미니기기코리아)](https://cafe.naver.com/minigkorea) 흡혈귀왕 제공 |
+| **배터리 위젯** | XFCE 패널 배터리 표시 | Termux API | genmon |
+| **밝기/볼륨 조절** | XFCE 패널 스크립트 | Termux API | |
+| **알림/TTS/STT** | Android 연동 도구 | Termux API | |
+| **배경화면 동기화** | XFCE↔Android 배경화면 | Termux API | |
 
 ## arm64 호환성 비고
 
@@ -69,27 +84,32 @@ bash app-install.sh status claude_code   # 설치 여부 확인
 | Nautilus MIT-SHM BadAccess | `GSK_RENDERER=cairo GDK_RENDERING=image` 소프트웨어 렌더러 강제 |
 | VS Code GPU 프로세스 crash | `--disable-gpu` + `dbus-run-session` |
 | Wine x86-64 ELF 자동 실행 불가 (binfmt_misc 없음) | `.elf`로 이름 변경 후 `box64` 래퍼 스크립트 생성 |
+| Wine 32-bit PE 미지원 (기존 amd64 빌드) | WoW64 빌드로 전환 — 64-bit Wine만으로 32-bit PE 실행 |
 | Thorium AUR은 x86 전용 | `ar`로 arm64 .deb 직접 추출 |
 | SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
 | Claude Code v2.1.114+ native ELF (glibc 동적 링커 요구) | npm 우회 — tarball 직접 다운로드 후 `grun` wrapper로 실행 |
 
-## Wine (Box64 + Wine-Staging)
+## Wine (Box64 + Wine-Staging WoW64)
 
-proot 유무에 따라 자동 분기합니다.
+proot 유무에 따라 자동 분기합니다. WoW64 빌드로 32-bit/64-bit Windows PE 모두 지원합니다.
 
 | 환경 | 구성 |
 |------|------|
-| proot Ubuntu/Arch | proot 내부 Box64(ARM64) + Wine-Staging x86_64 tarball |
-| proot 없음 | glibc-runner + box64-glibc + Wine-Staging tarball |
+| proot Ubuntu/Arch | proot 내부 Box64(ARM64) + Wine-Staging WoW64 tarball |
+| proot 없음 | glibc-runner + box64-glibc + Wine-Staging WoW64 tarball |
+
+속도 최적화:
+- `termux-wake-lock` — Android CPU 쓰로틀링 방지
+- `wineserver -p` — 영구 wineserver로 후속 실행 가속
 
 ```bash
-wine kakao.exe          # Windows 앱 실행
+wine program.exe        # Windows 앱 실행
 wine winecfg            # Wine 환경 설정
 winetricks vcrun2019    # DLL/런타임 설치
 winetricks dotnet48
 ```
 
-> **한계**: 안티치트 게임, 커널 드라이버 의존 앱, 최신 .NET 복잡 앱은 동작하지 않습니다.
+> **한계**: 안티치트/Themida 보호 앱, 커널 드라이버 의존 앱, 최신 .NET 복잡 앱은 동작하지 않습니다.
 
 ## 동작 방식
 
