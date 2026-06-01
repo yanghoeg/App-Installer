@@ -1,21 +1,28 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# DOMAIN: Visual Studio Code — Termux native (code-oss)
-# MS 공식 VSCode의 오픈소스 빌드. Marketplace 대신 Open VSX 사용.
-# proot x86_64 tarball/AUR 우회 없이 arm64 네이티브로 바로 실행.
+# DOMAIN: Visual Studio Code — proot 내부 설치, prun으로 실행
+# Arch: AUR visual-studio-code-bin (yay 사용)
+# Ubuntu: Microsoft 공식 arm64 repo 추가 후 설치
 
 app_install_vscode() {
-    termux_pkg_install code-oss
-    desktop_register "code-oss" "Visual Studio Code - OSS" \
-        "code-oss --no-sandbox --disable-gpu %F" "code-oss" \
-        "Development;IDE;" \
-        "MimeType=text/plain;inode/directory;"
+    proot_pkg_update
+    proot_pkg_install_vscode
+    local exec_cmd
+    case "${PROOT_DISTRO:-}" in
+        archlinux) exec_cmd='bash -c "prun dbus-run-session -- /opt/visual-studio-code/code --no-sandbox --disable-gpu </dev/null >/dev/null 2>&1 &"' ;;
+        ubuntu)    exec_cmd='bash -c "prun dbus-run-session -- /usr/share/code/code --no-sandbox --disable-gpu </dev/null >/dev/null 2>&1 &"' ;;
+        *)         exec_cmd='bash -c "prun code --no-sandbox </dev/null >/dev/null 2>&1 &"' ;;
+    esac
+    desktop_register "code" "Visual Studio Code" "$exec_cmd" \
+        "visual-studio-code" "Development;"
 }
 
 app_remove_vscode() {
-    termux_pkg_remove code-oss
-    desktop_remove "code-oss"
+    proot_pkg_remove_vscode
+    proot_pkg_autoremove
+    desktop_remove "code"
 }
 
 app_is_installed_vscode() {
-    termux_pkg_is_installed code-oss && desktop_is_registered "code-oss"
+    # proot 안에 실제 binary가 있는지 확인 (desktop 파일만으론 부족)
+    proot_exec bash -c "command -v code" &>/dev/null
 }

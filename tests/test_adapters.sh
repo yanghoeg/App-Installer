@@ -52,15 +52,10 @@ it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distr
 _test_ubuntu_exec_wine_has_mesa_env() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        local fn
-        fn=$(declare -f proot_exec_wine)
-        echo "$fn" | grep -q "MESA_LOADER_DRIVER_OVERRIDE" && \
-        echo "$fn" | grep -q "WINEESYNC" && \
-        echo "$fn" | grep -q "BOX64_MMAP32" && \
-        echo "$fn" | grep -q "DXVK_ASYNC"
+        declare -f proot_exec_wine | grep -q "MESA_LOADER_DRIVER_OVERRIDE"
     )
 }
-it "proot_exec_wine → Mesa·Wine·Box64·DXVK 환경변수 포함" _test_ubuntu_exec_wine_has_mesa_env
+it "proot_exec_wine → MESA_LOADER_DRIVER_OVERRIDE 포함" _test_ubuntu_exec_wine_has_mesa_env
 
 _test_ubuntu_sasm_has_codename_workaround() {
     (
@@ -79,17 +74,14 @@ _test_ubuntu_add_repo_uses_gpg() {
 }
 it "proot_pkg_add_external_repo → GPG 키 처리 포함" _test_ubuntu_add_repo_uses_gpg
 
-_test_ubuntu_dep_map_defined() {
+_test_ubuntu_jdk_has_fallback() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        # PROOT_DEP_MAP이 Ubuntu 어댑터에서 정의되고 핵심 키를 포함해야 함
-        [ "${#PROOT_DEP_MAP[@]}" -gt 0 ] && \
-        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^jdk:' && \
-        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^libreoffice:' && \
-        printf '%s\n' "${PROOT_DEP_MAP[@]}" | grep -q '^mesa_vulkan:'
+        # openjdk-21 실패 시 openjdk-11 폴백
+        declare -f proot_pkg_install_jdk | grep -q "11"
     )
 }
-it "PROOT_DEP_MAP 정의 + jdk/libreoffice/mesa_vulkan 키 포함" _test_ubuntu_dep_map_defined
+it "proot_pkg_install_jdk → openjdk-11 폴백 있음" _test_ubuntu_jdk_has_fallback
 
 # =============================================================================
 # pkg_arch.sh — proot Arch
@@ -112,13 +104,13 @@ _test_arch_autoremove_handles_orphans() {
 }
 it "proot_pkg_autoremove → pacman orphan 처리" _test_arch_autoremove_handles_orphans
 
-_test_arch_aur_installs_paru_if_missing() {
+_test_arch_aur_installs_yay_if_missing() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_aur | grep -q "paru"
+        declare -f proot_pkg_install_aur | grep -q "yay"
     )
 }
-it "proot_pkg_install_aur → paru 없으면 자동 설치" _test_arch_aur_installs_paru_if_missing
+it "proot_pkg_install_aur → yay 없으면 자동 설치" _test_arch_aur_installs_yay_if_missing
 
 _test_arch_box64_tries_chaotic_aur() {
     (

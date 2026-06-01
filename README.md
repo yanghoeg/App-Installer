@@ -18,8 +18,6 @@ Select an app from the zenity dialog and it installs automatically into proot (U
 
 ## Usage
 
-### GUI
-
 ```bash
 # From Termux terminal after Termux_XFCE is installed
 app-installer
@@ -28,51 +26,25 @@ app-installer
 # Desktop icon → App Installer  or  Application menu → App Installer
 ```
 
-### CLI
-
-```bash
-bash app-install.sh list              # List all apps with install status
-bash app-install.sh list 개발         # Filter by category
-bash app-install.sh install claude_code  # Install an app
-bash app-install.sh remove vlc          # Remove an app
-bash app-install.sh status claude_code   # Check install status
-```
-
 ## Supported Apps
 
 | App | Description | Install target | Notes |
 |-----|-------------|----------------|-------|
-| **Thunderbird** | Email client | Termux native | |
-| **VLC** | Media player | proot | |
-| **GIMP** | Image editor | Termux native | |
-| **Inkscape** | Vector graphics editor | Termux native | |
-| **Audacity** | Audio editor | Termux native | |
-| **VS Code** | Visual Studio Code | Termux native | |
-| **Claude Code** | AI coding assistant CLI | Termux native | glibc-runner + npm bypass |
+| **VS Code** | Visual Studio Code | proot | `--disable-gpu` applied |
 | **LibreOffice** | Office suite | proot | bwrap stub installed |
-| **Burp Suite** | Web security testing tool | Termux native | arm64 installer |
-| **Tor Browser** | Anonymous browser | proot | arm64 port |
-| **Notion** | Notes & productivity | proot | AppImage extracted |
-| **DBeaver** | Database client | proot | |
-| **Miniforge** | Conda package manager | proot | CLI only |
-| **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
+| **Thunderbird** | Email client | Termux native | |
+| **VLC** | Multimedia player | Termux native | |
 | **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
-| **Wine** | Run Windows apps (Box64 + Wine-Staging WoW64) | proot / native | 32/64-bit PE support |
-| **Notepad++** | Text editor | Wine | portable zip |
-| **7-Zip** | File archiver | Wine | |
-| **Sumatra PDF** | PDF/EPUB/MOBI viewer | Wine | |
-| **WinMerge** | File/folder diff & merge | Wine | |
-| **Teams** | Microsoft Teams | proot | community Electron client |
-| **Thorium** | High-performance browser | proot | .deb extraction (AUR x86-only) |
-| **GPU Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | Snapdragon only |
-| **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon only |
-| **Korean Input (fcitx5)** | fcitx5-hangul | Termux native | |
-| **Korean Input (nimf)** | nimf input method framework | Termux native | Termux native build by 흡혈귀왕 @ [미코(Mini-Device Korea)](https://cafe.naver.com/minigkorea) |
-| **Korean Locale** | force_gettext.so UI localization | Termux native | Korean rendering by 흡혈귀왕 @ [미코(Mini-Device Korea)](https://cafe.naver.com/minigkorea) |
-| **Battery Widget** | XFCE panel battery display | Termux API | genmon |
-| **Brightness/Volume** | XFCE panel scripts | Termux API | |
-| **Notification/TTS/STT** | Android integration tools | Termux API | |
-| **Wallpaper Sync** | XFCE↔Android wallpaper | Termux API | |
+| **Notion** | Notes & productivity | proot | AppImage extracted |
+| **Teams** | Microsoft Teams for Linux | proot | community Electron client |
+| **Wine** | Run Windows apps (Box64 + Wine-Staging) | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Miniforge** | Conda package manager | proot | CLI only |
+| **DBeaver** | Universal database client | proot | |
+| **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
+| **Tor Browser** | Anonymous browser | proot | arm64 port |
+| **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
+| **Burp Suite** | Web security testing tool | proot | arm64 installer |
+| **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
 
 ## arm64 Compatibility Notes
 
@@ -85,32 +57,27 @@ Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds app
 | Nautilus MIT-SHM BadAccess | `GSK_RENDERER=cairo GDK_RENDERING=image` forces software renderer |
 | VS Code GPU process crash | `--disable-gpu` + `dbus-run-session` |
 | Wine x86-64 ELF not auto-run (no binfmt_misc) | rename to `.elf`, create `box64` wrapper script |
-| Wine 32-bit PE not supported (old amd64 build) | switched to WoW64 build — runs 32-bit PE with 64-bit Wine only |
 | Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
-| Claude Code v2.1.114+ native ELF (requires glibc dynamic linker) | bypass npm — fetch tarball directly, run via `grun` wrapper |
+| 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
 
-## Wine (Box64 + Wine-Staging WoW64)
+## Wine (Box64 + Wine-Staging)
 
-Automatically branches based on whether proot is installed. WoW64 build supports both 32-bit and 64-bit Windows PE.
+Automatically branches based on whether proot is installed.
 
 | Environment | Setup |
 |-------------|-------|
-| proot Ubuntu/Arch | Box64 (ARM64) + Wine-Staging WoW64 tarball inside proot |
-| no proot | glibc-runner + box64-glibc + Wine-Staging WoW64 tarball |
-
-Speed optimizations:
-- `termux-wake-lock` — prevents Android CPU throttling
-- `wineserver -p` — persistent wineserver for faster subsequent launches
+| proot Ubuntu/Arch | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot |
+| no proot | glibc-runner + box64-glibc + Wine-Staging tarball |
 
 ```bash
-wine program.exe        # Run Windows app
+wine kakao.exe          # Run Windows app
 wine winecfg            # Wine configuration
 winetricks vcrun2019    # Install DLL / runtime
 winetricks dotnet48
 ```
 
-> **Limitations**: Anti-cheat/Themida-protected apps, kernel-driver-dependent apps, and complex modern .NET apps will not work.
+> **Limitations**: Anti-cheat games, kernel-driver-dependent apps, and complex modern .NET apps will not work.
 
 ## How It Works
 
@@ -119,7 +86,7 @@ This file is created automatically by the Termux_XFCE installer.
 
 ```
 PROOT_DISTRO=ubuntu
-PROOT_USER=<username>
+PROOT_USER=yanghoeg
 ```
 
 Falls back to `ubuntu` if the config file is missing.
@@ -143,8 +110,7 @@ ubuntu <cmd>    # run single command in Ubuntu proot
 
 ```
 app-installer/
-├── install.sh                  ← GUI main (yad/zenity, install/remove loop)
-├── app-install.sh              ← CLI interface (list/install/remove/status)
+├── install.sh                  ← zenity GUI main (install/remove loop)
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/

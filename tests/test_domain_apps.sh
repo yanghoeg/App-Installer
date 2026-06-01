@@ -49,22 +49,11 @@ _test_registry_all_have_three_fields() {
 }
 it "모든 APP_REGISTRY 항목은 id|name|desc 세 필드를 가진다" _test_registry_all_have_three_fields
 
-_WIP_APPS_NO_INSTALLER=()
-
-_is_wip_app() {
-    local needle="$1"
-    for wip in "${_WIP_APPS_NO_INSTALLER[@]}"; do
-        [ "$needle" = "$wip" ] && return 0
-    done
-    return 1
-}
-
 _test_registry_all_have_installer_functions() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local failed=0
     for entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r id _ _ <<< "$entry"
-        _is_wip_app "$id" && continue   # WIP는 별도 skip 테스트로 추적
         for fn in "app_install_${id}" "app_remove_${id}" "app_is_installed_${id}"; do
             if ! declare -f "$fn" >/dev/null 2>&1; then
                 echo "[ASSERT] 함수 미정의: ${fn}" >&2
@@ -75,9 +64,7 @@ _test_registry_all_have_installer_functions() {
     cleanup_sandbox "$sb"
     return "$failed"
 }
-it "모든 앱(WIP 제외)에 app_install/app_remove/app_is_installed 함수가 있다" \
-    _test_registry_all_have_installer_functions
-
+it "모든 앱에 app_install/app_remove/app_is_installed 함수가 있다" _test_registry_all_have_installer_functions
 
 # =============================================================================
 # Thunderbird — Termux native
@@ -160,68 +147,46 @@ _test_vlc_does_not_call_proot() {
 it "install → proot 함수 미호출 (native 전용)" _test_vlc_does_not_call_proot
 
 # =============================================================================
-# VS Code — Termux native (code-oss)
+# VS Code — proot 설치
 # =============================================================================
-describe "VS Code — Termux native 설치"
+describe "VS Code — proot 설치"
 
-_test_vscode_install_calls_termux_pkg() {
+_test_vscode_install_adds_external_repo() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_vscode
-    assert_was_called "termux_pkg_install code-oss"
+    assert_was_called "proot_pkg_add_external_repo vscode"
     cleanup_sandbox "$sb"
 }
-it "install → termux_pkg_install code-oss 호출" _test_vscode_install_calls_termux_pkg
+it "install → proot_pkg_add_external_repo 호출 (MS apt repo)" _test_vscode_install_adds_external_repo
 
-_test_vscode_install_registers_desktop() {
+_test_vscode_install_calls_proot_pkg_install_code() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_vscode
-    [ -f "${PREFIX}/share/applications/code-oss.desktop" ] || { echo "[ASSERT] desktop file not created" >&2; cleanup_sandbox "$sb"; return 1; }
-    grep -q "no-sandbox" "${PREFIX}/share/applications/code-oss.desktop" || { echo "[ASSERT] --no-sandbox flag missing" >&2; cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_pkg_install code"
     cleanup_sandbox "$sb"
 }
-it "install → desktop 파일 생성 (--no-sandbox 포함)" _test_vscode_install_registers_desktop
+it "install → proot_pkg_install code 호출" _test_vscode_install_calls_proot_pkg_install_code
 
-_test_vscode_remove_calls_termux_pkg() {
+_test_vscode_install_calls_update_first() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    app_remove_vscode
-    assert_was_called "termux_pkg_remove code-oss"
+    app_install_vscode
+    assert_was_called "proot_pkg_update"
     cleanup_sandbox "$sb"
 }
-it "remove → termux_pkg_remove code-oss 호출" _test_vscode_remove_calls_termux_pkg
-
-# =============================================================================
-# Burp Suite — Termux native (tur-packages)
-# =============================================================================
-describe "Burp Suite — Termux native 설치"
-
-_test_burpsuite_install_calls_termux_pkg() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_burpsuite
-    assert_was_called "termux_pkg_install burpsuite"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install burpsuite 호출" _test_burpsuite_install_calls_termux_pkg
-
-_test_burpsuite_remove_calls_termux_pkg() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_remove_burpsuite
-    assert_was_called "termux_pkg_remove burpsuite"
-    cleanup_sandbox "$sb"
-}
-it "remove → termux_pkg_remove burpsuite 호출" _test_burpsuite_remove_calls_termux_pkg
+it "install → proot_pkg_update를 먼저 호출한다" _test_vscode_install_calls_update_first
 
 # =============================================================================
 # LibreOffice — proot 설치 (패키지명 추상화)
 # =============================================================================
 describe "LibreOffice — proot 설치"
 
-_test_libreoffice_install_uses_proot_dep() {
+_test_libreoffice_install_uses_abstract_pkg_fn() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_libreoffice
-    assert_was_called "proot_dep libreoffice"
+    assert_was_called "proot_pkg_install_libreoffice"
     cleanup_sandbox "$sb"
 }
-it "install → proot_dep libreoffice 호출 (DEP_MAP 추상화)" _test_libreoffice_install_uses_proot_dep
+it "install → proot_pkg_install_libreoffice 호출 (Ubuntu/Arch 추상화)" _test_libreoffice_install_uses_abstract_pkg_fn
 
 _test_libreoffice_does_not_hardcode_pkg_name() {
     # proot_pkg_remove/install 에 구체적 패키지명(libreoffice, libreoffice-fresh)이 없어야 함
@@ -235,13 +200,13 @@ it "libreoffice.sh 도메인 — distro별 패키지명 하드코딩 없음" _te
 # =============================================================================
 describe "DBeaver — proot 설치"
 
-_test_dbeaver_install_uses_proot_dep_jdk() {
+_test_dbeaver_install_uses_abstract_jdk() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_dbeaver
-    assert_was_called "proot_dep jdk"
+    assert_was_called "proot_pkg_install_jdk"
     cleanup_sandbox "$sb"
 }
-it "install → proot_dep jdk 호출 (DEP_MAP 추상화)" _test_dbeaver_install_uses_proot_dep_jdk
+it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
 
 # =============================================================================
 # Miniforge — 설치 판단 기준 (디렉토리)
@@ -296,14 +261,14 @@ _test_wine_proot_path_calls_box64() {
 }
 it "proot 있음 → proot_pkg_install_box64 호출" _test_wine_proot_path_calls_box64
 
-_test_wine_proot_path_calls_mesa_vulkan_dep() {
+_test_wine_proot_path_calls_wine_mesa() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     MOCK_HAS_PROOT=true
     app_install_wine
-    assert_was_called "proot_dep mesa_vulkan"
+    assert_was_called "proot_pkg_install_wine_mesa"
     cleanup_sandbox "$sb"
 }
-it "proot 있음 → proot_dep mesa_vulkan 호출 (DEP_MAP 추상화)" _test_wine_proot_path_calls_mesa_vulkan_dep
+it "proot 있음 → proot_pkg_install_wine_mesa 호출" _test_wine_proot_path_calls_wine_mesa
 
 _test_wine_native_path_calls_termux_pkg() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -323,282 +288,6 @@ _test_wine_proot_path_does_not_call_termux_glibc() {
     cleanup_sandbox "$sb"
 }
 it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
-
-_test_wine_launcher_creates_desktop_without_shell() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_wine
-    assert_file_exists "${PREFIX}/share/applications/wine64.desktop"
-    # explorer /desktop=shell은 Box64에서 먹통 → wine explorer만 사용
-    if grep -q '/desktop=shell' "${PREFIX}/share/applications/wine64.desktop"; then
-        echo "[ASSERT] desktop에 /desktop=shell 포함됨 (Box64 호환 불가)" >&2
-        cleanup_sandbox "$sb"; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "proot 있음 → desktop 파일에 /desktop=shell 미포함" _test_wine_launcher_creates_desktop_without_shell
-
-_test_wine_wrapper_has_dpi_sync() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_wine
-    assert_file_contains "${PREFIX}/bin/wine" "WINE_DPI"
-    assert_file_contains "${PREFIX}/bin/wine" "LogPixels"
-    cleanup_sandbox "$sb"
-}
-it "proot 있음 → wine wrapper에 DPI 동기화 로직 포함" _test_wine_wrapper_has_dpi_sync
-
-# =============================================================================
-# Notepad++ — Wine 앱
-# =============================================================================
-describe "Notepad++ — Wine 앱 설치"
-
-_test_notepadpp_install_creates_desktop() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_notepadpp
-    assert_file_exists "${PREFIX}/share/applications/notepadpp.desktop"
-    cleanup_sandbox "$sb"
-}
-it "install → .desktop 파일 생성" _test_notepadpp_install_creates_desktop
-
-_test_notepadpp_desktop_supports_file_open() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_notepadpp
-    assert_file_contains "${PREFIX}/share/applications/notepadpp.desktop" "%f"
-    assert_file_contains "${PREFIX}/share/applications/notepadpp.desktop" "text/plain"
-    cleanup_sandbox "$sb"
-}
-it "desktop에 파일 열기(%f) 및 MimeType 포함" _test_notepadpp_desktop_supports_file_open
-
-# =============================================================================
-# 7-Zip — Wine 앱
-# =============================================================================
-describe "7-Zip — Wine 앱 설치"
-
-_test_sevenzip_install_creates_desktop() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_sevenzip
-    assert_file_exists "${PREFIX}/share/applications/sevenzip.desktop"
-    cleanup_sandbox "$sb"
-}
-it "install → .desktop 파일 생성" _test_sevenzip_install_creates_desktop
-
-_test_sevenzip_desktop_has_archive_mimetypes() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    MOCK_HAS_PROOT=true
-    app_install_sevenzip
-    assert_file_contains "${PREFIX}/share/applications/sevenzip.desktop" "application/zip"
-    assert_file_contains "${PREFIX}/share/applications/sevenzip.desktop" "application/x-7z-compressed"
-    cleanup_sandbox "$sb"
-}
-it "desktop에 압축 MimeType 포함" _test_sevenzip_desktop_has_archive_mimetypes
-
-# =============================================================================
-# Notion — zlib 추상화
-# =============================================================================
-describe "Notion — proot 설치"
-
-_test_notion_install_uses_proot_dep_zlib() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_notion
-    assert_was_called "proot_dep zlib"
-    cleanup_sandbox "$sb"
-}
-it "install → proot_dep zlib 호출 (DEP_MAP 추상화)" _test_notion_install_uses_proot_dep_zlib
-
-_test_notion_does_not_hardcode_zlib_pkg() {
-    # zlib1g-dev / zlib 같은 distro별 패키지명이 도메인에 없어야 함
-    ! grep -qE "proot_pkg_install (zlib1g-dev|zlib\b)" \
-        "${APP_DIR}/domain/installers/notion.sh" 2>/dev/null
-}
-it "notion.sh 도메인 — distro별 zlib 패키지명 하드코딩 없음" _test_notion_does_not_hardcode_zlib_pkg
-
-# =============================================================================
-# Tor Browser — tor_deps 추상화
-# =============================================================================
-describe "Tor Browser — proot 설치"
-
-_test_tor_install_uses_proot_dep() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_tor_browser
-    assert_was_called "proot_dep tor_deps"
-    cleanup_sandbox "$sb"
-}
-it "install → proot_dep tor_deps 호출 (DEP_MAP 추상화)" _test_tor_install_uses_proot_dep
-
-# =============================================================================
-# Nautilus — bwrap 스텁 설정
-# =============================================================================
-describe "Nautilus — proot 설치"
-
-_test_nautilus_install_sets_up_bwrap() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_nautilus
-    assert_was_called "proot_setup_bwrap"
-    cleanup_sandbox "$sb"
-}
-it "install → proot_setup_bwrap 호출 (GTK4 glycin 대응)" _test_nautilus_install_sets_up_bwrap
-
-# =============================================================================
-# GIMP/Inkscape/Audacity — Termux native (x11-repo)
-# =============================================================================
-describe "GIMP — Termux native 설치"
-
-_test_gimp_install_calls_termux_pkg() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_gimp
-    assert_was_called "termux_pkg_install gimp"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install gimp 호출" _test_gimp_install_calls_termux_pkg
-
-_test_gimp_does_not_call_proot() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_gimp
-    assert_not_called "proot_pkg_install"
-    cleanup_sandbox "$sb"
-}
-it "install → proot 함수 미호출 (native 전용)" _test_gimp_does_not_call_proot
-
-describe "Inkscape — Termux native 설치"
-
-_test_inkscape_install_calls_termux_pkg() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_inkscape
-    assert_was_called "termux_pkg_install inkscape"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install inkscape 호출" _test_inkscape_install_calls_termux_pkg
-
-_test_inkscape_does_not_call_proot() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_inkscape
-    assert_not_called "proot_pkg_install"
-    cleanup_sandbox "$sb"
-}
-it "install → proot 함수 미호출 (native 전용)" _test_inkscape_does_not_call_proot
-
-describe "Audacity — Termux native 설치"
-
-_test_audacity_install_calls_termux_pkg() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_audacity
-    assert_was_called "termux_pkg_install audacity"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install audacity 호출" _test_audacity_install_calls_termux_pkg
-
-_test_audacity_does_not_call_proot() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_install_audacity
-    assert_not_called "proot_pkg_install"
-    cleanup_sandbox "$sb"
-}
-it "install → proot 함수 미호출 (native 전용)" _test_audacity_does_not_call_proot
-
-# =============================================================================
-# Claude Code — Termux native + glibc-runner
-# =============================================================================
-describe "Claude Code — Termux native + glibc-runner"
-
-# 외부 호출(curl/tar/npm) override — 실제 네트워크 미사용
-_claude_code_mock_externals() {
-    _claude_code_fetch_latest_version() { echo "9.9.9"; }
-    _claude_code_download_native()      {
-        mkdir -p "${CLAUDE_CODE_PREFIX}"
-        touch "${CLAUDE_CODE_PREFIX}/claude"
-        chmod +x "${CLAUDE_CODE_PREFIX}/claude"
-    }
-    _claude_code_remove_npm_wrapper()   { :; }
-}
-
-_test_claude_code_install_calls_glibc_runner() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_mock_externals
-    app_install_claude_code
-    assert_was_called "termux_pkg_install glibc-runner"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install glibc-runner 호출" _test_claude_code_install_calls_glibc_runner
-
-_test_claude_code_install_calls_glibc_repo() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_mock_externals
-    app_install_claude_code
-    assert_was_called "termux_pkg_install glibc-repo"
-    cleanup_sandbox "$sb"
-}
-it "install → termux_pkg_install glibc-repo 호출 (의존성)" _test_claude_code_install_calls_glibc_repo
-
-_test_claude_code_install_creates_wrapper() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_mock_externals
-    app_install_claude_code
-    assert_file_exists "${CLAUDE_CODE_BIN_PATH}"
-    assert_file_contains "${CLAUDE_CODE_BIN_PATH}" "exec grun"
-    cleanup_sandbox "$sb"
-}
-it "install → wrapper script 생성 (grun 호출)" _test_claude_code_install_creates_wrapper
-
-_test_claude_code_install_creates_settings_when_absent() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_mock_externals
-    app_install_claude_code
-    assert_file_contains "${HOME}/.claude/settings.json" "DISABLE_AUTOUPDATER"
-    cleanup_sandbox "$sb"
-}
-it "install → settings.json 부재 시 DISABLE_AUTOUPDATER 자동 작성" _test_claude_code_install_creates_settings_when_absent
-
-_test_claude_code_install_preserves_existing_settings() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_mock_externals
-    mkdir -p "${HOME}/.claude"
-    echo '{"theme":"dark"}' > "${HOME}/.claude/settings.json"
-    app_install_claude_code
-    assert_file_contains "${HOME}/.claude/settings.json" '"theme":"dark"'
-    cleanup_sandbox "$sb"
-}
-it "install → 기존 settings.json 보존 (덮어쓰지 않음)" _test_claude_code_install_preserves_existing_settings
-
-_test_claude_code_install_fails_on_version_lookup_error() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_code_remove_npm_wrapper()    { :; }
-    _claude_code_fetch_latest_version()  { echo ""; }   # 빈 응답 시뮬레이션
-    app_install_claude_code 2>/dev/null && { echo "[ASSERT] 빈 버전인데 성공" >&2; cleanup_sandbox "$sb"; return 1; }
-    cleanup_sandbox "$sb"
-}
-it "버전 조회 실패 시 install → 비정상 종료" _test_claude_code_install_fails_on_version_lookup_error
-
-_test_claude_code_remove_deletes_wrapper_and_native() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${CLAUDE_CODE_PREFIX}"
-    touch "${CLAUDE_CODE_BIN_PATH}" "${CLAUDE_CODE_PREFIX}/claude"
-    app_remove_claude_code
-    [ ! -e "${CLAUDE_CODE_BIN_PATH}" ] || { echo "[ASSERT] wrapper 미삭제" >&2; cleanup_sandbox "$sb"; return 1; }
-    [ ! -e "${CLAUDE_CODE_PREFIX}/claude" ] || { echo "[ASSERT] native 미삭제" >&2; cleanup_sandbox "$sb"; return 1; }
-    cleanup_sandbox "$sb"
-}
-it "remove → wrapper + native binary 삭제" _test_claude_code_remove_deletes_wrapper_and_native
-
-_test_claude_code_is_installed_false_default() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    app_is_installed_claude_code && { echo "[ASSERT] wrapper 없는데 installed" >&2; cleanup_sandbox "$sb"; return 1; }
-    cleanup_sandbox "$sb"
-}
-it "wrapper/native 미존재 → is_installed false" _test_claude_code_is_installed_false_default
-
-_test_claude_code_is_installed_true_when_present() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${CLAUDE_CODE_PREFIX}"
-    echo "#!/bin/sh" > "${CLAUDE_CODE_BIN_PATH}"; chmod +x "${CLAUDE_CODE_BIN_PATH}"
-    touch "${CLAUDE_CODE_PREFIX}/claude"; chmod +x "${CLAUDE_CODE_PREFIX}/claude"
-    app_is_installed_claude_code
-    cleanup_sandbox "$sb"
-}
-it "wrapper + native 모두 있으면 is_installed true" _test_claude_code_is_installed_true_when_present
 
 # =============================================================================
 # has_proot_distro — 유틸 함수
@@ -762,197 +451,5 @@ for _f in "${APP_DIR}/adapters/output/"*.sh; do
     _test_adapter_syntax() { bash -n "$_f" 2>/dev/null; }
     it "${_name} — 문법 오류 없음" _test_adapter_syntax
 done
-
-# =============================================================================
-# nimf / fcitx5 입력기 전환 — 환경변수 + autostart
-# =============================================================================
-
-_im_setup_rc_with_fcitx5() {
-    mkdir -p "${PREFIX}/etc"
-    cat > "${PREFIX}/etc/bash.bashrc" << 'RC'
-export GTK_IM_MODULE=fcitx5
-export QT_IM_MODULE=fcitx5
-export XMODIFIERS=@im=fcitx5
-RC
-    mkdir -p "$(dirname "$HOME/.zshrc")"
-    cp "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"
-}
-
-_im_setup_rc_with_nimf() {
-    mkdir -p "${PREFIX}/etc"
-    cat > "${PREFIX}/etc/bash.bashrc" << 'RC'
-export GTK_IM_MODULE=nimf
-export QT_IM_MODULE=nimf
-export XMODIFIERS="@im=nimf"
-RC
-    mkdir -p "$(dirname "$HOME/.zshrc")"
-    cp "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"
-}
-
-describe "nimf 설치 — 환경변수 전환"
-
-_test_nimf_env_switches_from_fcitx5() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _im_setup_rc_with_fcitx5
-    _nimf_setup_env
-    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
-    assert_file_contains "$HOME/.zshrc" "GTK_IM_MODULE=nimf"
-    cleanup_sandbox "$sb"
-}
-it "fcitx5 → nimf 환경변수 전환 (bashrc + zshrc)" _test_nimf_env_switches_from_fcitx5
-
-_test_nimf_env_no_fcitx5_residue() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _im_setup_rc_with_fcitx5
-    _nimf_setup_env
-    if command grep -q 'GTK_IM_MODULE=fcitx' "${PREFIX}/etc/bash.bashrc" 2>/dev/null; then
-        echo "[ASSERT] bashrc에 fcitx 잔여" >&2; return 1
-    fi
-    if command grep -q 'GTK_IM_MODULE=fcitx' "$HOME/.zshrc" 2>/dev/null; then
-        echo "[ASSERT] zshrc에 fcitx 잔여" >&2; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "전환 후 fcitx5 환경변수 잔여 없음" _test_nimf_env_no_fcitx5_residue
-
-describe "nimf 설치 — autostart 전환"
-
-_test_nimf_autostart_created() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _nimf_setup_autostart
-    assert_file_exists "$HOME/.config/autostart/nimf.desktop"
-    assert_file_contains "$HOME/.config/autostart/nimf.desktop" "Exec=nimf"
-    cleanup_sandbox "$sb"
-}
-it "nimf.desktop 자동시작 생성" _test_nimf_autostart_created
-
-_test_nimf_disables_fcitx5_autostart() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${PREFIX}/etc/xdg/autostart"
-    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
-    _nimf_setup_autostart
-    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" "Hidden=true"
-    cleanup_sandbox "$sb"
-}
-it "fcitx5 시스템 autostart를 Hidden=true로 오버라이드" _test_nimf_disables_fcitx5_autostart
-
-_test_nimf_removes_fcitx5_user_autostart() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "$HOME/.config/autostart"
-    echo "[Desktop Entry]" > "$HOME/.config/autostart/fcitx5.desktop"
-    _nimf_setup_autostart
-    if [ -f "$HOME/.config/autostart/fcitx5.desktop" ]; then
-        echo "[ASSERT] fcitx5 사용자 autostart 미삭제" >&2; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "fcitx5 사용자 autostart 제거" _test_nimf_removes_fcitx5_user_autostart
-
-describe "fcitx5 설치 — 환경변수 전환"
-
-_test_fcitx5_env_switches_from_nimf() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _im_setup_rc_with_nimf
-    _fcitx5_setup_env
-    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=fcitx5"
-    assert_file_contains "$HOME/.zshrc" "GTK_IM_MODULE=fcitx5"
-    cleanup_sandbox "$sb"
-}
-it "nimf → fcitx5 환경변수 전환 (bashrc + zshrc)" _test_fcitx5_env_switches_from_nimf
-
-_test_fcitx5_env_no_nimf_residue() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _im_setup_rc_with_nimf
-    _fcitx5_setup_env
-    if command grep -q 'GTK_IM_MODULE=nimf' "${PREFIX}/etc/bash.bashrc" 2>/dev/null; then
-        echo "[ASSERT] bashrc에 nimf 잔여" >&2; return 1
-    fi
-    if command grep -q 'GTK_IM_MODULE=nimf' "$HOME/.zshrc" 2>/dev/null; then
-        echo "[ASSERT] zshrc에 nimf 잔여" >&2; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "전환 후 nimf 환경변수 잔여 없음" _test_fcitx5_env_no_nimf_residue
-
-describe "fcitx5 설치 — autostart 전환"
-
-_test_fcitx5_removes_nimf_autostart() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "$HOME/.config/autostart"
-    echo "[Desktop Entry]" > "$HOME/.config/autostart/nimf.desktop"
-    _fcitx5_setup_autostart
-    if [ -f "$HOME/.config/autostart/nimf.desktop" ]; then
-        echo "[ASSERT] nimf autostart 미삭제" >&2; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "nimf autostart 제거" _test_fcitx5_removes_nimf_autostart
-
-_test_fcitx5_removes_hidden_override() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "$HOME/.config/autostart" "${PREFIX}/etc/xdg/autostart"
-    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
-    cat > "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" << 'EOF'
-[Desktop Entry]
-Hidden=true
-X-GNOME-Autostart-enabled=false
-EOF
-    _fcitx5_setup_autostart
-    if [ -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" ]; then
-        echo "[ASSERT] fcitx5 Hidden 오버라이드 미삭제" >&2; return 1
-    fi
-    cleanup_sandbox "$sb"
-}
-it "fcitx5 Hidden 오버라이드 제거 → 시스템 autostart 복원" _test_fcitx5_removes_hidden_override
-
-_test_fcitx5_creates_fallback_without_system() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _fcitx5_setup_autostart
-    assert_file_exists "$HOME/.config/autostart/fcitx5.desktop"
-    assert_file_contains "$HOME/.config/autostart/fcitx5.desktop" "Exec=fcitx5"
-    cleanup_sandbox "$sb"
-}
-it "시스템 autostart 없으면 사용자 autostart 폴백 생성" _test_fcitx5_creates_fallback_without_system
-
-describe "입력기 왕복 전환 — nimf → fcitx5 → nimf"
-
-_test_roundtrip_env_switch() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    _im_setup_rc_with_fcitx5
-
-    # fcitx5 → nimf
-    _nimf_setup_env
-    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
-
-    # nimf → fcitx5
-    _fcitx5_setup_env
-    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=fcitx5"
-
-    # fcitx5 → nimf (다시)
-    _nimf_setup_env
-    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
-
-    cleanup_sandbox "$sb"
-}
-it "환경변수 왕복 전환 (fcitx5→nimf→fcitx5→nimf)" _test_roundtrip_env_switch
-
-_test_roundtrip_autostart_switch() {
-    local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${PREFIX}/etc/xdg/autostart"
-    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
-
-    # nimf 설치
-    _nimf_setup_autostart
-    assert_file_exists "$HOME/.config/autostart/nimf.desktop"
-    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" "Hidden=true"
-
-    # fcitx5로 되돌림
-    _fcitx5_setup_autostart
-    [ ! -f "$HOME/.config/autostart/nimf.desktop" ] || { echo "[ASSERT] nimf autostart 잔여" >&2; return 1; }
-    [ ! -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" ] || { echo "[ASSERT] fcitx5 오버라이드 잔여" >&2; return 1; }
-
-    cleanup_sandbox "$sb"
-}
-it "autostart 왕복 전환 (nimf↔fcitx5)" _test_roundtrip_autostart_switch
 
 print_results

@@ -6,7 +6,7 @@ _TOR_URL="https://sourceforge.net/projects/tor-browser-ports/files/${_TOR_VER}/t
 
 app_install_tor_browser() {
     proot_pkg_update
-    proot_dep "tor_deps"
+    proot_pkg_install_tor_deps
 
     proot_exec bash -c "
         curl -L '${_TOR_URL}' -o tor.tar.xz
@@ -16,7 +16,7 @@ app_install_tor_browser() {
     "
 
     desktop_register "tor" "Tor Browser" \
-        'bash -c "prun-gui \"Tor Browser\" -- /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "tor" "Network;WebBrowser;Security;"
 }
 

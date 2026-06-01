@@ -4,7 +4,6 @@
 # =============================================================================
 source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 
-# --- 기본 패키지 관리 ---
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
 proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
 proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
@@ -15,42 +14,37 @@ proot_pkg_autoremove() {
 }
 proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 
-# --- 의존성 매핑 (논리명 → Arch 패키지명) ---
-PROOT_DEP_MAP=(
-    "jdk:jdk-openjdk"
-    "python:python python-pip"
-    "zlib:zlib"
-    "tor_deps:curl dbus-glib"
-    "libreoffice:libreoffice-fresh"
-    "mesa_vulkan:mesa vulkan-freedreno lib32-mesa"
-)
-
-# --- 확장 설치 전략 ---
 proot_pkg_install_aur() {
     local pkg="$1"
     proot_exec bash -c "
-        if ! command -v paru &>/dev/null; then
+        if ! command -v yay &>/dev/null; then
             sudo pacman -S --noconfirm --needed git base-devel
-            git clone https://aur.archlinux.org/paru-bin.git /tmp/paru-bin
-            cd /tmp/paru-bin && makepkg -si --noconfirm
-            rm -rf /tmp/paru-bin
+            git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
+            cd /tmp/yay-bin && makepkg -si --noconfirm
+            rm -rf /tmp/yay-bin
         fi
-        paru -S --noconfirm --needed '${pkg}'
+        yay -S --noconfirm --needed '${pkg}'
     "
 }
 
 proot_pkg_install_deb_or_aur() {
-    local _deb_url="$1"
+    local _deb_url="$1"  # Arch에서는 미사용
     local aur_pkg="$2"
     proot_pkg_install_aur "$aur_pkg"
 }
 
+# Arch에는 APT 저장소 개념 없음 — no-op
 proot_pkg_add_external_repo() {
     echo "[INFO] Arch: proot_pkg_add_external_repo 불필요 (no-op)" >&2
 }
 
-# --- 복잡한 앱별 설치 ---
+proot_pkg_install_libreoffice() { proot_pkg_install libreoffice-fresh; }
+proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice-fresh; }
+proot_pkg_install_jdk()         { proot_pkg_install jdk-openjdk; }
+proot_pkg_install_python_pip()  { proot_pkg_install python python-pip; }
+proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 
+# Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
 proot_pkg_install_sasm() {
     proot_exec sudo bash -c "
         pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
@@ -62,32 +56,28 @@ proot_pkg_install_sasm() {
     "
 }
 
+# Arch: code는 공식 repo 없음 → AUR visual-studio-code-bin
+proot_pkg_install_vscode() { proot_pkg_install_aur visual-studio-code-bin; }
+proot_pkg_remove_vscode()  { proot_pkg_remove visual-studio-code-bin 2>/dev/null || proot_pkg_remove code 2>/dev/null || true; }
+
 proot_pkg_install_box64() {
-    if proot_exec which box64 &>/dev/null; then
-        echo "[Box64] 이미 설치되어 있습니다."
-        return 0
-    fi
+    proot_exec sudo bash -c "
+        pacman -S --noconfirm box64 2>/dev/null && exit 0
 
-    # chaotic-aur는 x86_64 전용 → ARM64 proot에서는 소스 빌드가 유일한 방법
-    echo "[Box64] GitHub 소스에서 빌드 중... (수분 소요)"
-    proot_exec sudo bash -c '
-        set -e
-        pacman -S --noconfirm --needed cmake gcc make git python
-        rm -rf /tmp/box64-build
-        git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-build
-        # Wine SharedUserData(0x7FFE0000) 충돌 방지: prereserve 영역 분할
-        sed -i "s/{(void\*)0x7f000000, 0x03000000}, {0, 0}, {0, 0}}/{(void*)0x7f000000, 0x00FE0000}, {(void*)0x7FFF0000, 0x02010000}, {0, 0}, {0, 0}}/" /tmp/box64-build/src/tools/wine_tools.c
-        cd /tmp/box64-build && mkdir build && cd build
-        cmake .. -DARM_DYNAREC=ON -DNOLOADADDR=ON -DBAD_SIGNAL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        make -j$(nproc)
-        make install
-        rm -rf /tmp/box64-build
-    '
+        # Chaotic-AUR 추가
+        pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com 2>/dev/null || true
+        pacman-key --lsign-key 3056513887B78AEB 2>/dev/null || true
+        pacman -U --noconfirm \
+            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' 2>/dev/null || true
+        grep -q '\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null || \
+            printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
+        pacman -Sy --noconfirm box64 2>/dev/null || echo '[WARN] Box64 설치 실패'
+    " 2>/dev/null || true
+}
 
-    if proot_exec which box64 &>/dev/null; then
-        echo "[Box64] 설치 완료."
-    else
-        echo "[ERROR] Box64 설치 실패 — Wine 실행 불가" >&2
-        return 1
-    fi
+proot_pkg_install_wine_mesa() {
+    proot_pkg_install \
+        mesa vulkan-freedreno lib32-mesa 2>/dev/null || \
+        echo "[WARN] Mesa 일부 패키지 실패"
 }

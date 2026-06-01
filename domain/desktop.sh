@@ -38,21 +38,12 @@ desktop_copy_from_proot() {
 
     mkdir -p "${PREFIX}/share/applications"
     for desktop in "${rootfs}/usr/share/applications"/${app_prefix}*.desktop; do
-        [ -e "$desktop" ] || [ -L "$desktop" ] || continue
-        local fname app_name src="$desktop"
+        [ -f "$desktop" ] || continue
+        local fname
         fname=$(basename "$desktop")
-        if [ -L "$desktop" ]; then
-            local target
-            target=$(readlink "$desktop")
-            [[ "$target" == /* ]] && src="${rootfs}${target}"
-        fi
-        [ -f "$src" ] || continue
-        cp "$src" "${PREFIX}/share/applications/${fname}"
-        # .desktop Name= 필드에서 앱 이름 추출 → prun-gui 로딩 알림에 사용
-        app_name=$(grep -m1 '^Name=' "${PREFIX}/share/applications/${fname}" | cut -d= -f2-)
-        app_name="${app_name:-${app_prefix}}"
+        cp "$desktop" "${PREFIX}/share/applications/${fname}"
         sed -i \
-            "s|^Exec=\(.*\)$|Exec=bash -c \"prun-gui '${app_name}' -- \1 </dev/null >/dev/null 2>\&1 \&\"|" \
+            "s|^Exec=\(.*\)$|Exec=bash -c \"prun \1 </dev/null >/dev/null 2>\&1 \&\"|" \
             "${PREFIX}/share/applications/${fname}"
     done
 }

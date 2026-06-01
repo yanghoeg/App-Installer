@@ -114,7 +114,7 @@ _wine_install_native() {
 
 WINE_DPI="${WINE_DPI:-240}"
 
-# Android CPU ���로틀링 방지
+# Android CPU 쓰로틀링 방지
 termux-wake-lock 2>/dev/null
 
 # Wine 레지스트리 DPI 동기화
@@ -268,7 +268,7 @@ app_install_wine() {
                 return 1
             fi
             _wine_install_tarball_proot
-            proot_dep "mesa_vulkan"
+            proot_pkg_install_wine_mesa
             _wine_install_winetricks_proot
             _wine_init_prefix_proot
         fi

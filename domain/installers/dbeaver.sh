@@ -4,7 +4,7 @@
 
 app_install_dbeaver() {
     proot_pkg_update
-    proot_dep "jdk"
+    proot_pkg_install_jdk
 
     proot_exec bash -c "
         wget 'https://github.com/dbeaver/dbeaver/releases/download/24.3.1/dbeaver-ce-24.3.1-linux.gtk.aarch64-nojdk.tar.gz' \
@@ -16,7 +16,7 @@ app_install_dbeaver() {
     "
 
     desktop_register "dbeaver" "DBeaver" \
-        'bash -c "prun-gui DBeaver -- dbeaver --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+        "prun dbeaver --no-sandbox" \
         "dbeaver" "Development;Database;"
 }
 

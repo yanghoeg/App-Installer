@@ -6,12 +6,13 @@
 app_install_sasm() {
     proot_pkg_install_sasm
 
-    local bashrc="$(proot_home)/.bashrc"
+    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
     grep -q "alias sasm=" "$bashrc" 2>/dev/null || \
         echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
 
     desktop_register "sasm" "SASM" \
-        'bash -c "prun-gui SASM -- env QT_SCALE_FACTOR=2 sasm </dev/null >/dev/null 2>&1 &"' \
+        'bash -c "prun env QT_SCALE_FACTOR=2 sasm </dev/null >/dev/null 2>&1 &"' \
         "sasm" "Development;"
 }
 
