@@ -33,13 +33,38 @@ app_install_korean_input() {
         fi
     done
 
-    # fcitx5 autostart: 시스템 autostart가 있으면 스킵 (중복 인스턴스 방지)
+    _fcitx5_setup_env
+    _fcitx5_setup_autostart
+
+    echo "한글 입력기(fcitx5-hangul) 설치 완료"
+    echo "XFCE 재시작 후 fcitx5 설정에서 한글(Hangul) 입력기를 추가하세요."
+}
+
+_fcitx5_setup_env() {
+    local rc
+    for rc in "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"; do
+        [ -f "$rc" ] || continue
+        # nimf → fcitx5 전환
+        sed -i 's/GTK_IM_MODULE=nimf/GTK_IM_MODULE=fcitx5/g' "$rc" 2>/dev/null
+        sed -i 's/QT_IM_MODULE=nimf/QT_IM_MODULE=fcitx5/g' "$rc" 2>/dev/null
+        sed -i 's/@im=nimf/@im=fcitx5/g' "$rc" 2>/dev/null
+        # nimf 블록 제거
+        sed -i '/# termux-xfce-nimf/,/# end-termux-xfce-nimf/d' "$rc" 2>/dev/null || true
+    done
+}
+
+_fcitx5_setup_autostart() {
+    # nimf autostart 제거
+    rm -f "$HOME/.config/autostart/nimf.desktop"
+    # fcitx5 사용자 오버라이드(Hidden=true) 제거 → 시스템 autostart 복원
+    rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
+
+    # 시스템 autostart가 없는 경우 사용자 autostart 생성
     local system_autostart="${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
     if [ ! -f "$system_autostart" ]; then
         mkdir -p "$HOME/.config/autostart"
         local fcitx_desktop="$HOME/.config/autostart/fcitx5.desktop"
-        if [ ! -f "$fcitx_desktop" ]; then
-            cat > "$fcitx_desktop" << 'EOF'
+        [ -f "$fcitx_desktop" ] || cat > "$fcitx_desktop" << 'EOF'
 [Desktop Entry]
 Type=Application
 Name=Fcitx5
@@ -47,11 +72,7 @@ Exec=fcitx5 -d
 Hidden=false
 X-GNOME-Autostart-enabled=true
 EOF
-        fi
     fi
-
-    echo "한글 입력기(fcitx5-hangul) 설치 완료"
-    echo "XFCE 재시작 후 fcitx5 설정에서 한글(Hangul) 입력기를 추가하세요."
 }
 
 app_remove_korean_input() {

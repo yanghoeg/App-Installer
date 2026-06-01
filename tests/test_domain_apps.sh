@@ -763,4 +763,196 @@ for _f in "${APP_DIR}/adapters/output/"*.sh; do
     it "${_name} — 문법 오류 없음" _test_adapter_syntax
 done
 
+# =============================================================================
+# nimf / fcitx5 입력기 전환 — 환경변수 + autostart
+# =============================================================================
+
+_im_setup_rc_with_fcitx5() {
+    mkdir -p "${PREFIX}/etc"
+    cat > "${PREFIX}/etc/bash.bashrc" << 'RC'
+export GTK_IM_MODULE=fcitx5
+export QT_IM_MODULE=fcitx5
+export XMODIFIERS=@im=fcitx5
+RC
+    mkdir -p "$(dirname "$HOME/.zshrc")"
+    cp "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"
+}
+
+_im_setup_rc_with_nimf() {
+    mkdir -p "${PREFIX}/etc"
+    cat > "${PREFIX}/etc/bash.bashrc" << 'RC'
+export GTK_IM_MODULE=nimf
+export QT_IM_MODULE=nimf
+export XMODIFIERS="@im=nimf"
+RC
+    mkdir -p "$(dirname "$HOME/.zshrc")"
+    cp "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"
+}
+
+describe "nimf 설치 — 환경변수 전환"
+
+_test_nimf_env_switches_from_fcitx5() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _im_setup_rc_with_fcitx5
+    _nimf_setup_env
+    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
+    assert_file_contains "$HOME/.zshrc" "GTK_IM_MODULE=nimf"
+    cleanup_sandbox "$sb"
+}
+it "fcitx5 → nimf 환경변수 전환 (bashrc + zshrc)" _test_nimf_env_switches_from_fcitx5
+
+_test_nimf_env_no_fcitx5_residue() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _im_setup_rc_with_fcitx5
+    _nimf_setup_env
+    if command grep -q 'GTK_IM_MODULE=fcitx' "${PREFIX}/etc/bash.bashrc" 2>/dev/null; then
+        echo "[ASSERT] bashrc에 fcitx 잔여" >&2; return 1
+    fi
+    if command grep -q 'GTK_IM_MODULE=fcitx' "$HOME/.zshrc" 2>/dev/null; then
+        echo "[ASSERT] zshrc에 fcitx 잔여" >&2; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "전환 후 fcitx5 환경변수 잔여 없음" _test_nimf_env_no_fcitx5_residue
+
+describe "nimf 설치 — autostart 전환"
+
+_test_nimf_autostart_created() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _nimf_setup_autostart
+    assert_file_exists "$HOME/.config/autostart/nimf.desktop"
+    assert_file_contains "$HOME/.config/autostart/nimf.desktop" "Exec=nimf"
+    cleanup_sandbox "$sb"
+}
+it "nimf.desktop 자동시작 생성" _test_nimf_autostart_created
+
+_test_nimf_disables_fcitx5_autostart() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${PREFIX}/etc/xdg/autostart"
+    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
+    _nimf_setup_autostart
+    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" "Hidden=true"
+    cleanup_sandbox "$sb"
+}
+it "fcitx5 시스템 autostart를 Hidden=true로 오버라이드" _test_nimf_disables_fcitx5_autostart
+
+_test_nimf_removes_fcitx5_user_autostart() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "$HOME/.config/autostart"
+    echo "[Desktop Entry]" > "$HOME/.config/autostart/fcitx5.desktop"
+    _nimf_setup_autostart
+    if [ -f "$HOME/.config/autostart/fcitx5.desktop" ]; then
+        echo "[ASSERT] fcitx5 사용자 autostart 미삭제" >&2; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "fcitx5 사용자 autostart 제거" _test_nimf_removes_fcitx5_user_autostart
+
+describe "fcitx5 설치 — 환경변수 전환"
+
+_test_fcitx5_env_switches_from_nimf() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _im_setup_rc_with_nimf
+    _fcitx5_setup_env
+    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=fcitx5"
+    assert_file_contains "$HOME/.zshrc" "GTK_IM_MODULE=fcitx5"
+    cleanup_sandbox "$sb"
+}
+it "nimf → fcitx5 환경변수 전환 (bashrc + zshrc)" _test_fcitx5_env_switches_from_nimf
+
+_test_fcitx5_env_no_nimf_residue() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _im_setup_rc_with_nimf
+    _fcitx5_setup_env
+    if command grep -q 'GTK_IM_MODULE=nimf' "${PREFIX}/etc/bash.bashrc" 2>/dev/null; then
+        echo "[ASSERT] bashrc에 nimf 잔여" >&2; return 1
+    fi
+    if command grep -q 'GTK_IM_MODULE=nimf' "$HOME/.zshrc" 2>/dev/null; then
+        echo "[ASSERT] zshrc에 nimf 잔여" >&2; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "전환 후 nimf 환경변수 잔여 없음" _test_fcitx5_env_no_nimf_residue
+
+describe "fcitx5 설치 — autostart 전환"
+
+_test_fcitx5_removes_nimf_autostart() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "$HOME/.config/autostart"
+    echo "[Desktop Entry]" > "$HOME/.config/autostart/nimf.desktop"
+    _fcitx5_setup_autostart
+    if [ -f "$HOME/.config/autostart/nimf.desktop" ]; then
+        echo "[ASSERT] nimf autostart 미삭제" >&2; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "nimf autostart 제거" _test_fcitx5_removes_nimf_autostart
+
+_test_fcitx5_removes_hidden_override() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "$HOME/.config/autostart" "${PREFIX}/etc/xdg/autostart"
+    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
+    cat > "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" << 'EOF'
+[Desktop Entry]
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+    _fcitx5_setup_autostart
+    if [ -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" ]; then
+        echo "[ASSERT] fcitx5 Hidden 오버라이드 미삭제" >&2; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "fcitx5 Hidden 오버라이드 제거 → 시스템 autostart 복원" _test_fcitx5_removes_hidden_override
+
+_test_fcitx5_creates_fallback_without_system() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _fcitx5_setup_autostart
+    assert_file_exists "$HOME/.config/autostart/fcitx5.desktop"
+    assert_file_contains "$HOME/.config/autostart/fcitx5.desktop" "Exec=fcitx5"
+    cleanup_sandbox "$sb"
+}
+it "시스템 autostart 없으면 사용자 autostart 폴백 생성" _test_fcitx5_creates_fallback_without_system
+
+describe "입력기 왕복 전환 — nimf → fcitx5 → nimf"
+
+_test_roundtrip_env_switch() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _im_setup_rc_with_fcitx5
+
+    # fcitx5 → nimf
+    _nimf_setup_env
+    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
+
+    # nimf → fcitx5
+    _fcitx5_setup_env
+    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=fcitx5"
+
+    # fcitx5 → nimf (다시)
+    _nimf_setup_env
+    assert_file_contains "${PREFIX}/etc/bash.bashrc" "GTK_IM_MODULE=nimf"
+
+    cleanup_sandbox "$sb"
+}
+it "환경변수 왕복 전환 (fcitx5→nimf→fcitx5→nimf)" _test_roundtrip_env_switch
+
+_test_roundtrip_autostart_switch() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${PREFIX}/etc/xdg/autostart"
+    echo "[Desktop Entry]" > "${PREFIX}/etc/xdg/autostart/org.fcitx.Fcitx5.desktop"
+
+    # nimf 설치
+    _nimf_setup_autostart
+    assert_file_exists "$HOME/.config/autostart/nimf.desktop"
+    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" "Hidden=true"
+
+    # fcitx5로 되돌림
+    _fcitx5_setup_autostart
+    [ ! -f "$HOME/.config/autostart/nimf.desktop" ] || { echo "[ASSERT] nimf autostart 잔여" >&2; return 1; }
+    [ ! -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" ] || { echo "[ASSERT] fcitx5 오버라이드 잔여" >&2; return 1; }
+
+    cleanup_sandbox "$sb"
+}
+it "autostart 왕복 전환 (nimf↔fcitx5)" _test_roundtrip_autostart_switch
+
 print_results

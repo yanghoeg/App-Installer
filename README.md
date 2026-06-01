@@ -66,7 +66,8 @@ bash app-install.sh status claude_code   # Check install status
 | **Thorium** | High-performance browser | proot | .deb extraction (AUR x86-only) |
 | **GPU Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | Snapdragon only |
 | **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon only |
-| **Korean Input** | fcitx5-hangul | Termux native | |
+| **Korean Input (fcitx5)** | fcitx5-hangul | Termux native | |
+| **Korean Input (nimf)** | nimf input method framework | Termux native | Termux native build by 흡혈귀왕 @ [미코(Mini-Device Korea)](https://cafe.naver.com/minigkorea) |
 | **Korean Locale** | force_gettext.so UI localization | Termux native | Korean rendering by 흡혈귀왕 @ [미코(Mini-Device Korea)](https://cafe.naver.com/minigkorea) |
 | **Battery Widget** | XFCE panel battery display | Termux API | genmon |
 | **Brightness/Volume** | XFCE panel scripts | Termux API | |

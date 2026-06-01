@@ -66,7 +66,8 @@ bash app-install.sh status claude_code   # 설치 여부 확인
 | **Thorium** | 고속 웹 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
 | **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | Snapdragon 전용 |
 | **GPU 가속 (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon 전용 |
-| **한글 입력기** | fcitx5-hangul | Termux native | |
+| **한글 입력기 (fcitx5)** | fcitx5-hangul | Termux native | |
+| **한글 입력기 (nimf)** | nimf 입력기 프레임워크 | Termux native | Termux native 빌드: [미코(미니기기코리아)](https://cafe.naver.com/minigkorea) 흡혈귀왕 제공 |
 | **한글 로케일** | force_gettext.so UI 한글화 | Termux native | 한글 렌더링: [미코(미니기기코리아)](https://cafe.naver.com/minigkorea) 흡혈귀왕 제공 |
 | **배터리 위젯** | XFCE 패널 배터리 표시 | Termux API | genmon |
 | **밝기/볼륨 조절** | XFCE 패널 스크립트 | Termux API | |
