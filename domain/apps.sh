@@ -21,6 +21,7 @@ APP_REGISTRY=(
     "teams|Microsoft Teams|팀 협업 도구 (proot)"
     "thorium|Thorium|고속 웹 브라우저 (proot)"
     "onepassword|1Password|패스워드 관리자 (proot)"
+    "nimf|한글 입력기 (nimf)|nimf 한글 입력 (Termux native, 흡혈귀왕 빌드)"
 )
 
 # proot 설치 여부 확인
