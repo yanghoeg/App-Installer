@@ -5,15 +5,16 @@ _TOR_VER="13.0.9"
 _TOR_URL="https://sourceforge.net/projects/tor-browser-ports/files/${_TOR_VER}/tor-browser-linux-arm64-${_TOR_VER}.tar.xz/download"
 
 app_install_tor_browser() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install_tor_deps
 
-    proot_exec bash -c "
-        curl -L '${_TOR_URL}' -o tor.tar.xz
+    proot_exec bash -c '
+        curl -L "$1" -o tor.tar.xz
         tar -xJf tor.tar.xz
         sudo mv tor-browser /opt/tor-browser
         rm -f tor.tar.xz
-    "
+    ' _ "$_TOR_URL"
 
     desktop_register "tor" "Tor Browser" \
         'bash -c "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \

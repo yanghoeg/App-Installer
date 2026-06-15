@@ -2,6 +2,7 @@
 # DOMAIN: Burp Suite Community — proot 내부 설치 (arm64 바이너리, distro-agnostic)
 
 app_install_burpsuite() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_exec bash -c "
         curl -L -o /tmp/burpsuite.sh \

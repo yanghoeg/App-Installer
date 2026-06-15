@@ -5,27 +5,34 @@
 # 사용법: bash install.sh
 # 환경변수: PROOT_DISTRO, PROOT_USER (없으면 config 파일에서 로드)
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
+_detect_proot_user() {
+    if [ -z "${PROOT_DISTRO:-}" ]; then
+        echo "user"
+        return
+    fi
+    local detected
+    detected=$(ls "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/" 2>/dev/null \
+        | head -1) || true
+    echo "${detected:-user}"
+}
+
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then
         source "$config"
-        # config에 PROOT_DISTRO=""이면 그대로 유지 (사용자가 proot 없음 선택)
-        # env var(PROOT_DISTRO=archlinux bash app-installer/install.sh)로 override 가능
     else
-        # config 없을 때만 ubuntu 기본값 적용
         PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
     fi
-    PROOT_USER="${PROOT_USER:-$(
-        basename "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* \
-        2>/dev/null || echo "user"
-    )}"
+    if [ -z "${PROOT_USER:-}" ]; then
+        PROOT_USER=$(_detect_proot_user)
+    fi
 }
 
 _load_config
@@ -64,7 +71,6 @@ export GTK_THEME=Adwaita:dark
 
 while true; do
     rows=()
-    row_ids=()
 
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _desc <<< "$_entry"
@@ -74,7 +80,6 @@ while true; do
             _action="Install ${_name} (Not Installed)"
         fi
         rows+=("FALSE" "$_action" "$_desc" "$_id")
-        row_ids+=("${_action}:${_id}")
     done
 
     # --hide-column=4: app_id 컬럼 숨김

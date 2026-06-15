@@ -4,6 +4,7 @@
 # Ubuntu: 공식 apt repo / Arch: AUR 1password-cli
 
 app_install_onepassword() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     case "${PROOT_DISTRO:-}" in
         archlinux)
             proot_pkg_install_aur 1password-cli

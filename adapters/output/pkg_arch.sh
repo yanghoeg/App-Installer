@@ -16,15 +16,15 @@ proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 
 proot_pkg_install_aur() {
     local pkg="$1"
-    proot_exec bash -c "
+    proot_exec bash -c '
         if ! command -v yay &>/dev/null; then
             sudo pacman -S --noconfirm --needed git base-devel
             git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
             cd /tmp/yay-bin && makepkg -si --noconfirm
             rm -rf /tmp/yay-bin
         fi
-        yay -S --noconfirm --needed '${pkg}'
-    "
+        yay -S --noconfirm --needed "$1"
+    ' _ "$pkg"
 }
 
 proot_pkg_install_deb_or_aur() {

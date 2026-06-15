@@ -3,6 +3,7 @@
 # zlib 패키지명 차이(zlib1g-dev vs zlib)는 adapter가 흡수
 
 app_install_notion() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_install_zlib
 
     proot_exec bash -c "

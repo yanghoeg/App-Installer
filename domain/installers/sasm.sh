@@ -4,6 +4,7 @@
 # Arch: AUR sasm → adapter가 처리
 
 app_install_sasm() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_install_sasm
 
     local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
@@ -17,6 +18,9 @@ app_install_sasm() {
 }
 
 app_remove_sasm() {
+    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
+    [ -f "$bashrc" ] && sed -i '/alias sasm=/d' "$bashrc" 2>/dev/null || true
     # Arch: 소스 빌드 → 직접 삭제 / Ubuntu: apt purge
     proot_exec sudo rm -f /usr/local/bin/sasm 2>/dev/null || true
     proot_pkg_purge sasm 2>/dev/null || true

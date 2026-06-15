@@ -121,7 +121,7 @@ _wine_create_launchers() {
 #!/data/data/com.termux/files/usr/bin/bash
 # Wine proot 래퍼 — XFCE에서 .exe 파일을 열 때 사용
 proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- \\
-    env DISPLAY="${DISPLAY:-:0.0}" \\
+    env DISPLAY="\${DISPLAY:-:0.0}" \\
         MESA_LOADER_DRIVER_OVERRIDE=zink \\
         TU_DEBUG=noconform \\
         ZINK_DESCRIPTORS=lazy \\
@@ -212,7 +212,7 @@ app_remove_wine() {
     fi
 
     rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP"
-    rm -f "${HOME}/Desktop/wine64.desktop"
+    rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop"
 }
 
 app_is_installed_wine() {

@@ -3,6 +3,7 @@
 # python/pip 패키지명 차이는 adapter가 흡수
 
 app_install_miniforge() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install wget
     proot_pkg_install_python_pip

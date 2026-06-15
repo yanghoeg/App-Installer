@@ -19,21 +19,21 @@ proot_pkg_install_aur() {
 proot_pkg_install_deb_or_aur() {
     local deb_url="$1"
     local deb="${deb_url##*/}"
-    proot_exec bash -c "
-        curl -fsSL '${deb_url}' -o /tmp/${deb}
-        sudo apt install -y /tmp/${deb}
-        rm -f /tmp/${deb}
-    "
+    proot_exec bash -c '
+        curl -fsSL "$1" -o "/tmp/$2"
+        sudo apt install -y "/tmp/$2"
+        rm -f "/tmp/$2"
+    ' _ "$deb_url" "$deb"
 }
 
 proot_pkg_add_external_repo() {
     local name="$1" gpg_key_url="$2" sources_line="$3"
-    proot_exec sudo bash -c "
+    proot_exec sudo bash -c '
         apt install -y gpg software-properties-common apt-transport-https 2>/dev/null || true
-        wget -qO- '${gpg_key_url}' | gpg --dearmor > /usr/share/keyrings/${name}.gpg
-        echo '${sources_line}' > /etc/apt/sources.list.d/${name}.list
+        wget -qO- "$1" | gpg --dearmor > "/usr/share/keyrings/$2.gpg"
+        echo "$3" > "/etc/apt/sources.list.d/$2.list"
         apt update
-    "
+    ' _ "$gpg_key_url" "$name" "$sources_line"
 }
 
 proot_pkg_install_libreoffice() { proot_pkg_install libreoffice; }
@@ -98,10 +98,10 @@ proot_pkg_install_box64() {
 
     if [ -n "$box64_tag" ]; then
         local box64_url="https://github.com/ptitSeb/box64/releases/download/${box64_tag}/box64_Ubuntu_${codename}_arm64.deb"
-        proot_exec sudo bash -c "
-            wget -q '${box64_url}' -O /tmp/box64.deb 2>/dev/null \
+        proot_exec sudo bash -c '
+            wget -q "$1" -O /tmp/box64.deb 2>/dev/null \
             && dpkg -i /tmp/box64.deb && rm -f /tmp/box64.deb
-        " || proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
+        ' _ "$box64_url" || proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
     else
         proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
     fi

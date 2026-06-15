@@ -9,12 +9,16 @@ _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
-    [ -f "$config" ] && source "$config"
-    PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
-    PROOT_USER="${PROOT_USER:-$(
-        basename "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/"* \
-        2>/dev/null || echo "user"
-    )}"
+    if [ -f "$config" ]; then
+        source "$config"
+    else
+        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+    fi
+    if [ -z "${PROOT_USER:-}" ] && [ -n "${PROOT_DISTRO:-}" ]; then
+        PROOT_USER=$(ls "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/" 2>/dev/null \
+            | head -1 || echo "user")
+    fi
+    PROOT_USER="${PROOT_USER:-user}"
 
     # DI: 새 어댑터 로드
     source "${_COMMON_DIR}/ports/pkg_manager.sh"

@@ -3,6 +3,7 @@
 # 패키지명 차이(libreoffice vs libreoffice-fresh)는 adapter가 흡수
 
 app_install_libreoffice() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install_libreoffice
     proot_setup_bwrap

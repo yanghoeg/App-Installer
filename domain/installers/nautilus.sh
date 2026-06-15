@@ -2,6 +2,7 @@
 # DOMAIN: Nautilus — proot 내부 파일 관리자
 
 app_install_nautilus() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install nautilus
     proot_setup_bwrap

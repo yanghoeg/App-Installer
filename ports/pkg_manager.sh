@@ -40,6 +40,12 @@ proot_pkg_install_sasm()        { _port_not_impl "proot_pkg_install_sasm"; }
 proot_pkg_install_box64()       { _port_not_impl "proot_pkg_install_box64"; }
 proot_pkg_install_wine_mesa()   { _port_not_impl "proot_pkg_install_wine_mesa"; }
 
+# --- proot 환경 설정 ---
+proot_setup_sudo_path()      { _port_not_impl "proot_setup_sudo_path"; }
+proot_setup_bwrap()          { _port_not_impl "proot_setup_bwrap"; }
+proot_pkg_install_vscode()   { _port_not_impl "proot_pkg_install_vscode"; }
+proot_pkg_remove_vscode()    { _port_not_impl "proot_pkg_remove_vscode"; }
+
 # --- Termux native ---
 termux_pkg_install()      { _port_not_impl "termux_pkg_install"; }
 termux_pkg_remove()       { _port_not_impl "termux_pkg_remove"; }

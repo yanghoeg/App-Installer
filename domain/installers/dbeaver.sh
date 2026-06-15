@@ -3,6 +3,7 @@
 # JDK 패키지명 차이(openjdk-21-jdk vs jdk-openjdk)는 adapter가 흡수
 
 app_install_dbeaver() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install_jdk
 
@@ -16,7 +17,7 @@ app_install_dbeaver() {
     "
 
     desktop_register "dbeaver" "DBeaver" \
-        "prun dbeaver --no-sandbox" \
+        'bash -c "prun dbeaver --no-sandbox </dev/null >/dev/null 2>&1 &"' \
         "dbeaver" "Development;Database;"
 }
 

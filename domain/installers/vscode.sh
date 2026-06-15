@@ -4,6 +4,7 @@
 # Ubuntu: Microsoft 공식 arm64 repo 추가 후 설치
 
 app_install_vscode() {
+    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_pkg_install_vscode
     local exec_cmd
