@@ -130,7 +130,7 @@ _run_yad_notebook() {
         _tab_args+=(--tab="$_tab_label")
 
         (
-            local rows=()
+            local rows=("➡️" "" "앱을 클릭하여 선택" "" "")
             for _entry in "${APP_REGISTRY[@]}"; do
                 IFS='|' read -r _id _name _category _desc <<< "$_entry"
                 _category_in_tab "$_category" "$_tab_cats" || continue
@@ -148,7 +148,6 @@ _run_yad_notebook() {
                 --separator="" \
                 --tooltip-column=4 \
                 --expand-column=4 \
-                --no-click \
                 "${rows[@]}" 2>/dev/null
         ) &
     done
@@ -157,7 +156,7 @@ _run_yad_notebook() {
     _tab_num=$((_tab_num + 1))
     _tab_args+=(--tab="Wine")
     (
-        local rows=()
+        local rows=("➡️" "" "앱을 클릭하여 선택" "" "")
         for _entry in "${APP_REGISTRY[@]}"; do
             IFS='|' read -r _id _name _category _desc <<< "$_entry"
             [[ "$_desc" == *"(Wine)"* ]] || [ "$_id" = "wine" ] || continue
@@ -175,7 +174,6 @@ _run_yad_notebook() {
             --separator="" \
             --tooltip-column=4 \
             --expand-column=4 \
-            --no-click \
             "${rows[@]}" 2>/dev/null
     ) &
 
@@ -190,7 +188,7 @@ _run_yad_notebook() {
         --button="닫기!gtk-cancel:1" \
         2>/dev/null) || return 1
 
-    echo "$result" | tr -d '|' | awk 'NF{print;exit}' | tr -d '[:space:]'
+    echo "$result" | tr -d '| \t' | sed '/^$/d' | head -1
 }
 
 _run_yad_flat() {
