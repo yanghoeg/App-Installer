@@ -2,12 +2,17 @@
 # =============================================================================
 # App Installer — 진입점 + DI 컨테이너
 # =============================================================================
-# 사용법: bash install.sh
+# 사용법: bash install.sh [wine]
+#   wine  — Wine 탭만 단독 표시 (Windows 프로그램 설치 UI)
 # 환경변수: PROOT_DISTRO, PROOT_USER (없으면 config 파일에서 로드)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+_FILTER=""
+case "${1:-}" in
+    wine|Wine) _FILTER="Wine" ;;
+esac
 
 # -----------------------------------------------------------------------------
 # 설정 로드
@@ -61,55 +66,209 @@ for _installer in "${SCRIPT_DIR}/domain/installers/"*.sh; do
 done
 
 # -----------------------------------------------------------------------------
-# GUI 메인 루프
+# GUI
 # -----------------------------------------------------------------------------
-# zenity/GTK 텍스트 렌더링 버그 회피: Zink GPU 변수와 GTK font 렌더링 충돌
 unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG ZINK_DESCRIPTORS \
       MESA_NO_ERROR MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE 2>/dev/null || true
 
 export GTK_THEME=Adwaita:dark
 
-while true; do
-    rows=()
+if command -v yad >/dev/null 2>&1; then
+    UI=yad
+elif command -v zenity >/dev/null 2>&1; then
+    UI=zenity
+else
+    echo "[ERROR] yad 또는 zenity가 필요합니다." >&2
+    exit 1
+fi
 
-    for _entry in "${APP_REGISTRY[@]}"; do
-        IFS='|' read -r _id _name _desc <<< "$_entry"
-        if app_is_installed "$_id"; then
-            _action="Remove ${_name} (Installed)"
-        else
-            _action="Install ${_name} (Not Installed)"
-        fi
-        rows+=("FALSE" "$_action" "$_desc" "$_id")
+_notify() {
+    local type="$1" title="$2" body="$3"
+    if [ "$UI" = yad ]; then
+        yad --"$type" --title="$title" --text="$body" --button=OK:0 \
+            --center --width=420 --borders=20 2>/dev/null || true
+    else
+        zenity --"$type" --title="$title" --text="$body" 2>/dev/null || true
+    fi
+}
+
+_category_in_tab() {
+    local category="$1" tab_categories="$2"
+    IFS=',' read -ra _cats <<< "$tab_categories"
+    for _c in "${_cats[@]}"; do
+        [ "$_c" = "$category" ] && return 0
+    done
+    return 1
+}
+
+_status_icon() {
+    if app_is_installed "$1"; then
+        echo "✅"
+    else
+        echo "⬜"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# yad notebook 탭 GUI
+# -----------------------------------------------------------------------------
+_run_yad_notebook() {
+    local _KEY=$$
+    local _title="App Installer"
+    local _subtitle="proot: ${PROOT_DISTRO:-none} · user: ${PROOT_USER:-}"
+
+    if [ -n "$_FILTER" ]; then
+        _run_yad_flat "Wine App Installer" "Windows 프로그램을 선택하세요:"
+        return
+    fi
+
+    local _tab_num=0
+    local _tab_args=()
+    for _group in "${TAB_GROUPS[@]}"; do
+        IFS='|' read -r _tab_label _tab_cats <<< "$_group"
+        _tab_num=$((_tab_num + 1))
+        _tab_args+=(--tab="$_tab_label")
+
+        (
+            local rows=()
+            for _entry in "${APP_REGISTRY[@]}"; do
+                IFS='|' read -r _id _name _category _desc <<< "$_entry"
+                _category_in_tab "$_category" "$_tab_cats" || continue
+                rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+            done
+
+            [ ${#rows[@]} -gt 0 ] && yad --plug=$_KEY --tabnum=$_tab_num --list \
+                --column='  :TEXT' \
+                --column='분류:TEXT' \
+                --column='이름:TEXT' \
+                --column='설명:TEXT' \
+                --column='ID:HD' \
+                --search-column=3 \
+                --print-column=5 \
+                --separator="" \
+                --tooltip-column=4 \
+                --expand-column=4 \
+                --no-click \
+                "${rows[@]}" 2>/dev/null
+        ) &
     done
 
-    # --hide-column=4: app_id 컬럼 숨김
-    # --print-column=4: 선택 시 app_id 반환
-    chosen_id=$(zenity --list --radiolist \
-        --title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})" \
+    # Wine 탭 (별도)
+    _tab_num=$((_tab_num + 1))
+    _tab_args+=(--tab="Wine")
+    (
+        local rows=()
+        for _entry in "${APP_REGISTRY[@]}"; do
+            IFS='|' read -r _id _name _category _desc <<< "$_entry"
+            [[ "$_desc" == *"(Wine)"* ]] || [ "$_id" = "wine" ] || continue
+            rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+        done
+
+        [ ${#rows[@]} -gt 0 ] && yad --plug=$_KEY --tabnum=$_tab_num --list \
+            --column='  :TEXT' \
+            --column='분류:TEXT' \
+            --column='이름:TEXT' \
+            --column='설명:TEXT' \
+            --column='ID:HD' \
+            --search-column=3 \
+            --print-column=5 \
+            --separator="" \
+            --tooltip-column=4 \
+            --expand-column=4 \
+            --no-click \
+            "${rows[@]}" 2>/dev/null
+    ) &
+
+    local result
+    result=$(yad --notebook --key=$_KEY \
+        "${_tab_args[@]}" \
+        --tab-pos=top \
+        --title="$_title" \
+        --text="$_subtitle" \
+        --width=1000 --height=620 --center --borders=8 \
+        --button="설치/제거!gtk-apply:0" \
+        --button="닫기!gtk-cancel:1" \
+        2>/dev/null) || return 1
+
+    echo "$result" | tr -d '|' | awk 'NF{print;exit}' | tr -d '[:space:]'
+}
+
+_run_yad_flat() {
+    local _title="$1" _text="$2"
+    local rows=()
+
+    for _entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r _id _name _category _desc <<< "$_entry"
+        if [ -n "$_FILTER" ] && [[ "$_desc" != *"($_FILTER)"* ]] && [ "$_id" != "wine" ]; then
+            continue
+        fi
+        rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+    done
+
+    yad --list \
+        --title="$_title" \
+        --text="$_text" \
+        --column='  :TEXT' \
+        --column='분류:TEXT' \
+        --column='이름:TEXT' \
+        --column='설명:TEXT' \
+        --column='ID:HD' \
+        --search-column=3 \
+        --print-column=5 \
+        --separator="" \
+        --tooltip-column=4 \
+        --expand-column=4 \
+        --no-click \
+        --width=1000 --height=600 --center --borders=8 \
+        --button="설치/제거!gtk-apply:0" --button="닫기!gtk-cancel:1" \
+        "${rows[@]}" 2>/dev/null
+}
+
+# zenity 폴백 (탭 미지원)
+_run_zenity() {
+    local _title="App Installer (proot: ${PROOT_DISTRO:-none}, user: ${PROOT_USER:-})"
+    local zenity_rows=()
+
+    for _entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r _id _name _category _desc <<< "$_entry"
+        if [ -n "$_FILTER" ] && [[ "$_desc" != *"($_FILTER)"* ]] && [ "$_id" != "wine" ]; then
+            continue
+        fi
+        zenity_rows+=("FALSE" "$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+    done
+
+    zenity --list --radiolist \
+        --title="$_title" \
         --text="앱을 선택하세요:" \
-        --column="Select" --column="Action" --column="Description" --column="ID" \
-        --hide-column=4 \
-        --print-column=4 \
-        "${rows[@]}" \
-        --width=900 --height=500 2>/dev/null) || exit 0
+        --column="Select" --column="상태" --column="분류" --column="이름" --column="설명" --column="ID" \
+        --hide-column=6 --print-column=6 \
+        "${zenity_rows[@]}" \
+        --width=1000 --height=600 2>/dev/null
+}
+
+# -----------------------------------------------------------------------------
+# 메인 루프
+# -----------------------------------------------------------------------------
+while true; do
+    if [ "$UI" = yad ]; then
+        chosen_id=$(_run_yad_notebook) || exit 0
+    else
+        chosen_id=$(_run_zenity) || exit 0
+    fi
 
     [ -z "$chosen_id" ] && continue
 
     if app_is_installed "$chosen_id"; then
         if app_remove "$chosen_id"; then
-            zenity --info --title="제거 완료" \
-                --text="${chosen_id} 제거가 완료되었습니다." 2>/dev/null || true
+            _notify info "제거 완료" "${chosen_id} 제거가 완료되었습니다."
         else
-            zenity --error --title="오류" \
-                --text="${chosen_id} 제거 중 오류가 발생했습니다." 2>/dev/null || true
+            _notify error "오류" "${chosen_id} 제거 중 오류가 발생했습니다."
         fi
     else
         if app_install "$chosen_id"; then
-            zenity --info --title="설치 완료" \
-                --text="${chosen_id} 설치가 완료되었습니다." 2>/dev/null || true
+            _notify info "설치 완료" "${chosen_id} 설치가 완료되었습니다."
         else
-            zenity --error --title="오류" \
-                --text="${chosen_id} 설치 중 오류가 발생했습니다." 2>/dev/null || true
+            _notify error "오류" "${chosen_id} 설치 중 오류가 발생했습니다."
         fi
     fi
 done
