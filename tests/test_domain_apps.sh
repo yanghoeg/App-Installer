@@ -290,6 +290,85 @@ _test_wine_proot_path_does_not_call_termux_glibc() {
 it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
 
 # =============================================================================
+# Claude Code — 업그레이드 지원
+# =============================================================================
+describe "Claude Code — 설치/업그레이드"
+
+# 설치된 상태 시뮬레이션 (wrapper + native binary + VERSION 파일)
+_claude_fake_install() {
+    local ver="$1"
+    mkdir -p "${CLAUDE_CODE_PREFIX}"
+    printf '#!/bin/sh\n' > "${CLAUDE_CODE_BIN_PATH}"; chmod +x "${CLAUDE_CODE_BIN_PATH}"
+    printf 'binary\n'    > "${CLAUDE_CODE_PREFIX}/claude"; chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    printf '%s\n' "$ver" > "${CLAUDE_CODE_VERSION_FILE}"
+}
+
+_test_claude_supports_upgrade() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_can_upgrade claude_code
+    cleanup_sandbox "$sb"
+}
+it "claude_code는 업그레이드를 지원한다 (app_can_upgrade)" _test_claude_supports_upgrade
+
+_test_thunderbird_no_upgrade() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_can_upgrade thunderbird && { echo "[ASSERT] thunderbird에 업그레이드 함수가 있으면 안 됨" >&2; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "thunderbird는 업그레이드를 지원하지 않는다" _test_thunderbird_no_upgrade
+
+_test_claude_download_writes_version() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    curl() { :; }   # 다운로드 성공 흉내
+    tar()  { :; }   # 압축해제 성공 흉내
+    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
+    _claude_code_download_native "9.9.9"
+    assert_eq "9.9.9" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 파일 내용"
+    cleanup_sandbox "$sb"
+}
+it "download → VERSION 파일에 버전 기록" _test_claude_download_writes_version
+
+_test_claude_installed_version_empty_when_absent() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    assert_eq "" "$(_claude_code_installed_version)" "미설치 시 빈 문자열"
+    cleanup_sandbox "$sb"
+}
+it "VERSION 파일 없으면 installed_version → 빈 문자열" _test_claude_installed_version_empty_when_absent
+
+_test_claude_upgrade_when_outdated() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { _record_call "download $1"; printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; }
+    _claude_code_install_wrapper()  { _record_call "install_wrapper"; }
+    app_upgrade_claude_code
+    assert_was_called "download 2.0.0"
+    assert_was_called "install_wrapper"
+    cleanup_sandbox "$sb"
+}
+it "구버전 설치됨 → 최신 버전 다운로드 (업그레이드)" _test_claude_upgrade_when_outdated
+
+_test_claude_upgrade_when_latest() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "2.0.0"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { _record_call "download $1"; }
+    local rc; app_upgrade_claude_code && rc=0 || rc=$?
+    assert_eq "2" "$rc" "이미 최신이면 return 2"
+    assert_not_called "download"
+    cleanup_sandbox "$sb"
+}
+it "이미 최신 → 다운로드 없이 return 2" _test_claude_upgrade_when_latest
+
+_test_claude_upgrade_not_installed() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local rc; app_upgrade_claude_code 2>/dev/null && rc=0 || rc=$?
+    assert_eq "1" "$rc" "미설치 업그레이드 시 return 1"
+    cleanup_sandbox "$sb"
+}
+it "미설치 상태 업그레이드 → return 1" _test_claude_upgrade_not_installed
+
+# =============================================================================
 # has_proot_distro — 유틸 함수
 # =============================================================================
 describe "has_proot_distro — proot 설치 감지"

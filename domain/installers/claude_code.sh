@@ -7,10 +7,18 @@
 CLAUDE_CODE_PREFIX="${PREFIX}/share/claude-code"
 CLAUDE_CODE_BIN_PATH="${PREFIX}/bin/claude"
 CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
+# 설치된 버전 기록 — self-update를 끈 상태라 업그레이드 판단 근거로 사용
+CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 
 _claude_code_fetch_latest_version() {
     curl -sL "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
         | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4
+}
+
+# 설치된 버전 조회 — 미설치/버전 파일 없으면 빈 문자열
+_claude_code_installed_version() {
+    [ -f "${CLAUDE_CODE_VERSION_FILE}" ] || return 0
+    cat "${CLAUDE_CODE_VERSION_FILE}"
 }
 
 _claude_code_download_native() {
@@ -22,6 +30,7 @@ _claude_code_download_native() {
     tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1
     rm -f "$tarball"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
 }
 
 _claude_code_remove_npm_wrapper() {
@@ -64,6 +73,26 @@ app_install_claude_code() {
     _claude_code_download_native "$version" || return 1
     _claude_code_install_wrapper
     _claude_code_configure_settings
+}
+
+# 최신 native binary로 업그레이드.
+# self-update가 꺼져 있으므로 tarball을 다시 받아 교체 (settings.json은 건드리지 않음).
+#   반환값: 0=업그레이드 완료, 2=이미 최신, 1=오류
+app_upgrade_claude_code() {
+    if ! app_is_installed_claude_code; then
+        echo "[ERROR] claude-code가 설치되어 있지 않습니다" >&2
+        return 1
+    fi
+    local latest current
+    latest=$(_claude_code_fetch_latest_version)
+    [ -z "$latest" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
+    current=$(_claude_code_installed_version)
+    if [ "$current" = "$latest" ]; then
+        echo "[INFO] 이미 최신 버전입니다 (${latest})"
+        return 2
+    fi
+    _claude_code_download_native "$latest" || return 1
+    _claude_code_install_wrapper
 }
 
 app_remove_claude_code() {

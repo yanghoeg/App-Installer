@@ -75,3 +75,15 @@ app_remove() {
     local id="$1"
     "app_remove_${id}"
 }
+
+# 업그레이드 지원 여부 — app_upgrade_<id> 함수가 정의된 앱만 true
+app_can_upgrade() {
+    local id="$1"
+    declare -F "app_upgrade_${id}" >/dev/null 2>&1
+}
+
+# 앱 업그레이드 — app_upgrade_<id> 호출 (반환값 그대로 전달)
+app_upgrade() {
+    local id="$1"
+    "app_upgrade_${id}"
+}
