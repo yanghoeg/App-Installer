@@ -21,6 +21,7 @@ app_install_sumatrapdf() {
 
     echo "[Sumatra PDF] portable exe 다운로드 중..."
     proot_exec bash -c "
+        set -e
         mkdir -p \"\$HOME/.wine/drive_c/Program Files/SumatraPDF\"
         wget -q '$(_sumatrapdf_portable_url)' -O /tmp/sumatra.zip || \
             curl -fsSL '$(_sumatrapdf_portable_url)' -o /tmp/sumatra.zip
@@ -30,8 +31,9 @@ app_install_sumatrapdf() {
         for f in SumatraPDF-*.exe; do
             [ -f \"\$f\" ] && mv \"\$f\" SumatraPDF.exe
         done
+        [ -f \"\$HOME/.wine/drive_c/Program Files/SumatraPDF/SumatraPDF.exe\" ]
         rm -f /tmp/sumatra.zip
-    "
+    " || { echo "[ERROR] Sumatra PDF 다운로드/설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_SUMATRA_DESKTOP" << 'EOF'

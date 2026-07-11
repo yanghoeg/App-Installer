@@ -11,7 +11,7 @@ CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 
 _claude_code_fetch_latest_version() {
-    curl -sL "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
+    curl -sSLf "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
         | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4
 }
 
@@ -26,7 +26,7 @@ _claude_code_download_native() {
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
     mkdir -p "${CLAUDE_CODE_PREFIX}"
     local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
-    curl -sL "$url" -o "$tarball" || return 1
+    curl -sSLf "$url" -o "$tarball" || return 1
     tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1
     rm -f "$tarball"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"

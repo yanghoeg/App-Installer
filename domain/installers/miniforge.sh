@@ -17,7 +17,7 @@ app_install_miniforge() {
 }
 
 app_remove_miniforge() {
-    proot_exec sudo rm -rf ~/miniforge3 2>/dev/null || true
+    rm -rf "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
 }
 
 app_is_installed_miniforge() {

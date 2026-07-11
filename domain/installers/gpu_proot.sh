@@ -32,14 +32,7 @@ app_install_gpu_proot() {
 
     # 2) proot 검증 도구 설치
     echo "  proot 검증 도구 설치 중..."
-    proot_dep mesa_vulkan 2>/dev/null || true
-    proot_exec sudo bash -c 'command -v vulkaninfo >/dev/null 2>&1 || {
-        if command -v pacman >/dev/null 2>&1; then
-            pacman -S --noconfirm --needed vulkan-tools mesa-utils 2>/dev/null || true
-        elif command -v apt-get >/dev/null 2>&1; then
-            apt-get install -y vulkan-tools mesa-utils 2>/dev/null || true
-        fi
-    }' 2>/dev/null || true
+    proot_pkg_install vulkan-tools mesa-utils 2>/dev/null || true
 
     # 3) 환경변수 프로파일 생성
     echo "  GPU 환경변수 프로파일 설정 중..."
@@ -62,8 +55,7 @@ PROFILE
     # 4) 검증
     echo "  GPU 가속 검증..."
     local vk_test
-    vk_test=$(proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" --shared-tmp -- \
-        env VK_ICD_FILENAMES="${_GPU_PROOT_ICD}" vulkaninfo --summary 2>/dev/null \
+    vk_test=$(proot_exec env VK_ICD_FILENAMES="${_GPU_PROOT_ICD}" vulkaninfo --summary 2>/dev/null \
         | grep -E "GPU|driverName|apiVersion" | head -3) || true
     if [ -n "$vk_test" ]; then
         echo "  Vulkan: ${vk_test}"

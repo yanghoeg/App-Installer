@@ -7,15 +7,16 @@ app_install_notion() {
     proot_pkg_install_zlib
 
     proot_exec bash -c "
-        wget https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage
+        set -e
+        wget -O Notion-2.0.18-1-arm64.AppImage https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage
         chmod +x Notion-2.0.18-1-arm64.AppImage
         ./Notion-2.0.18-1-arm64.AppImage --appimage-extract
         mv squashfs-root notion
         rm -f Notion-2.0.18-1-arm64.AppImage
-    "
+    " || { echo "[ERROR] Notion 다운로드/설치 실패" >&2; return 1; }
 
     desktop_register "notion" "Notion" \
-        'bash -c "prun env MESA_LOADER_DRIVER_OVERRIDE=zink ~/notion/notion-app --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+        "bash -c \"prun env MESA_LOADER_DRIVER_OVERRIDE=zink /home/${PROOT_USER}/notion/notion-app --no-sandbox </dev/null >/dev/null 2>&1 &\"" \
         "notion" "Office;"
 }
 

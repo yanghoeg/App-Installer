@@ -27,6 +27,7 @@ app_install_winmerge() {
 
     echo "[WinMerge] portable zip 다운로드 및 설치 중..."
     proot_exec bash -c "
+        set -e
         wget -q '${url}' -O /tmp/winmerge.zip || \
             curl -fsSL '${url}' -o /tmp/winmerge.zip
         mkdir -p \"\$HOME/.wine/drive_c/Program Files/WinMerge\"
@@ -38,7 +39,8 @@ app_install_winmerge() {
             rmdir WinMerge 2>/dev/null || rm -rf WinMerge
         fi
         rm -f /tmp/winmerge.zip
-    "
+        test -e \"\$HOME/.wine/drive_c/Program Files/WinMerge/WinMergeU.exe\"
+    " || { echo "[ERROR] WinMerge 설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_WINMERGE_DESKTOP" << 'EOF'

@@ -30,6 +30,7 @@ _wine_install_tarball_proot() {
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     proot_exec_wine sudo bash -c "
+        set -e
         mkdir -p /opt/wine-staging
         wget -q '${wine_url}' -O /tmp/wine-staging.tar.xz
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
@@ -202,13 +203,24 @@ WRAPEOF
     fi
 
     mkdir -p "${PREFIX}/share/applications"
-    cat > "$_WINE_DESKTOP" << 'EOF'
+
+    # native는 prun-gui(proot 전용) 대신 wine 래퍼를 직접 호출
+    local _wine_exec_cmd _winecfg_exec_cmd
+    if has_proot_distro; then
+        _wine_exec_cmd="prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer"
+        _winecfg_exec_cmd="prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg"
+    else
+        _wine_exec_cmd="wine explorer"
+        _winecfg_exec_cmd="wine winecfg"
+    fi
+
+    cat > "$_WINE_DESKTOP" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Wine
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=bash -c "prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "${_wine_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
@@ -216,13 +228,13 @@ StartupNotify=false
 Terminal=false
 EOF
 
-    cat > "$_WINECFG_DESKTOP" << 'EOF'
+    cat > "$_WINECFG_DESKTOP" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Wine 설정
 Comment=Wine 환경 구성 (winecfg)
-Exec=bash -c "prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "${_winecfg_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
 Categories=Settings;System;
 Terminal=false
@@ -267,7 +279,7 @@ app_install_wine() {
                 echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
                 return 1
             fi
-            _wine_install_tarball_proot
+            _wine_install_tarball_proot || { echo "[ERROR] Wine 다운로드/설치 실패" >&2; return 1; }
             proot_pkg_install_wine_mesa
             _wine_install_winetricks_proot
             _wine_init_prefix_proot

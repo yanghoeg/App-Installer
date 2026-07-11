@@ -21,7 +21,7 @@ app_install_teams() {
         return 1
     fi
 
-    proot_pkg_install_deb_or_aur "$latest_url" "teams-for-linux"
+    proot_pkg_install_deb_or_aur "$latest_url" "teams-for-linux" || { echo "[ERROR] Teams 설치 실패" >&2; return 1; }
 
     desktop_register "teams" "Microsoft Teams" \
         'bash -c "prun teams-for-linux --no-sandbox </dev/null >/dev/null 2>&1 &"' \

@@ -5,12 +5,13 @@ app_install_burpsuite() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     proot_pkg_update
     proot_exec bash -c "
-        curl -L -o /tmp/burpsuite.sh \
+        set -e
+        curl -fL -o /tmp/burpsuite.sh \
             'https://portswigger.net/burp/releases/startdownload?product=community&version=2024.11.2&type=linuxarm64'
         chmod +x /tmp/burpsuite.sh
         /tmp/burpsuite.sh -q
         rm -f /tmp/burpsuite.sh
-    "
+    " || { echo "[ERROR] Burp Suite 설치 실패" >&2; return 1; }
 
     desktop_register "burpsuite" "Burp Suite Community" \
         'bash -c "prun BurpSuiteCommunity </dev/null >/dev/null 2>&1 &"' \

@@ -20,6 +20,7 @@ proot_pkg_install_deb_or_aur() {
     local deb_url="$1"
     local deb="${deb_url##*/}"
     proot_exec bash -c '
+        set -e
         curl -fsSL "$1" -o "/tmp/$2"
         sudo apt install -y "/tmp/$2"
         rm -f "/tmp/$2"
@@ -84,6 +85,8 @@ proot_pkg_install_sasm() {
 
     [ -f "${sources}.bak" ] && mv "${sources}.bak" "$sources"
     proot_exec sudo apt update
+
+    proot_exec dpkg -s sasm &>/dev/null || return 1
 }
 
 proot_pkg_install_box64() {

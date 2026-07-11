@@ -62,6 +62,8 @@ desktop_remove_prefix() {
           "${PREFIX}/share/applications/${prefix}"*.desktop
 }
 
+# 주의: .desktop 파일 존재 여부만 확인한다. installer는 설치 실패 시
+# desktop_register를 호출하지 않아야만 이 검사가 정확해진다.
 desktop_is_registered() {
     local app_id="$1"
     [ -e "${PREFIX}/share/applications/${app_id}.desktop" ]

@@ -10,11 +10,12 @@ app_install_tor_browser() {
     proot_pkg_install_tor_deps
 
     proot_exec bash -c '
-        curl -L "$1" -o tor.tar.xz
+        set -e
+        curl -fL "$1" -o tor.tar.xz
         tar -xJf tor.tar.xz
         sudo mv tor-browser /opt/tor-browser
         rm -f tor.tar.xz
-    ' _ "$_TOR_URL"
+    ' _ "$_TOR_URL" || { echo "[ERROR] Tor Browser 설치 실패" >&2; return 1; }
 
     desktop_register "tor" "Tor Browser" \
         'bash -c "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \

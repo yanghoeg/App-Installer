@@ -24,13 +24,18 @@ app_install_notepadpp() {
     url=$(_notepadpp_portable_url)
 
     echo "[Notepad++] portable zip 다운로드 및 설치 중..."
-    proot_exec bash -c "
+    if ! proot_exec bash -c "
+        set -e
         wget -q '${url}' -O /tmp/npp.zip || \
             curl -fsSL '${url}' -o /tmp/npp.zip
         mkdir -p \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
         unzip -qo /tmp/npp.zip -d \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
         rm -f /tmp/npp.zip
-    "
+        [ -f \"\$HOME/.wine/drive_c/Program Files/Notepad++/notepad++.exe\" ]
+    "; then
+        echo "[ERROR] Notepad++ 다운로드/설치 실패" >&2
+        return 1
+    fi
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_NOTEPADPP_DESKTOP" << 'EOF'

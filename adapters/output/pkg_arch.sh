@@ -47,6 +47,7 @@ proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 # Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
 proot_pkg_install_sasm() {
     proot_exec sudo bash -c "
+        set -e
         pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
         [ -f /usr/local/bin/sasm ] && exit 0
         git clone https://github.com/Dman95/SASM.git /tmp/sasm-src

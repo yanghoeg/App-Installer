@@ -16,11 +16,13 @@ app_install_sevenzip() {
 
     echo "[7-Zip] 다운로드 및 설치 중..."
     proot_exec_wine bash -c "
+        set -e
         wget -q '${_SEVENZIP_URL}' -O /tmp/7z_install.exe || \
             curl -fsSL '${_SEVENZIP_URL}' -o /tmp/7z_install.exe
         wine /tmp/7z_install.exe /S 2>/dev/null || true
         rm -f /tmp/7z_install.exe
-    "
+        test -f \"\$HOME/.wine/drive_c/7-Zip/7zFM.exe\"
+    " || { echo "[ERROR] 7-Zip 설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_SEVENZIP_DESKTOP" << 'EOF'

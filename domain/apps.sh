@@ -65,6 +65,8 @@ app_is_installed() {
 }
 
 # 앱 설치 — app_install_<id> 호출
+# 설치기 계약: app_install_<id>는 임계 명령(pkg install/curl/proot_exec 등) 실패 시
+# 반드시 non-zero를 반환해야 하며, 실패 시 .desktop 런처를 생성하지 말 것.
 app_install() {
     local id="$1"
     "app_install_${id}"
@@ -83,6 +85,8 @@ app_can_upgrade() {
 }
 
 # 앱 업그레이드 — app_upgrade_<id> 호출 (반환값 그대로 전달)
+# 설치기 계약: app_upgrade_<id>도 임계 명령 실패 시 반드시 non-zero를 반환해야 하며,
+# 실패 시 .desktop 런처를 재생성/변경하지 말 것.
 app_upgrade() {
     local id="$1"
     "app_upgrade_${id}"

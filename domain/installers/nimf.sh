@@ -104,6 +104,7 @@ EOF
 
 app_remove_nimf() {
     rm -f "$HOME/.config/autostart/nimf.desktop"
+    rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
 
     local rc
     for rc in "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"; do
