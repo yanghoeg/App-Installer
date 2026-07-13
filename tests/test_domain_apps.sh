@@ -341,6 +341,7 @@ _test_claude_upgrade_when_outdated() {
     _claude_code_fetch_latest_version() { echo "2.0.0"; }
     _claude_code_download_native() { _record_call "download $1"; printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; }
     _claude_code_install_wrapper()  { _record_call "install_wrapper"; }
+    _claude_code_smoke_check()      { return 0; }
     app_upgrade_claude_code
     assert_was_called "download 2.0.0"
     assert_was_called "install_wrapper"
@@ -367,6 +368,65 @@ _test_claude_upgrade_not_installed() {
     cleanup_sandbox "$sb"
 }
 it "미설치 상태 업그레이드 → return 1" _test_claude_upgrade_not_installed
+
+_test_claude_remove_uninstalls_npm() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    # npm 패키지가 남아 있는 상황을 흉내 — 제거 함수가 이걸 호출하는지만 검증
+    _claude_code_remove_npm_wrapper() { _record_call "remove_npm_wrapper"; }
+    app_remove_claude_code
+    assert_was_called "remove_npm_wrapper"
+    cleanup_sandbox "$sb"
+}
+it "remove → npm 글로벌 패키지도 제거 시도" _test_claude_remove_uninstalls_npm
+
+_test_claude_upgrade_backs_up_current() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; printf 'new\n' > "${CLAUDE_CODE_PREFIX}/claude"; }
+    _claude_code_install_wrapper()  { :; }
+    _claude_code_smoke_check()      { return 0; }
+    app_upgrade_claude_code
+    assert_file_exists "${CLAUDE_CODE_PREFIX}/claude.bak.v1.0.0" "이전 버전 백업이 생성됨"
+    cleanup_sandbox "$sb"
+}
+it "업그레이드 → 이전 버전 백업 생성" _test_claude_upgrade_backs_up_current
+
+_test_claude_upgrade_smoke_fail_rollbacks() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; printf 'broken\n' > "${CLAUDE_CODE_PREFIX}/claude"; }
+    _claude_code_install_wrapper()  { _record_call "install_wrapper"; }
+    _claude_code_smoke_check()      { return 1; }
+    local rc; app_upgrade_claude_code 2>/dev/null && rc=0 || rc=$?
+    assert_eq "1" "$rc" "스모크 실패 시 return 1"
+    assert_eq "1.0.0" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION이 1.0.0으로 롤백됨"
+    cleanup_sandbox "$sb"
+}
+it "스모크 실패 → 이전 버전으로 자동 롤백" _test_claude_upgrade_smoke_fail_rollbacks
+
+_test_claude_manual_rollback() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "3.0.0"
+    # 사전에 이전 버전 백업이 있다고 가정
+    printf 'old\n' > "${CLAUDE_CODE_PREFIX}/claude.bak.v1.0.0"
+    _claude_code_install_wrapper() { :; }
+    app_rollback_claude_code "1.0.0"
+    assert_eq "1.0.0" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION이 1.0.0으로 변경됨"
+    cleanup_sandbox "$sb"
+}
+it "수동 롤백 → 지정 버전으로 복원" _test_claude_manual_rollback
+
+_test_claude_rollback_no_backup() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    local rc; app_rollback_claude_code 2>/dev/null && rc=0 || rc=$?
+    assert_eq "1" "$rc" "백업 없으면 return 1"
+    cleanup_sandbox "$sb"
+}
+it "백업 없이 롤백 → return 1" _test_claude_rollback_no_backup
 
 # =============================================================================
 # has_proot_distro — 유틸 함수
