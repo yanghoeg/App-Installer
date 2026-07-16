@@ -45,6 +45,10 @@ app-installer
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
 | **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
+| **Ollama** | 로컬 LLM 실행기 | Termux native | 모델 별도 pull |
+| **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | Ollama/클라우드 API 연동 |
+| **Neovim / Helix** | 터미널 모달 에디터 | Termux native | |
+| **개발 CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv는 셸 hook 직접 추가 필요 |
 
 ## arm64 호환성 비고
 

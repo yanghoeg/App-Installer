@@ -45,6 +45,10 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
+| **Ollama** | Local LLM runner | Termux native | models pulled separately |
+| **aichat** | Terminal AI assistant CLI | Termux native | Ollama / cloud API |
+| **Neovim / Helix** | Terminal modal editors | Termux native | |
+| **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
 
 ## arm64 Compatibility Notes
 
