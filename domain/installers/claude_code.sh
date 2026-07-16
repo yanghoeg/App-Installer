@@ -9,8 +9,15 @@ CLAUDE_CODE_BIN_PATH="${PREFIX}/bin/claude"
 CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 # 설치된 버전 기록 — self-update를 끈 상태라 업그레이드 판단 근거로 사용
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
+# 핀 버전 — 이후 릴리스에서 회귀가 발견되어 이 버전에 고정.
+# 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
+CLAUDE_CODE_PIN_VERSION="2.1.132"
 
 _claude_code_fetch_latest_version() {
+    if [ -n "${CLAUDE_CODE_PIN_VERSION}" ]; then
+        printf '%s\n' "${CLAUDE_CODE_PIN_VERSION}"
+        return 0
+    fi
     curl -sSLf "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
         | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4
 }
@@ -56,6 +63,7 @@ _claude_code_configure_settings() {
     [ -f "${settings_file}" ] && return 0
     cat > "${settings_file}" << 'EOF'
 {
+  "model": "claude-opus-4-8",
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   }
