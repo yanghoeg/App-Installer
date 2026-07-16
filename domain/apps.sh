@@ -14,6 +14,8 @@ APP_REGISTRY=(
     "audacity|Audacity|미디어|오디오 편집 (Termux native)"
     "vscode|Visual Studio Code|개발|코드 에디터 (Termux native)"
     "claude_code|Claude Code|개발|AI 코딩 어시스턴트 CLI (Termux native + glibc-runner)"
+    "ollama|Ollama|개발|로컬 LLM 실행기 (Termux native, 모델 별도 pull)"
+    "aichat|aichat|개발|터미널 AI 어시스턴트 CLI (Termux native, Ollama/클라우드 연동)"
     "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
     "burpsuite|Burp Suite|보안|웹 보안 테스트 도구 (proot)"
     "tor_browser|Tor Browser|브라우저|익명 웹 브라우저 (proot)"
