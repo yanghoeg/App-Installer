@@ -65,7 +65,7 @@ TAB_GROUPS=(
 # proot 설치 여부 확인
 has_proot_distro() {
     [ -n "${PROOT_DISTRO:-}" ] && \
-    [ -d "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}" ]
+    [ -d "$(_proot_rootfs)" ]
 }
 
 # 앱 설치 상태 확인 — app_is_installed_<id> 호출

@@ -170,8 +170,15 @@ termux-wake-lock 2>/dev/null
 _conf="$HOME/.config/termux-xfce/config"
 [ -f "$_conf" ] && . "$_conf"
 _distro="${PROOT_DISTRO:-archlinux}"
-_user="${PROOT_USER:-$(ls -1 "$PREFIX/var/lib/proot-distro/installed-rootfs/$_distro/home/" 2>/dev/null | grep -v '^alarm$' | head -1)}"
-_reg="$PREFIX/var/lib/proot-distro/installed-rootfs/$_distro/home/$_user/.wine/user.reg"
+# rootfs 레이아웃 자동 판별 (신규 containers/<distro>/rootfs 우선, 레거시 폴백)
+_base="$PREFIX/var/lib/proot-distro"
+if [ -d "$_base/containers/$_distro/rootfs" ]; then
+    _rootfs="$_base/containers/$_distro/rootfs"
+else
+    _rootfs="$_base/installed-rootfs/$_distro"
+fi
+_user="${PROOT_USER:-$(ls -1 "$_rootfs/home/" 2>/dev/null | grep -v '^alarm$' | head -1)}"
+_reg="$_rootfs/home/$_user/.wine/user.reg"
 
 # Wine 레지스트리 DPI 동기화 (sed — wineserver 불필요, 즉시 반영)
 if [ -f "$_reg" ]; then

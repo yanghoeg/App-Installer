@@ -13,12 +13,13 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/lib/proot_path.sh"
 
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
 _detect_proot_user() {
-    local home_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO:-}/home"
+    local home_dir="$(_proot_rootfs)/home"
     local d
     for d in "$home_dir"/*/; do
         [ -d "$d" ] || continue

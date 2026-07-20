@@ -5,6 +5,9 @@
 # 모든 함수는 adapters/output/ 어댑터에서 override 필수.
 # 미구현 상태로 호출하면 즉시 오류를 반환한다.
 
+# proot rootfs 경로 해석기(_proot_rootfs) 공용 로드
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/proot_path.sh"
+
 _port_not_impl() { echo "[PORT] ${1}: 어댑터가 구현되지 않았습니다" >&2; return 1; }
 
 # --- proot 실행 ---

@@ -6,7 +6,7 @@ _GPU_PROOT_PROFILE="gpu-accel.sh"
 _GPU_PROOT_ICD="${PREFIX}/share/vulkan/icd.d/freedreno_icd.aarch64.json"
 
 _gpu_proot_profile_path() {
-    echo "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/etc/profile.d/${_GPU_PROOT_PROFILE}"
+    echo "$(_proot_rootfs)/etc/profile.d/${_GPU_PROOT_PROFILE}"
 }
 
 app_install_gpu_proot() {

@@ -6,6 +6,7 @@
 # 새 코드는 install.sh DI 컨테이너를 통해 어댑터를 로드할 것.
 
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${_COMMON_DIR}/lib/proot_path.sh"
 
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
@@ -15,7 +16,7 @@ _load_config() {
         PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
     fi
     if [ -z "${PROOT_USER:-}" ] && [ -n "${PROOT_DISTRO:-}" ]; then
-        PROOT_USER=$(ls "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/" 2>/dev/null \
+        PROOT_USER=$(ls "$(_proot_rootfs)/home/" 2>/dev/null \
             | head -1 || echo "user")
     fi
     PROOT_USER="${PROOT_USER:-user}"

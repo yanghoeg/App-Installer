@@ -9,6 +9,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/lib/proot_path.sh"
 _FILTER=""
 case "${1:-}" in
     wine|Wine) _FILTER="Wine" ;;
@@ -23,7 +24,7 @@ _detect_proot_user() {
         return
     fi
     local detected
-    detected=$(ls "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/" 2>/dev/null \
+    detected=$(ls "$(_proot_rootfs)/home/" 2>/dev/null \
         | head -1) || true
     echo "${detected:-user}"
 }

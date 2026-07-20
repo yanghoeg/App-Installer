@@ -59,7 +59,7 @@ proot_pkg_install_python_pip() { proot_pkg_install python3 python3-pip; }
 proot_pkg_install_zlib()       { proot_pkg_install zlib1g-dev; }
 
 proot_pkg_install_sasm() {
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
     local sources="${rootfs}/etc/apt/sources.list"
 
     # universe repo 활성화 후 현재 버전에서 먼저 시도
@@ -90,7 +90,7 @@ proot_pkg_install_sasm() {
 }
 
 proot_pkg_install_box64() {
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
     local codename
     codename=$(grep "^VERSION_CODENAME=" "${rootfs}/etc/os-release" 2>/dev/null \
         | cut -d= -f2 | tr -d '"' || echo "jammy")

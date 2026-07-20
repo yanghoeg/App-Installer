@@ -17,10 +17,10 @@ app_install_miniforge() {
 }
 
 app_remove_miniforge() {
-    rm -rf "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    rm -rf "$(_proot_rootfs)/home/${PROOT_USER}/miniforge3"
 }
 
 app_is_installed_miniforge() {
-    local miniforge_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    local miniforge_dir="$(_proot_rootfs)/home/${PROOT_USER}/miniforge3"
     [ -d "$miniforge_dir" ]
 }

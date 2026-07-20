@@ -34,7 +34,7 @@ desktop_register() {
 # $1=app_prefix (e.g. "libreoffice", "nautilus")
 desktop_copy_from_proot() {
     local app_prefix="$1"
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
 
     mkdir -p "${PREFIX}/share/applications"
     for desktop in "${rootfs}/usr/share/applications"/${app_prefix}*.desktop; do
