@@ -24,9 +24,11 @@ _load_config() {
     # DI: 새 어댑터 로드
     source "${_COMMON_DIR}/ports/pkg_manager.sh"
     source "${_COMMON_DIR}/adapters/output/pkg_termux.sh"
-    case "${PROOT_DISTRO}" in
+    case "${PROOT_DISTRO:-}" in
         archlinux) source "${_COMMON_DIR}/adapters/output/pkg_arch.sh" ;;
-        *)         source "${_COMMON_DIR}/adapters/output/pkg_ubuntu.sh" ;;
+        ubuntu)    source "${_COMMON_DIR}/adapters/output/pkg_ubuntu.sh" ;;
+        "")        ;;  # native only — proot 포트는 미구현 stub 유지
+        *)         echo "[WARN] 알 수 없는 PROOT_DISTRO: ${PROOT_DISTRO}" >&2 ;;
     esac
     source "${_COMMON_DIR}/domain/desktop.sh"
 }
