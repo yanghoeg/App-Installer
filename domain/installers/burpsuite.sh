@@ -3,7 +3,7 @@
 
 app_install_burpsuite() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
+    proot_pkg_update || return 1
     proot_exec bash -c "
         set -e
         curl -fL -o /tmp/burpsuite.sh \

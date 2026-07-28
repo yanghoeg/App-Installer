@@ -146,6 +146,20 @@ _test_vlc_does_not_call_proot() {
 }
 it "install → proot 함수 미호출 (native 전용)" _test_vlc_does_not_call_proot
 
+_test_native_pkg_failure_propagates_without_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    termux_pkg_install() { return 41; }
+
+    if app_install vlc; then
+        echo "[ASSERT] pkg 실패가 app_install 성공으로 처리됨" >&2
+        cleanup_sandbox "$sb"
+        return 1
+    fi
+    [ ! -e "${PREFIX}/share/applications/vlc.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it "native pkg 실패 → non-zero 반환, .desktop 미생성" _test_native_pkg_failure_propagates_without_desktop
+
 # =============================================================================
 # VS Code — proot 설치
 # =============================================================================
@@ -208,6 +222,20 @@ _test_dbeaver_install_uses_abstract_jdk() {
 }
 it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
 
+_test_dbeaver_failure_propagates_without_desktop() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    proot_exec() { return 23; }
+
+    if app_install dbeaver; then
+        echo "[ASSERT] proot_exec 실패가 app_install 성공으로 처리됨" >&2
+        cleanup_sandbox "$sb"
+        return 1
+    fi
+    [ ! -e "${PREFIX}/share/applications/dbeaver.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it "다운로드 실패 → non-zero 반환, .desktop 미생성" _test_dbeaver_failure_propagates_without_desktop
+
 # =============================================================================
 # Miniforge — 설치 판단 기준 (디렉토리)
 # =============================================================================
@@ -227,6 +255,19 @@ _test_miniforge_installed_with_dir() {
     cleanup_sandbox "$sb"
 }
 it "miniforge3 디렉토리 있으면 is_installed → true" _test_miniforge_installed_with_dir
+
+_test_miniforge_failure_propagates() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    proot_exec() { return 24; }
+
+    if app_install miniforge; then
+        echo "[ASSERT] proot_exec 실패가 app_install 성공으로 처리됨" >&2
+        cleanup_sandbox "$sb"
+        return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "다운로드 실패 → app_install이 non-zero 반환" _test_miniforge_failure_propagates
 
 # =============================================================================
 # SASM — 패키지 설치 추상화
@@ -562,7 +603,8 @@ _test_install_fallback_proot_distro() {
     zenity()       { echo "ZENITY: $*"; }
     proot-distro() { echo "PROOT: $*"; }
     local tmp; tmp=$(mktemp)
-    awk '/^while true/{ exit } { print }' "${APP_DIR}/install.sh" > "$tmp"
+    echo "SCRIPT_DIR='${APP_DIR}'" > "$tmp"
+    awk '/^while true/{ exit } /^SCRIPT_DIR=/ { next } { print }' "${APP_DIR}/install.sh" >> "$tmp"
     source "$tmp"
     rm -f "$tmp"
     assert_eq "ubuntu" "${PROOT_DISTRO:-}" "config 없을 때 ubuntu 기본값"

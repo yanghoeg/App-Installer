@@ -10,6 +10,7 @@ app_install_thorium() {
     # Ubuntu 25.10: coreutils-from-uutils 충돌로 apt 불가 → dpkg --force-depends 폴백
     # Arch: pacman에 등록 안 됨 → ar로 수동 추출
     proot_exec sudo bash -c '
+        set -e
         curl -fsSL "$1" -o /tmp/thorium.deb
 
         # ar 방식 시도 (binutils 필요)
@@ -18,20 +19,20 @@ app_install_thorium() {
             cd /tmp/thorium-extract
             ar x /tmp/thorium.deb
             data_tar=$(ls data.tar.* 2>/dev/null | head -1)
-            if [ -n "$data_tar" ]; then
-                tar -xf "$data_tar" -C /
-            fi
+            test -n "$data_tar"
+            tar -xf "$data_tar" -C /
             cd / && rm -rf /tmp/thorium-extract
         else
             # ar 없으면 dpkg --force-depends (Ubuntu 전용)
             dpkg --force-depends -i /tmp/thorium.deb
         fi
         rm -f /tmp/thorium.deb
-    ' _ "$_THORIUM_DEB_URL"
+        command -v thorium-browser >/dev/null
+    ' _ "$_THORIUM_DEB_URL" || { echo "[ERROR] Thorium 다운로드/설치 실패" >&2; return 1; }
 
     desktop_register "thorium-browser" "Thorium" \
         'bash -c "prun thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
-        "thorium-browser" "Network;"
+        "thorium-browser" "Network;" || return 1
 }
 
 app_remove_thorium() {

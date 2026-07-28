@@ -72,15 +72,15 @@ EOF
 }
 
 app_install_claude_code() {
-    termux_pkg_install glibc-repo
-    termux_pkg_install glibc-runner
+    termux_pkg_install glibc-repo || return 1
+    termux_pkg_install glibc-runner || return 1
     _claude_code_remove_npm_wrapper
     local version
     version=$(_claude_code_fetch_latest_version)
     [ -z "$version" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
     _claude_code_download_native "$version" || return 1
-    _claude_code_install_wrapper
-    _claude_code_configure_settings
+    _claude_code_install_wrapper || return 1
+    _claude_code_configure_settings || return 1
 }
 
 # 현재 native binary를 이전 버전 이름으로 백업 — 롤백 자료.
@@ -94,6 +94,7 @@ _claude_code_backup_current() {
     cp -f "${CLAUDE_CODE_PREFIX}/claude"       "$bak_bin"
     [ -f "${CLAUDE_CODE_PREFIX}/package.json" ] && \
         cp -f "${CLAUDE_CODE_PREFIX}/package.json" "${CLAUDE_CODE_PREFIX}/package.json.bak.v${ver}"
+    return 0
 }
 
 # 새 binary가 최소한 실행되는지만 확인 — 로그인/기능 회귀는 여기서 못 잡음.

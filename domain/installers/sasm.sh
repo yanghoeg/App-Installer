@@ -5,7 +5,7 @@
 
 app_install_sasm() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_install_sasm
+    proot_pkg_install_sasm || return 1
 
     local rootfs="$(_proot_rootfs)"
     local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"

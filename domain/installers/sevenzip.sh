@@ -11,7 +11,7 @@ _SEVENZIP_WIN_PATH='C:\7-Zip\7zFM.exe'
 app_install_sevenzip() {
     if ! app_is_installed_wine; then
         echo "[7-Zip] Wine이 필요합니다. 먼저 설치합니다."
-        app_install_wine
+        app_install_wine || return 1
     fi
 
     echo "[7-Zip] 다운로드 및 설치 중..."

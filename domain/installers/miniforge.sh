@@ -4,16 +4,19 @@
 
 app_install_miniforge() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install wget
-    proot_pkg_install_python_pip
+    proot_pkg_update || return 1
+    proot_pkg_install wget || return 1
+    proot_pkg_install_python_pip || return 1
 
     proot_exec bash -c "
-        wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
-        chmod +x Miniforge3-Linux-aarch64.sh
-        bash Miniforge3-Linux-aarch64.sh -b
-        rm -f Miniforge3-Linux-aarch64.sh
-    "
+        set -e
+        wget -O /tmp/miniforge.sh \
+            https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
+        chmod +x /tmp/miniforge.sh
+        bash /tmp/miniforge.sh -b
+        rm -f /tmp/miniforge.sh
+        test -x \"\$HOME/miniforge3/bin/conda\"
+    " || { echo "[ERROR] Miniforge 다운로드/설치 실패" >&2; return 1; }
 }
 
 app_remove_miniforge() {
@@ -21,6 +24,7 @@ app_remove_miniforge() {
 }
 
 app_is_installed_miniforge() {
-    local miniforge_dir="$(_proot_rootfs)/home/${PROOT_USER}/miniforge3"
+    local miniforge_dir
+    miniforge_dir="$(_proot_rootfs)/home/${PROOT_USER}/miniforge3"
     [ -d "$miniforge_dir" ]
 }

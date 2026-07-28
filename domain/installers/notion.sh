@@ -4,7 +4,7 @@
 
 app_install_notion() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_install_zlib
+    proot_pkg_install_zlib || return 1
 
     proot_exec bash -c "
         set -e

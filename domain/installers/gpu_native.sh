@@ -18,7 +18,7 @@ app_install_gpu_native() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 

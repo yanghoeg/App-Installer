@@ -4,21 +4,24 @@
 
 app_install_dbeaver() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install_jdk
+    proot_pkg_update || return 1
+    proot_pkg_install_jdk || return 1
 
     proot_exec bash -c "
+        set -e
         wget 'https://github.com/dbeaver/dbeaver/releases/download/24.3.1/dbeaver-ce-24.3.1-linux.gtk.aarch64-nojdk.tar.gz' \
-            -O dbeaver.tar.gz
-        tar -xzf dbeaver.tar.gz
-        sudo mv dbeaver /opt/
+            -O /tmp/dbeaver.tar.gz
+        tar -xzf /tmp/dbeaver.tar.gz -C /tmp
+        sudo rm -rf /opt/dbeaver
+        sudo mv /tmp/dbeaver /opt/
         sudo ln -sf /opt/dbeaver/dbeaver /usr/bin/dbeaver
-        rm -f dbeaver.tar.gz
-    "
+        rm -f /tmp/dbeaver.tar.gz
+        test -x /opt/dbeaver/dbeaver
+    " || { echo "[ERROR] DBeaver 다운로드/설치 실패" >&2; return 1; }
 
     desktop_register "dbeaver" "DBeaver" \
         'bash -c "prun dbeaver --no-sandbox </dev/null >/dev/null 2>&1 &"' \
-        "dbeaver" "Development;Database;"
+        "dbeaver" "Development;Database;" || return 1
 }
 
 app_remove_dbeaver() {

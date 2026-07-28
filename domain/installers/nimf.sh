@@ -28,7 +28,7 @@ app_install_nimf() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 
@@ -40,7 +40,10 @@ app_install_nimf() {
     }
 
     echo "nimf 설치 중..."
-    dpkg -i --force-overwrite "$deb_file"
+    if ! dpkg -i --force-overwrite "$deb_file"; then
+        rm -f "$deb_file"
+        return 1
+    fi
     rm -f "$deb_file"
 
     glib-compile-schemas "${PREFIX}/share/glib-2.0/schemas/" 2>/dev/null || true

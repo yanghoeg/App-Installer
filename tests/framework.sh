@@ -15,6 +15,19 @@ _YELLOW='\033[1;33m'
 _CYAN='\033[0;36m'
 _NC='\033[0m'
 
+_test_tmp_base() {
+    local base="${TMPDIR:-}"
+    if [ -z "$base" ]; then
+        if [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/tmp" ]; then
+            base="${PREFIX}/tmp"
+        else
+            base="/tmp"
+        fi
+    fi
+    mkdir -p "$base" || return 1
+    printf '%s\n' "$base"
+}
+
 # 테스트 스위트 시작
 describe() {
     _CURRENT_SUITE="$1"
@@ -26,13 +39,16 @@ it() {
     local name="$1"
     local test_fn="$2"
 
-    # 서브셸에서 실행 → set -euo pipefail 에러도 잡힘
-    local _tmpfile="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/test_stderr_$$"
-    if (set -euo pipefail; "$test_fn") 2>"$_tmpfile"; then
+    # 조건식으로 서브셸을 직접 감싸면 그 내부의 set -e까지 무시되므로
+    # 먼저 실행한 뒤 종료 코드를 별도로 판정한다.
+    local _tmpfile
+    _tmpfile=$(mktemp "$(_test_tmp_base)/termux_app_test_stderr_XXXXXX") || return 1
+    (set -euo pipefail; "$test_fn") 2>"$_tmpfile"
+    local exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
         echo -e "  ${_GREEN}✓${_NC} ${name}"
         (( _PASS++ )) || true
     else
-        local exit_code=$?
         echo -e "  ${_RED}✗${_NC} ${name}"
         if [ -s "$_tmpfile" ]; then
             sed 's/^/    /' "$_tmpfile"
@@ -135,7 +151,7 @@ print_results() {
 # 임시 디렉토리 기반 샌드박스 생성
 make_sandbox() {
     local dir
-    dir=$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/termux_test_XXXXXX")
+    dir=$(mktemp -d "$(_test_tmp_base)/termux_app_test_XXXXXX")
     echo "$dir"
 }
 

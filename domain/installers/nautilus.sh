@@ -3,9 +3,9 @@
 
 app_install_nautilus() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install nautilus
-    proot_setup_bwrap
+    proot_pkg_update || return 1
+    proot_pkg_install nautilus || return 1
+    proot_setup_bwrap || return 1
     desktop_register "nautilus" "Nautilus" \
         'bash -c "prun env XDG_SESSION_TYPE=x11 GSK_RENDERER=cairo GDK_RENDERING=image dbus-run-session -- nautilus </dev/null >/dev/null 2>&1 &"' \
         "org.gnome.Nautilus" "System;FileManager;"

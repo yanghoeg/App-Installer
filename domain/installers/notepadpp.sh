@@ -17,7 +17,7 @@ _notepadpp_portable_url() {
 app_install_notepadpp() {
     if ! app_is_installed_wine; then
         echo "[Notepad++] Wine이 필요합니다. 먼저 설치합니다."
-        app_install_wine
+        app_install_wine || return 1
     fi
 
     local url

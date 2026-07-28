@@ -37,7 +37,7 @@ _wine_install_tarball_proot() {
         rm -f /tmp/wine-staging.tar.xz
 
         # x86-64 ELF를 .elf/ 서브디렉토리로 이동 후 box64 wrapper 생성
-        # argv[0] 보존: box64가 basename(경로)="wine"을 argv[0]으로 전달
+        # argv[0] 보존: box64가 wine 경로의 basename을 argv[0]으로 전달
         cd /opt/wine-staging/bin
         mkdir -p .elf
         for f in wine wine64 wineserver wineboot winedbg; do
@@ -87,8 +87,8 @@ _wine_install_native() {
         return 0
     fi
 
-    termux_pkg_install glibc-repo
-    termux_pkg_install glibc-runner box64-glibc
+    termux_pkg_install glibc-repo || return 1
+    termux_pkg_install glibc-runner box64-glibc || return 1
 
     for p in \
         mesa-zink-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
@@ -104,9 +104,21 @@ _wine_install_native() {
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     mkdir -p "$_WINE_NATIVE_DIR"
-    wget -q "$wine_url" -O /tmp/wine-staging.tar.xz
-    tar -xJf /tmp/wine-staging.tar.xz -C "$_WINE_NATIVE_DIR" --strip-components=1
+    if ! wget -q "$wine_url" -O /tmp/wine-staging.tar.xz; then
+        rm -f /tmp/wine-staging.tar.xz
+        echo "[ERROR] Wine 다운로드 실패" >&2
+        return 1
+    fi
+    if ! tar -xJf /tmp/wine-staging.tar.xz -C "$_WINE_NATIVE_DIR" --strip-components=1; then
+        rm -f /tmp/wine-staging.tar.xz
+        echo "[ERROR] Wine 압축 해제 실패" >&2
+        return 1
+    fi
     rm -f /tmp/wine-staging.tar.xz
+    [ -x "$_WINE_NATIVE_DIR/bin/wine64" ] || {
+        echo "[ERROR] Wine 실행 파일을 찾을 수 없습니다." >&2
+        return 1
+    }
 
     cat > "$_WINE_BIN" << 'WRAPEOF'
 #!/data/data/com.termux/files/usr/bin/bash
@@ -280,23 +292,23 @@ app_install_wine() {
         if proot_exec which wine &>/dev/null 2>&1; then
             echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
         else
-            proot_pkg_update
-            proot_pkg_install_box64
+            proot_pkg_update || return 1
+            proot_pkg_install_box64 || return 1
             if ! proot_exec which box64 &>/dev/null; then
                 echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
                 return 1
             fi
             _wine_install_tarball_proot || { echo "[ERROR] Wine 다운로드/설치 실패" >&2; return 1; }
-            proot_pkg_install_wine_mesa
+            proot_pkg_install_wine_mesa || return 1
             _wine_install_winetricks_proot
             _wine_init_prefix_proot
         fi
     else
         echo "[Wine] proot 없음: Termux native (glibc-runner) 방식"
-        _wine_install_native
+        _wine_install_native || return 1
     fi
 
-    _wine_create_launchers
+    _wine_create_launchers || return 1
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

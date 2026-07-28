@@ -6,8 +6,8 @@ _TOR_URL="https://sourceforge.net/projects/tor-browser-ports/files/${_TOR_VER}/t
 
 app_install_tor_browser() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install_tor_deps
+    proot_pkg_update || return 1
+    proot_pkg_install_tor_deps || return 1
 
     proot_exec bash -c '
         set -e

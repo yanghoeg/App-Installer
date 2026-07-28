@@ -2,7 +2,7 @@
 # DOMAIN: Thunderbird — Termux native
 
 app_install_thunderbird() {
-    termux_pkg_install thunderbird
+    termux_pkg_install thunderbird || return 1
     desktop_register "thunderbird" "Thunderbird" "thunderbird %u" "thunderbird" \
         "Network;Email;News;" \
         "MimeType=message/rfc822;x-scheme-handler/mailto;"

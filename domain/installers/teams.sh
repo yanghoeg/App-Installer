@@ -4,8 +4,8 @@
 
 app_install_teams() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install curl
+    proot_pkg_update || return 1
+    proot_pkg_install curl || return 1
 
     local latest_url
     latest_url=$(proot_exec curl -fsSL \

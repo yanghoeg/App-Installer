@@ -5,8 +5,8 @@
 
 app_install_vscode() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install_vscode
+    proot_pkg_update || return 1
+    proot_pkg_install_vscode || return 1
     local exec_cmd
     case "${PROOT_DISTRO:-}" in
         archlinux) exec_cmd='bash -c "prun dbus-run-session -- /opt/visual-studio-code/code --no-sandbox --disable-gpu </dev/null >/dev/null 2>&1 &"' ;;

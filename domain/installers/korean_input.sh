@@ -11,7 +11,7 @@ _PKGS_KOREAN_INPUT=(
 
 app_install_korean_input() {
     # tur-repo 필요 (fcitx5 패키지 소스)
-    termux_pkg_is_installed tur-repo || termux_pkg_install tur-repo
+    termux_pkg_is_installed tur-repo || termux_pkg_install tur-repo || return 1
 
     # tur-multilib 활성화
     local tur_list="${PREFIX}/etc/apt/sources.list.d/tur.list"
@@ -29,7 +29,7 @@ app_install_korean_input() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 

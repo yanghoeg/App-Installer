@@ -16,7 +16,7 @@ _sumatrapdf_portable_url() {
 app_install_sumatrapdf() {
     if ! app_is_installed_wine; then
         echo "[Sumatra PDF] Wine이 필요합니다. 먼저 설치합니다."
-        app_install_wine
+        app_install_wine || return 1
     fi
 
     echo "[Sumatra PDF] portable exe 다운로드 중..."
