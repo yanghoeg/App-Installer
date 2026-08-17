@@ -15,7 +15,7 @@ APP_REGISTRY=(
     "vscode|Visual Studio Code|개발|코드 에디터 (Termux native)"
     "claude_code|Claude Code|개발|AI 코딩 어시스턴트 CLI (Termux native + glibc-runner)"
     "ollama|Ollama|개발|로컬 LLM 실행기 + 서버/채팅 런처 (Termux native, Vulkan GPU 백엔드 포함)"
-    "llama_cpp|llama.cpp|개발|GGUF 로컬 LLM 추론 (Vulkan/OpenCL 백엔드 포함)"
+    "llama_cpp|llama.cpp|개발|GGUF 로컬 LLM 추론 (llama-gpu = 네이티브 OpenCL GPU 가속)"
     "aichat|aichat|개발|터미널 AI 어시스턴트 CLI (Termux native, Ollama/클라우드 연동)"
     "crush|Crush|개발|터미널 AI 코딩 에이전트 (Termux native, API 키 필요)"
     "codex|Codex CLI|개발|OpenAI 코딩 에이전트 CLI (Termux native, API 키 필요)"
