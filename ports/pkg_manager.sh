@@ -53,3 +53,5 @@ proot_pkg_remove_vscode()    { _port_not_impl "proot_pkg_remove_vscode"; }
 termux_pkg_install()      { _port_not_impl "termux_pkg_install"; }
 termux_pkg_remove()       { _port_not_impl "termux_pkg_remove"; }
 termux_pkg_is_installed() { _port_not_impl "termux_pkg_is_installed"; }
+# termux_pkg_enable_repo <repo-pkg> — x11-repo / tur-repo / root-repo 활성화 (멱등)
+termux_pkg_enable_repo()  { _port_not_impl "termux_pkg_enable_repo"; }

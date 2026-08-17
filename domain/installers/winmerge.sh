@@ -17,7 +17,7 @@ _winmerge_portable_url() {
 }
 
 app_install_winmerge() {
-    if ! app_is_installed_wine; then
+    if ! wine_backend_available; then
         echo "[WinMerge] Wine이 필요합니다. 먼저 설치합니다."
         app_install_wine || return 1
     fi
@@ -25,21 +25,21 @@ app_install_winmerge() {
     local url
     url=$(_winmerge_portable_url)
 
-    echo "[WinMerge] portable zip 다운로드 및 설치 중..."
-    proot_exec bash -c "
+    echo "[WinMerge] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
+    wine_exec_shell "
         set -e
         wget -q '${url}' -O /tmp/winmerge.zip || \
             curl -fsSL '${url}' -o /tmp/winmerge.zip
-        mkdir -p \"\$HOME/.wine/drive_c/Program Files/WinMerge\"
-        unzip -qo /tmp/winmerge.zip -d \"\$HOME/.wine/drive_c/Program Files/WinMerge/\"
+        mkdir -p \"\$WINEPREFIX/drive_c/Program Files/WinMerge\"
+        unzip -qo /tmp/winmerge.zip -d \"\$WINEPREFIX/drive_c/Program Files/WinMerge/\"
         # zip 내 서브디렉토리가 있으면 한 단계 올림
-        cd \"\$HOME/.wine/drive_c/Program Files/WinMerge\"
+        cd \"\$WINEPREFIX/drive_c/Program Files/WinMerge\"
         if [ -d WinMerge ]; then
             mv WinMerge/* . 2>/dev/null
             rmdir WinMerge 2>/dev/null || rm -rf WinMerge
         fi
         rm -f /tmp/winmerge.zip
-        test -e \"\$HOME/.wine/drive_c/Program Files/WinMerge/WinMergeU.exe\"
+        test -e \"\$WINEPREFIX/drive_c/Program Files/WinMerge/WinMergeU.exe\"
     " || { echo "[ERROR] WinMerge 설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"
@@ -65,8 +65,8 @@ EOF
 }
 
 app_remove_winmerge() {
-    proot_exec bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/Program Files/WinMerge\" 2>/dev/null
+    wine_exec_shell "
+        rm -rf \"\$WINEPREFIX/drive_c/Program Files/WinMerge\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_WINMERGE_DESKTOP" "${HOME}/Desktop/winmerge.desktop"
 }

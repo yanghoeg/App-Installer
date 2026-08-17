@@ -14,6 +14,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/wine_backend.sh"
 
 # -----------------------------------------------------------------------------
 # 설정 로드

@@ -1,11 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # =============================================================================
-# DOMAIN: Wine — Box64 + Wine-Staging
+# DOMAIN: Wine — Box64 + Wine-Staging (백엔드 id: box64)
 # =============================================================================
 # proot 있음 → proot 내부 Box64 + Wine-Staging (adapter가 distro 차이 흡수)
 # proot 없음 → Termux native (glibc-runner + box64-glibc)
+#
+# 이 설치기는 $PREFIX/bin/wine-box64 래퍼만 만든다. PATH 상의 `wine`은
+# lib/wine_backend.sh가 만드는 디스패처이며 활성 백엔드로 위임한다.
+# WINEPREFIX는 $HOME/.wine (hangover 백엔드와 분리 — lib/wine_backend.sh 참조)
 
-_WINE_BIN="${PREFIX}/bin/wine"
+_WINE_BIN="${PREFIX}/bin/wine-box64"
 _WINE_DESKTOP="${PREFIX}/share/applications/wine64.desktop"
 _WINECFG_DESKTOP="${PREFIX}/share/applications/winecfg.desktop"
 _WINE_APPS_DESKTOP="${PREFIX}/share/applications/wine-apps.desktop"
@@ -82,8 +86,11 @@ _wine_init_prefix_proot() {
 _wine_install_native() {
     echo "[Wine] Termux native: glibc-runner + box64-glibc + Wine-Staging"
 
-    if [ -d "$_WINE_NATIVE_DIR" ] && [ -f "$_WINE_BIN" ]; then
-        echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
+    # 래퍼가 아니라 wine 트리 자체로 판정한다.
+    # (래퍼 경로가 wine → wine-box64로 바뀐 기존 설치도 재다운로드하지 않도록)
+    if [ -x "$_WINE_NATIVE_DIR/bin/wine64" ]; then
+        echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
+        _wine_write_box64_native_wrapper
         return 0
     fi
 
@@ -120,36 +127,37 @@ _wine_install_native() {
         return 1
     }
 
-    cat > "$_WINE_BIN" << 'WRAPEOF'
+    _wine_write_box64_native_wrapper
+
+    DISPLAY="${DISPLAY:-:0.0}" "$_WINE_BIN" wineboot --init 2>/dev/null || true
+}
+
+# $PREFIX/bin/wine-box64 — Termux native (glibc-runner) 래퍼
+# Mesa/Vulkan/Wine 공통 env는 wine_emit_env_block()(lib/wine_backend.sh)에서 온다.
+_wine_write_box64_native_wrapper() {
+    {
+        cat << 'WRAP_HEAD'
 #!/data/data/com.termux/files/usr/bin/bash
-# Wine wrapper — Termux native (glibc-runner)
+# Wine wrapper — Termux native (glibc-runner), 백엔드 id: box64
 # WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
 
 WINE_DPI="${WINE_DPI:-240}"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
 
 # Android CPU 쓰로틀링 방지
 termux-wake-lock 2>/dev/null
 
 # Wine 레지스트리 DPI 동기화
-_reg="${WINEPREFIX:-$HOME/.wine}/user.reg"
+_reg="${WINEPREFIX}/user.reg"
 if [ -f "$_reg" ]; then
     _hex=$(printf '%08x' "$WINE_DPI")
     grep -q "\"LogPixels\"=dword:${_hex}" "$_reg" 2>/dev/null || \
         sed -i "s/\"LogPixels\"=dword:[0-9a-f]\{8\}/\"LogPixels\"=dword:${_hex}/" "$_reg"
 fi
 
-export DISPLAY="${DISPLAY:-:0.0}"
-# Mesa / Vulkan
-export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-zink}"
-export TU_DEBUG=noconform
-export ZINK_DESCRIPTORS=lazy
-export MESA_NO_ERROR=1
-export MESA_GL_VERSION_OVERRIDE="${MESA_GL_VERSION_OVERRIDE:-4.6COMPAT}"
-export MESA_GLSL_VERSION_OVERRIDE="${MESA_GLSL_VERSION_OVERRIDE:-460}"
-export MESA_GLES_VERSION_OVERRIDE="${MESA_GLES_VERSION_OVERRIDE:-3.2}"
-# Wine
-export WINEESYNC=1
-export WINEDEBUG="${WINEDEBUG:--all}"
+WRAP_HEAD
+        wine_emit_env_block
+        cat << 'WRAP_TAIL'
 # Box64
 export BOX64_MMAP32=1
 export BOX64_X11THREADS=1
@@ -159,10 +167,9 @@ export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
 grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
 exec grun "$HOME/.wine-staging/bin/wine64" "$@"
-WRAPEOF
+WRAP_TAIL
+    } > "$_WINE_BIN"
     chmod +x "$_WINE_BIN"
-
-    DISPLAY="${DISPLAY:-:0.0}" wine wineboot --init 2>/dev/null || true
 }
 
 # .desktop + proot 래퍼 스크립트 생성
@@ -170,7 +177,7 @@ _wine_create_launchers() {
     if has_proot_distro; then
         cat > "$_WINE_BIN" << 'WRAPEOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# Wine wrapper — prun을 통해 proot 내 wine-staging 실행
+# Wine wrapper — prun을 통해 proot 내 wine-staging 실행, 백엔드 id: box64
 # WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
 
 WINE_DPI="${WINE_DPI:-240}"
@@ -229,15 +236,15 @@ WRAPEOF
         _wine_exec_cmd="prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer"
         _winecfg_exec_cmd="prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg"
     else
-        _wine_exec_cmd="wine explorer"
-        _winecfg_exec_cmd="wine winecfg"
+        _wine_exec_cmd="wine-box64 explorer"
+        _winecfg_exec_cmd="wine-box64 winecfg"
     fi
 
     cat > "$_WINE_DESKTOP" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Wine
+Name=Wine (Box64)
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
 Exec=bash -c "${_wine_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine
@@ -251,7 +258,7 @@ EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Wine 설정
+Name=Wine 설정 (Box64)
 Comment=Wine 환경 구성 (winecfg)
 Exec=bash -c "${_winecfg_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
@@ -282,6 +289,10 @@ EOF
         "${HOME}/Desktop/wine-apps.desktop" 2>/dev/null || true
     gio set "${HOME}/Desktop/wine64.desktop" metadata::trusted true 2>/dev/null || true
     gio set "${HOME}/Desktop/winecfg.desktop" metadata::trusted true 2>/dev/null || true
+
+    # PATH 상의 `wine` 디스패처 + wine-backend CLI 배선
+    wine_wire_frontend || return 1
+    wine_backend_set_default box64
 }
 
 app_install_wine() {
@@ -312,9 +323,11 @@ app_install_wine() {
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Wine 설치 완료"
-    echo "  wine program.exe  — Windows 앱 실행"
+    echo "  Wine (Box64 + Wine-Staging) 설치 완료"
+    echo "  wine program.exe  — Windows 앱 실행 (활성 백엔드)"
     echo "  wine winecfg      — Wine 설정"
+    echo "  wine-backend      — 활성 백엔드 확인 / 전환"
+    echo "  WINEPREFIX        — \$HOME/.wine"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -334,6 +347,13 @@ app_remove_wine() {
     rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP"
     rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
         "${HOME}/Desktop/wine-apps.desktop"
+
+    # 디스패처: 다른 백엔드가 남아 있으면 그쪽으로 넘기고, 없으면 함께 제거
+    if [ -x "$_WINE_HANGOVER_BIN" ]; then
+        wine_backend_set hangover
+    else
+        rm -f "$_WINE_DISPATCHER" "$_WINE_BACKEND_CLI" "$_WINE_BACKEND_CONF"
+    fi
 }
 
 app_is_installed_wine() {

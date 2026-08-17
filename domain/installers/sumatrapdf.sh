@@ -14,24 +14,24 @@ _sumatrapdf_portable_url() {
 }
 
 app_install_sumatrapdf() {
-    if ! app_is_installed_wine; then
+    if ! wine_backend_available; then
         echo "[Sumatra PDF] Wine이 필요합니다. 먼저 설치합니다."
         app_install_wine || return 1
     fi
 
-    echo "[Sumatra PDF] portable exe 다운로드 중..."
-    proot_exec bash -c "
+    echo "[Sumatra PDF] portable exe 다운로드 중... (백엔드: $(wine_backend))"
+    wine_exec_shell "
         set -e
-        mkdir -p \"\$HOME/.wine/drive_c/Program Files/SumatraPDF\"
+        mkdir -p \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"
         wget -q '$(_sumatrapdf_portable_url)' -O /tmp/sumatra.zip || \
             curl -fsSL '$(_sumatrapdf_portable_url)' -o /tmp/sumatra.zip
-        unzip -qo /tmp/sumatra.zip -d \"\$HOME/.wine/drive_c/Program Files/SumatraPDF/\"
+        unzip -qo /tmp/sumatra.zip -d \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/\"
         # zip 안의 파일명을 SumatraPDF.exe로 통일
-        cd \"\$HOME/.wine/drive_c/Program Files/SumatraPDF\"
+        cd \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"
         for f in SumatraPDF-*.exe; do
             [ -f \"\$f\" ] && mv \"\$f\" SumatraPDF.exe
         done
-        [ -f \"\$HOME/.wine/drive_c/Program Files/SumatraPDF/SumatraPDF.exe\" ]
+        [ -f \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/SumatraPDF.exe\" ]
         rm -f /tmp/sumatra.zip
     " || { echo "[ERROR] Sumatra PDF 다운로드/설치 실패" >&2; return 1; }
 
@@ -59,8 +59,8 @@ EOF
 }
 
 app_remove_sumatrapdf() {
-    proot_exec bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/Program Files/SumatraPDF\" 2>/dev/null
+    wine_exec_shell "
+        rm -rf \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_SUMATRA_DESKTOP" "${HOME}/Desktop/sumatrapdf.desktop"
 }

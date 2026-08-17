@@ -37,7 +37,8 @@ app-installer
 | **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
 | **Notion** | Notes & productivity | proot | AppImage extracted |
 | **Teams** | Microsoft Teams for Linux | proot | community Electron client |
-| **Wine** | Run Windows apps (Box64 + Wine-Staging) | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Wine (Box64+Staging)** | Run Windows apps via Box64 | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Wine (Hangover)** | Run Windows apps via FEX/ARM64EC | Termux native | faster; separate WINEPREFIX |
 | **Miniforge** | Conda package manager | proot | CLI only |
 | **DBeaver** | Universal database client | proot | |
 | **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
@@ -45,8 +46,19 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
-| **Ollama** | Local LLM runner | Termux native | models pulled separately |
+| **Ollama** | Local LLM runner | Termux native | Vulkan GPU backend included; models pulled separately |
+| **llama.cpp** | GGUF inference (`llama-cli`/`llama-server`) | Termux native | Vulkan + OpenCL backends |
 | **aichat** | Terminal AI assistant CLI | Termux native | Ollama / cloud API |
+| **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
+| **Codex CLI** | OpenAI coding agent CLI | Termux native | needs `OPENAI_API_KEY` |
+| **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
+| **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
+| **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
+| **Jujutsu** | Git-compatible VCS + `lazyjj` | Termux native | |
+| **television** | Fuzzy finder (`tv`) | Termux native | |
+| **superfile** | Modern TUI file manager (`spf`) | Termux native | |
+| **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
+| **wayvnc** | VNC server for the desktop | Termux native | wayland sessions only (`wayvnc-start`) |
 | **Neovim / Helix** | Terminal modal editors | Termux native | |
 | **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
 
@@ -65,21 +77,28 @@ Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds app
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
 | 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
 
-## Wine (Box64 + Wine-Staging)
+## Wine — two backends
 
-Automatically branches based on whether proot is installed.
+Two backends can be installed side by side. `wine` on your PATH is a dispatcher that
+forwards to the active one.
 
-| Environment | Setup |
-|-------------|-------|
-| proot Ubuntu/Arch | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot |
-| no proot | glibc-runner + box64-glibc + Wine-Staging tarball |
+| Backend | Setup | WINEPREFIX | Wrapper |
+|---------|-------|------------|---------|
+| `box64` (proot) | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot | `$HOME/.wine` | `wine-box64` |
+| `box64` (no proot) | glibc-runner + box64-glibc + Wine-Staging tarball | `$HOME/.wine` | `wine-box64` |
+| `hangover` | `hangover` package (Wine native arm64, apps via FEX/ARM64EC) | `$HOME/.wine-hangover` | `wine-hangover` |
 
 ```bash
-wine kakao.exe          # Run Windows app
+wine-backend            # show active backend + install status
+wine-backend hangover   # switch backends
+wine kakao.exe          # Run Windows app through the active backend
 wine winecfg            # Wine configuration
-winetricks vcrun2019    # Install DLL / runtime
+winetricks vcrun2019    # Install DLL / runtime (box64 backend, inside proot)
 winetricks dotnet48
 ```
+
+> The prefixes are separate on purpose — the two Wine builds (wow64 staging vs ARM64EC)
+> would fight over a shared prefix. Reinstall Wine apps after switching backends.
 
 > **Limitations**: Anti-cheat games, kernel-driver-dependent apps, and complex modern .NET apps will not work.
 

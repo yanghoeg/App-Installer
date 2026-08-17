@@ -15,6 +15,8 @@ _setup() {
     export PROOT_USER="testuser"
     setup_fs_sandbox "$sb"
     source "${APP_DIR}/ports/pkg_manager.sh"
+    unset _WINE_BACKEND_SH   # 샌드박스마다 HOME/PREFIX가 바뀌므로 재소싱 강제
+    source "${APP_DIR}/lib/wine_backend.sh"
     source "${APP_DIR}/domain/desktop.sh"
     source "${APP_DIR}/domain/apps.sh"
     for _f in "${APP_DIR}/domain/installers/"*.sh; do source "$_f"; done
@@ -329,6 +331,217 @@ _test_wine_proot_path_does_not_call_termux_glibc() {
     cleanup_sandbox "$sb"
 }
 it "proot 있음 → glibc-repo 설치 미호출 (proot 경로)" _test_wine_proot_path_does_not_call_termux_glibc
+
+# =============================================================================
+# Wine 백엔드 이중화 (box64 / hangover)
+# =============================================================================
+describe "Wine 백엔드 — 리졸버"
+
+_test_wine_backend_defaults_to_box64() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    assert_eq "box64" "$(wine_backend)" "백엔드 미설치 시 기본값"
+    cleanup_sandbox "$sb"
+}
+it "설정·설치 모두 없으면 box64" _test_wine_backend_defaults_to_box64
+
+_test_wine_backend_prefers_hangover_when_present() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    assert_eq "hangover" "$(wine_backend)" "hangover 설치 시 우선"
+    cleanup_sandbox "$sb"
+}
+it "설정 없고 hangover만 있으면 hangover" _test_wine_backend_prefers_hangover_when_present
+
+_test_wine_backend_honours_config() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    : > "${PREFIX}/bin/wine-box64";    chmod +x "${PREFIX}/bin/wine-box64"
+    wine_backend_set box64
+    assert_eq "box64" "$(wine_backend)" "설정 파일이 우선"
+    cleanup_sandbox "$sb"
+}
+it "둘 다 설치 시 설정 파일 값을 따른다" _test_wine_backend_honours_config
+
+_test_wine_backend_ignores_stale_config() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-box64"; chmod +x "${PREFIX}/bin/wine-box64"
+    wine_backend_set hangover 2>/dev/null || true
+    # 설정은 hangover지만 실제로는 없음 → 설치된 box64로 폴백
+    assert_eq "box64" "$(wine_backend)" "설정이 가리키는 백엔드가 없으면 폴백"
+    cleanup_sandbox "$sb"
+}
+it "설정이 미설치 백엔드를 가리키면 설치된 쪽으로 폴백" _test_wine_backend_ignores_stale_config
+
+_test_wine_prefix_per_backend() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    assert_eq "${HOME}/.wine" "$(wine_prefix)" "box64 WINEPREFIX"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    assert_eq "${HOME}/.wine-hangover" "$(wine_prefix)" "hangover WINEPREFIX"
+    cleanup_sandbox "$sb"
+}
+it "백엔드마다 WINEPREFIX가 분리된다" _test_wine_prefix_per_backend
+
+_test_wine_backend_set_default_does_not_override() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    wine_backend_set hangover
+    wine_backend_set_default box64
+    assert_file_contains "$_WINE_BACKEND_CONF" "hangover" "기존 사용자 선택 보존"
+    cleanup_sandbox "$sb"
+}
+it "wine_backend_set_default는 기존 설정을 덮어쓰지 않는다" _test_wine_backend_set_default_does_not_override
+
+_test_wine_backend_available() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    rc=0; wine_backend_available || rc=$?
+    assert_nonzero "$rc" "미설치 상태" || { cleanup_sandbox "$sb"; return 1; }
+    : > "${PREFIX}/bin/wine-box64"; chmod +x "${PREFIX}/bin/wine-box64"
+    rc=0; wine_backend_available || rc=$?
+    assert_zero "$rc" "box64 설치 상태" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "wine_backend_available은 백엔드 하나라도 있으면 성공" _test_wine_backend_available
+
+describe "Wine 백엔드 — 디스패처 / Hangover"
+
+_test_wine_dispatcher_written() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    wine_wire_frontend
+    assert_file_exists "${PREFIX}/bin/wine" "디스패처"
+    assert_file_exists "${PREFIX}/bin/wine-backend" "전환 CLI"
+    assert_file_contains "${PREFIX}/bin/wine" 'exec "$PREFIX/bin/wine-$_b"' "백엔드로 위임"
+    cleanup_sandbox "$sb"
+}
+it "wine_wire_frontend가 디스패처+CLI를 만든다" _test_wine_dispatcher_written
+
+_test_legacy_wine_wrapper_migrates() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    # 백엔드 분리 이전 설치 재현: $PREFIX/bin/wine 자체가 box64 래퍼
+    printf '#!/bin/bash\nexec grun "$HOME/.wine-staging/bin/wine64" "$@"\n' > "${PREFIX}/bin/wine"
+    chmod +x "${PREFIX}/bin/wine"
+
+    wine_wire_frontend
+
+    assert_file_exists "${PREFIX}/bin/wine-box64" "레거시 래퍼가 보존된다"
+    assert_file_contains "${PREFIX}/bin/wine-box64" "wine-staging" "원본 내용 유지"
+    assert_file_contains "${PREFIX}/bin/wine" "termux-xfce-wine-dispatcher" "디스패처로 교체"
+    cleanup_sandbox "$sb"
+}
+it "레거시 \$PREFIX/bin/wine 래퍼는 wine-box64로 이관된다" _test_legacy_wine_wrapper_migrates
+
+_test_foreign_wine_binary_not_migrated() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    # 우리 래퍼가 아닌 wine(wine-staging 문자열 없음)은 wine-box64로 이관하지 않는다.
+    # (PATH 상의 wine 자체는 디스패처로 교체된다 — 백엔드 분리 이전과 동일한 동작)
+    printf '#!/bin/bash\necho other-wine\n' > "${PREFIX}/bin/wine"
+    chmod +x "${PREFIX}/bin/wine"
+
+    wine_wire_frontend
+
+    [ -e "${PREFIX}/bin/wine-box64" ] && {
+        echo "[ASSERT] 남의 wine 바이너리를 wine-box64로 옮김" >&2; return 1
+    }
+    cleanup_sandbox "$sb"
+}
+it "우리 래퍼가 아닌 wine은 wine-box64로 이관하지 않는다" _test_foreign_wine_binary_not_migrated
+
+_test_wine_box64_installs_to_own_path() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine
+    assert_file_exists "${PREFIX}/bin/wine-box64" "box64 래퍼는 전용 경로에"
+    assert_file_exists "${PREFIX}/bin/wine" "디스패처도 함께 생성"
+    cleanup_sandbox "$sb"
+}
+it "wine 설치는 wine-box64 + 디스패처를 만든다" _test_wine_box64_installs_to_own_path
+
+_test_hangover_enables_x11_repo() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_hangover 2>/dev/null || true
+    assert_was_called "termux_pkg_enable_repo x11-repo"
+    assert_was_called "termux_pkg_install hangover"
+    cleanup_sandbox "$sb"
+}
+it "hangover 설치는 x11-repo를 켜고 hangover를 깐다" _test_hangover_enables_x11_repo
+
+_test_hangover_fails_without_upstream_binary() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    # mock pkg는 실제로 hangover-wine을 만들지 않는다 → 실패해야 한다
+    rc=0; app_install_hangover >/dev/null 2>&1 || rc=$?
+    assert_nonzero "$rc" "hangover-wine 없으면 실패해야 함" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "hangover-wine 바이너리가 없으면 non-zero" _test_hangover_fails_without_upstream_binary
+
+_test_hangover_wires_frontend() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
+    app_install_hangover >/dev/null 2>&1
+    assert_file_exists "${PREFIX}/bin/wine-hangover" "hangover 래퍼"
+    assert_file_exists "${PREFIX}/bin/wine" "디스패처"
+    assert_file_contains "${PREFIX}/bin/wine-hangover" 'exec "$PREFIX/bin/hangover-wine"' "상위 바이너리 호출"
+    assert_file_contains "$_WINE_BACKEND_CONF" "hangover" "기본 백엔드 설정"
+    cleanup_sandbox "$sb"
+}
+it "hangover 설치는 래퍼+디스패처를 만들고 기본 백엔드가 된다" _test_hangover_wires_frontend
+
+_test_remove_one_backend_keeps_dispatcher() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
+    app_install_hangover >/dev/null 2>&1
+    MOCK_HAS_PROOT=true
+    app_install_wine >/dev/null 2>&1
+    app_remove_wine >/dev/null 2>&1
+    assert_file_exists "${PREFIX}/bin/wine" "hangover가 남았으므로 디스패처 유지"
+    assert_file_contains "$_WINE_BACKEND_CONF" "hangover" "남은 백엔드로 전환"
+    cleanup_sandbox "$sb"
+}
+it "한쪽 백엔드 제거 시 디스패처는 남은 쪽을 가리킨다" _test_remove_one_backend_keeps_dispatcher
+
+_test_remove_last_backend_drops_dispatcher() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    app_install_wine >/dev/null 2>&1
+    app_remove_wine >/dev/null 2>&1
+    rc=0; [ -e "${PREFIX}/bin/wine" ] || rc=$?
+    assert_nonzero "$rc" "마지막 백엔드 제거 시 디스패처도 사라져야 함" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "마지막 백엔드를 지우면 디스패처도 사라진다" _test_remove_last_backend_drops_dispatcher
+
+describe "Wine 앱 — 백엔드 중립 실행"
+
+_test_wine_apps_use_wine_exec_shell() {
+    local f rc failed=0
+    for f in notepadpp sevenzip sumatrapdf winmerge; do
+        command grep -q "wine_exec_shell" "${APP_DIR}/domain/installers/${f}.sh" || {
+            echo "[ASSERT] ${f}.sh가 wine_exec_shell을 쓰지 않음" >&2; failed=1
+        }
+        command grep -q 'HOME/\.wine/drive_c' "${APP_DIR}/domain/installers/${f}.sh" && {
+            echo "[ASSERT] ${f}.sh에 \$HOME/.wine/drive_c 하드코딩이 남아 있음" >&2; failed=1
+        }
+    done
+    return $failed
+}
+it "Wine 앱 4종이 WINEPREFIX를 하드코딩하지 않는다" _test_wine_apps_use_wine_exec_shell
+
+_test_wine_exec_shell_injects_prefix_native() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=false
+    local out
+    out=$(wine_exec_shell 'printf "%s" "$WINEPREFIX"')
+    assert_eq "${HOME}/.wine" "$out" "native 문맥에서 WINEPREFIX 주입"
+    cleanup_sandbox "$sb"
+}
+it "wine_exec_shell이 native 문맥에 WINEPREFIX를 주입한다" _test_wine_exec_shell_injects_prefix_native
+
+_test_wine_exec_shell_uses_proot_for_box64() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=true
+    wine_exec_shell 'true'
+    assert_was_called "proot_exec_wine"
+    cleanup_sandbox "$sb"
+}
+it "box64+proot에서는 proot_exec_wine을 탄다" _test_wine_exec_shell_uses_proot_for_box64
 
 # =============================================================================
 # Claude Code — 업그레이드 지원

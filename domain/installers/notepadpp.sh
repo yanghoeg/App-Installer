@@ -15,7 +15,7 @@ _notepadpp_portable_url() {
 }
 
 app_install_notepadpp() {
-    if ! app_is_installed_wine; then
+    if ! wine_backend_available; then
         echo "[Notepad++] Wine이 필요합니다. 먼저 설치합니다."
         app_install_wine || return 1
     fi
@@ -23,15 +23,15 @@ app_install_notepadpp() {
     local url
     url=$(_notepadpp_portable_url)
 
-    echo "[Notepad++] portable zip 다운로드 및 설치 중..."
-    if ! proot_exec bash -c "
+    echo "[Notepad++] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
+    if ! wine_exec_shell "
         set -e
         wget -q '${url}' -O /tmp/npp.zip || \
             curl -fsSL '${url}' -o /tmp/npp.zip
-        mkdir -p \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
-        unzip -qo /tmp/npp.zip -d \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
+        mkdir -p \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
+        unzip -qo /tmp/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
         rm -f /tmp/npp.zip
-        [ -f \"\$HOME/.wine/drive_c/Program Files/Notepad++/notepad++.exe\" ]
+        [ -f \"\$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe\" ]
     "; then
         echo "[ERROR] Notepad++ 다운로드/설치 실패" >&2
         return 1
@@ -61,8 +61,8 @@ EOF
 }
 
 app_remove_notepadpp() {
-    proot_exec bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/Program Files/Notepad++\" 2>/dev/null
+    wine_exec_shell "
+        rm -rf \"\$WINEPREFIX/drive_c/Program Files/Notepad++\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_NOTEPADPP_DESKTOP" "${HOME}/Desktop/notepadpp.desktop"
 }

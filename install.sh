@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/wine_backend.sh"
 _FILTER=""
 case "${1:-}" in
     wine|Wine) _FILTER="Wine" ;;
@@ -193,7 +194,7 @@ _run_yad_notebook() {
         local rows=("➡️" "" "앱을 클릭하여 선택" "" "")
         for _entry in "${APP_REGISTRY[@]}"; do
             IFS='|' read -r _id _name _category _desc <<< "$_entry"
-            [[ "$_desc" == *"(Wine)"* ]] || [ "$_id" = "wine" ] || continue
+            [[ "$_desc" == *"(Wine)"* ]] || [ "$_id" = "wine" ] || [ "$_id" = "hangover" ] || continue
             rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
         done
 

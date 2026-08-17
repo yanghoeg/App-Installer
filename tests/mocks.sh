@@ -73,6 +73,11 @@ mock_pkg_adapter() {
     termux_pkg_install()          { _record_call "termux_pkg_install $*"; }
     termux_pkg_remove()           { _record_call "termux_pkg_remove $*"; }
     termux_pkg_is_installed()     { echo "$MOCK_INSTALLED_PKGS" | grep -qw "$1"; }
+    termux_pkg_enable_repo()      {
+        _record_call "termux_pkg_enable_repo $*"
+        echo "$MOCK_INSTALLED_PKGS" | grep -qw "$1" && return 0
+        MOCK_INSTALLED_PKGS="${MOCK_INSTALLED_PKGS} $1"
+    }
 
     has_proot_distro() { [ "${MOCK_HAS_PROOT}" = "true" ]; }
 }

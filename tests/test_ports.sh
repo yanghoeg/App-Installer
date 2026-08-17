@@ -34,6 +34,7 @@ PKG_TERMUX_CONTRACTS=(
     termux_pkg_install
     termux_pkg_remove
     termux_pkg_is_installed
+    termux_pkg_enable_repo
 )
 
 _check_contracts() {

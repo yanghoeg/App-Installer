@@ -37,7 +37,8 @@ app-installer
 | **Nautilus** | GNOME 파일 관리자 | proot | 소프트웨어 렌더러 (MIT-SHM 우회) |
 | **Notion** | 메모·생산성 앱 | proot | AppImage 추출 방식 |
 | **Teams** | Microsoft Teams for Linux | proot | 커뮤니티 Electron 클라이언트 |
-| **Wine** | Windows 앱 실행 (Box64 + Wine-Staging) | proot / native | ELF→box64 래퍼 (binfmt_misc 없음) |
+| **Wine (Box64+Staging)** | Box64로 Windows 앱 실행 | proot / native | ELF→box64 래퍼 (binfmt_misc 없음) |
+| **Wine (Hangover)** | FEX/ARM64EC로 Windows 앱 실행 | Termux native | 더 빠름; WINEPREFIX 분리 |
 | **Miniforge** | Conda 패키지 관리자 | proot | CLI 전용 |
 | **DBeaver** | 유니버설 데이터베이스 클라이언트 | proot | |
 | **Thorium** | Chromium 기반 고성능 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
@@ -45,8 +46,19 @@ app-installer
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
 | **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
-| **Ollama** | 로컬 LLM 실행기 | Termux native | 모델 별도 pull |
+| **Ollama** | 로컬 LLM 실행기 | Termux native | Vulkan GPU 백엔드 포함; 모델 별도 pull |
+| **llama.cpp** | GGUF 추론 (`llama-cli`/`llama-server`) | Termux native | Vulkan + OpenCL 백엔드 |
 | **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | Ollama/클라우드 API 연동 |
+| **Crush** | 터미널 AI 코딩 에이전트 | Termux native | 제공자 API 키 필요 |
+| **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | `OPENAI_API_KEY` 필요 |
+| **code-server** | 브라우저에서 여는 VS Code | Termux native | 127.0.0.1:8080 서빙 |
+| **PyTorch + ONNX Runtime** | 온디바이스 ML 런타임 | Termux native | 약 280MB |
+| **AI 업스케일 (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan 가속 |
+| **Jujutsu** | Git 호환 VCS + `lazyjj` | Termux native | |
+| **television** | 퍼지 파인더 (`tv`) | Termux native | |
+| **superfile** | 현대적 TUI 파일 매니저 (`spf`) | Termux native | |
+| **uutils-coreutils** | Rust 재구현 coreutils | Termux native | GNU coreutils와 병존 |
+| **wayvnc** | 데스크탑 VNC 서버 | Termux native | wayland 세션 전용 (`wayvnc-start`) |
 | **Neovim / Helix** | 터미널 모달 에디터 | Termux native | |
 | **개발 CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv는 셸 hook 직접 추가 필요 |
 
@@ -65,21 +77,27 @@ app-installer
 | SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
 | 1Password GUI arm64 미지원 | `1password-cli`(`op`) 설치 |
 
-## Wine (Box64 + Wine-Staging)
+## Wine — 두 가지 백엔드
 
-proot 유무에 따라 자동 분기합니다.
+두 백엔드를 동시에 설치할 수 있고, PATH 상의 `wine`은 활성 백엔드로 위임하는 디스패처입니다.
 
-| 환경 | 구성 |
-|------|------|
-| proot Ubuntu/Arch | proot 내부 Box64(ARM64) + Wine-Staging x86_64 tarball |
-| proot 없음 | glibc-runner + box64-glibc + Wine-Staging tarball |
+| 백엔드 | 구성 | WINEPREFIX | 래퍼 |
+|--------|------|------------|------|
+| `box64` (proot) | proot 내부 Box64(ARM64) + Wine-Staging x86_64 tarball | `$HOME/.wine` | `wine-box64` |
+| `box64` (proot 없음) | glibc-runner + box64-glibc + Wine-Staging tarball | `$HOME/.wine` | `wine-box64` |
+| `hangover` | `hangover` 패키지 (Wine는 네이티브 arm64, 앱만 FEX/ARM64EC) | `$HOME/.wine-hangover` | `wine-hangover` |
 
 ```bash
-wine kakao.exe          # Windows 앱 실행
+wine-backend            # 활성 백엔드 + 설치 상태 확인
+wine-backend hangover   # 백엔드 전환
+wine kakao.exe          # 활성 백엔드로 Windows 앱 실행
 wine winecfg            # Wine 환경 설정
-winetricks vcrun2019    # DLL/런타임 설치
+winetricks vcrun2019    # DLL/런타임 설치 (box64 백엔드, proot 내부)
 winetricks dotnet48
 ```
+
+> prefix를 일부러 분리했습니다 — 서로 다른 Wine 빌드(wow64 staging vs ARM64EC)가
+> 하나의 prefix를 공유하면 깨집니다. 백엔드를 바꾼 뒤에는 Wine 앱을 다시 설치하세요.
 
 > **한계**: 안티치트 게임, 커널 드라이버 의존 앱, 최신 .NET 복잡 앱은 동작하지 않습니다.
 
