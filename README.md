@@ -46,9 +46,8 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
-| **Ollama** | Local LLM runner | Termux native | Vulkan GPU backend included; models pulled separately |
-| **llama.cpp** | GGUF inference (`llama-cli`/`llama-server`) | Termux native | Vulkan + OpenCL backends |
-| **aichat** | Terminal AI assistant CLI | Termux native | Ollama / cloud API |
+| **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel; `llama-model-get` fetches Q5_K_M models |
+| **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
 | **Codex CLI** | OpenAI coding agent CLI | Termux native | needs `OPENAI_API_KEY` |
 | **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
