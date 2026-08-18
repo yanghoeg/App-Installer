@@ -56,8 +56,9 @@ _llama_write_model_get() {
     cat > "$_LLAMA_MODEL_GET_BIN" << 'MEOF'
 #!/data/data/com.termux/files/usr/bin/bash
 # llama-model-get — 로컬 LLM GGUF 다운로드 (~/models)
-# 사용법: llama-model-get [0.5b|1.5b|3b|hammer]   (기본 1.5b)
+# 사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]   (기본 1.5b)
 #   0.5b ~420MB / 1.5b ~1.3GB / 3b ~2.4GB (Qwen2.5-Instruct Q5_K_M)
+#   3.5-2b ~1.5GB (Qwen3.5-2B Q6_K) / 3.5-4b ~2.6GB (Qwen3.5-4B Q4_K_M) — 최신 소형 dense
 #   hammer ~1.9GB (Hammer2.1-3b Q4_K_M — 함수호출/툴콜 판단이 좋은 3B)
 set -eu
 DIR="$HOME/models"; mkdir -p "$DIR"
@@ -65,8 +66,10 @@ case "${1:-1.5b}" in
     0.5b) REPO="Qwen/Qwen2.5-0.5B-Instruct-GGUF"; F="qwen2.5-0.5b-instruct-q5_k_m.gguf" ;;
     1.5b) REPO="Qwen/Qwen2.5-1.5B-Instruct-GGUF"; F="qwen2.5-1.5b-instruct-q5_k_m.gguf" ;;
     3b)   REPO="Qwen/Qwen2.5-3B-Instruct-GGUF";   F="qwen2.5-3b-instruct-q5_k_m.gguf" ;;
+    3.5-2b) REPO="unsloth/Qwen3.5-2B-GGUF"; F="Qwen3.5-2B-Q6_K.gguf" ;;
+    3.5-4b) REPO="unsloth/Qwen3.5-4B-GGUF"; F="Qwen3.5-4B-Q4_K_M.gguf" ;;
     hammer) REPO="Nekuromento/Hammer2.1-3b-Q4_K_M-GGUF"; F="hammer2.1-3b-q4_k_m.gguf" ;;
-    *) echo "사용법: llama-model-get [0.5b|1.5b|3b|hammer]" >&2; exit 2 ;;
+    *) echo "사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]" >&2; exit 2 ;;
 esac
 OUT="$DIR/$F"
 if [ -f "$OUT" ]; then
@@ -91,7 +94,7 @@ app_install_llama_cpp() {
         echo "[llama.cpp] 힌트: GPU 추론을 쓰려면 '시스템 → GPU 가속'을 먼저 설치하세요."
     fi
     echo "[llama.cpp] CPU: llama-cli / llama-server, GPU: llama-gpu (네이티브 OpenCL)."
-    echo "[llama.cpp] 모델: llama-model-get [0.5b|1.5b|3b|hammer] 로 GGUF 다운로드 (hammer=툴콜용 Hammer2.1-3b Q4)."
+    echo "[llama.cpp] 모델: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer] 로 GGUF 다운로드 (3.5-*=최신 Qwen3.5 Q4, hammer=툴콜용 Hammer2.1-3b Q4)."
 }
 
 app_remove_llama_cpp() {
