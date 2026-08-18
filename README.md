@@ -46,7 +46,7 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
-| **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel; `llama-model-get` fetches Q5_K_M models |
+| **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
 | **Codex CLI** | OpenAI coding agent CLI | Termux native | needs `OPENAI_API_KEY` |

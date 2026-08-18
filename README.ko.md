@@ -46,7 +46,7 @@ app-installer
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
 | **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
-| **llama.cpp** | GGUF 추론 (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = 네이티브 OpenCL GPU 가속; `llama-model-get`로 Q5_K_M 모델 다운로드 |
+| **llama.cpp** | GGUF 추론 (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = 네이티브 OpenCL GPU 가속 (기본 컨텍스트 4096, `LLAMA_CTX`로 변경); `llama-model-get`로 Qwen2.5/Qwen3.5 GGUF 다운로드 (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | 로컬(`llama-server`)/클라우드 API 연동 |
 | **Crush** | 터미널 AI 코딩 에이전트 | Termux native | 제공자 API 키 필요 |
 | **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | `OPENAI_API_KEY` 필요 |
