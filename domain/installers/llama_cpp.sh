@@ -46,7 +46,17 @@ export OCL_ICD_VENDORS=
 export OPENCL_VENDOR_PATH=
 export LD_LIBRARY_PATH="$_icd:$PREFIX/lib:/system/lib64:/vendor/lib64:/system/vendor/lib64"
 
-exec "${LLAMA_GPU_BIN:-llama-cli}" -ngl 99 "$@"
+# 기본 컨텍스트 4096 — 미지정 시 모델 기본(Qwen3.5=262144)을 물려받아 KV 캐시가
+# 수십 GB로 잡혀 OOM 으로 죽는다. -c/--ctx-size 를 직접 주면 그대로 존중한다.
+# (KV 양자화 -ctk/-ctv 는 -fa 필수 → 이 Adreno OpenCL 백엔드에선 CPU 폴백으로
+#  생성이 ~13배 느려지므로 쓰지 말고 컨텍스트로 조절할 것)
+_ctx=()
+case " $* " in
+    *" -c "*|*" --ctx-size "*) : ;;
+    *) _ctx=(-c "${LLAMA_CTX:-4096}") ;;
+esac
+
+exec "${LLAMA_GPU_BIN:-llama-cli}" -ngl 99 "${_ctx[@]}" "$@"
 GEOF
     chmod +x "$_LLAMA_GPU_BIN"
 }
@@ -58,7 +68,7 @@ _llama_write_model_get() {
 # llama-model-get — 로컬 LLM GGUF 다운로드 (~/models)
 # 사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]   (기본 1.5b)
 #   0.5b ~420MB / 1.5b ~1.3GB / 3b ~2.4GB (Qwen2.5-Instruct Q5_K_M)
-#   3.5-2b ~1.5GB (Qwen3.5-2B Q6_K) / 3.5-4b ~2.6GB (Qwen3.5-4B Q4_K_M) — 최신 소형 dense
+#   3.5-2b ~1.4GB (Qwen3.5-2B Q5_K_M) / 3.5-4b ~2.6GB (Qwen3.5-4B Q4_K_M) — 최신 소형 dense
 #   hammer ~1.9GB (Hammer2.1-3b Q4_K_M — 함수호출/툴콜 판단이 좋은 3B)
 set -eu
 DIR="$HOME/models"; mkdir -p "$DIR"
@@ -66,7 +76,7 @@ case "${1:-1.5b}" in
     0.5b) REPO="Qwen/Qwen2.5-0.5B-Instruct-GGUF"; F="qwen2.5-0.5b-instruct-q5_k_m.gguf" ;;
     1.5b) REPO="Qwen/Qwen2.5-1.5B-Instruct-GGUF"; F="qwen2.5-1.5b-instruct-q5_k_m.gguf" ;;
     3b)   REPO="Qwen/Qwen2.5-3B-Instruct-GGUF";   F="qwen2.5-3b-instruct-q5_k_m.gguf" ;;
-    3.5-2b) REPO="unsloth/Qwen3.5-2B-GGUF"; F="Qwen3.5-2B-Q6_K.gguf" ;;
+    3.5-2b) REPO="unsloth/Qwen3.5-2B-GGUF"; F="Qwen3.5-2B-Q5_K_M.gguf" ;;
     3.5-4b) REPO="unsloth/Qwen3.5-4B-GGUF"; F="Qwen3.5-4B-Q4_K_M.gguf" ;;
     hammer) REPO="Nekuromento/Hammer2.1-3b-Q4_K_M-GGUF"; F="hammer2.1-3b-q4_k_m.gguf" ;;
     *) echo "사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]" >&2; exit 2 ;;
