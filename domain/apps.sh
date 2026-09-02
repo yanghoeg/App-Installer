@@ -4,7 +4,7 @@
 # =============================================================================
 # 형식: "id|이름|카테고리|설명"
 # id는 domain/installers/${id}.sh의 app_install_${id}/app_remove_${id}/app_is_installed_${id} 와 매핑
-# 카테고리: 시스템 | 그래픽 | 미디어 | 오피스 | 브라우저 | 개발 | 보안 | 유틸 | 소통
+# 카테고리: 시스템 | 그래픽 | 미디어 | 오피스 | 브라우저 | 개발 | 보안 | 유틸 | 소통 | Wine
 
 APP_REGISTRY=(
     "thunderbird|Thunderbird|소통|이메일 클라이언트 (Termux native)"
@@ -28,6 +28,7 @@ APP_REGISTRY=(
     "mise|mise|개발|다국어 버전 매니저 nvm/pyenv 대체 (Termux native, 셸 activation 필요)"
     "hyperfine|hyperfine|개발|통계 기반 CLI 벤치마킹 (Termux native)"
     "tokei|tokei|개발|언어별 코드 라인 수 집계 (Termux native)"
+    "btop|btop|개발|시각적 리소스 모니터 (htop 후속, root-repo)"
     "direnv|direnv|개발|디렉터리별 환경변수 자동 로드 (Termux native, 셸 hook 필요)"
     "watchexec|watchexec|개발|파일 변경 시 명령 재실행 (Termux native)"
     "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
@@ -42,12 +43,12 @@ APP_REGISTRY=(
     "uutils|uutils-coreutils|유틸|Rust로 재구현한 coreutils (Termux native)"
     "wayvnc|wayvnc 원격 데스크탑|유틸|VNC로 데스크탑 원격 접속 (wayland 세션 전용)"
     "ncnn_upscale|AI 업스케일 (ncnn)|미디어|Real-ESRGAN 확대 + RIFE 보간 (Vulkan 가속)"
-    "wine|Wine (Box64+Staging)|유틸|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
-    "hangover|Wine (Hangover)|유틸|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
-    "notepadpp|Notepad++|개발|텍스트 에디터 (Wine)"
-    "sevenzip|7-Zip|유틸|파일 압축/해제 (Wine)"
-    "sumatrapdf|Sumatra PDF|오피스|PDF/EPUB/MOBI 뷰어 (Wine)"
-    "winmerge|WinMerge|개발|파일/폴더 비교·병합 (Wine)"
+    "wine|Wine (Box64+Staging)|Wine|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
+    "hangover|Wine (Hangover)|Wine|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
+    "notepadpp|Notepad++|Wine|텍스트 에디터 (Wine)"
+    "sevenzip|7-Zip|Wine|파일 압축/해제 (Wine)"
+    "sumatrapdf|Sumatra PDF|Wine|PDF/EPUB/MOBI 뷰어 (Wine)"
+    "winmerge|WinMerge|Wine|파일/폴더 비교·병합 (Wine)"
     "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
     "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
     "onepassword|1Password|보안|패스워드 관리자 (proot)"
@@ -71,6 +72,7 @@ TAB_GROUPS=(
     "앱|소통,미디어,그래픽,오피스,브라우저,개발,보안,유틸"
     "시스템|시스템"
     "Termux API|Termux API"
+    "Wine|Wine"
 )
 
 # proot 설치 여부 확인

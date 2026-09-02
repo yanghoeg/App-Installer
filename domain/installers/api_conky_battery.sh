@@ -6,7 +6,8 @@ _BATTERY_POPUP="$PREFIX/bin/battery-info"
 _BATTERY_DESKTOP="$PREFIX/share/applications/battery-info.desktop"
 
 app_install_api_conky_battery() {
-    termux_pkg_install xfce4-genmon-plugin
+    termux_pkg_enable_repo x11-repo || return 1
+    termux_pkg_install xfce4-genmon-plugin || return 1
 
     mkdir -p "$(dirname "$_BATTERY_SCRIPT")"
 

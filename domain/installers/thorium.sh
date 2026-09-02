@@ -2,7 +2,7 @@
 # DOMAIN: Thorium Browser — proot 내부 설치
 # arm64 .deb 직접 추출 방식 (AUR thorium은 x86 only, Ubuntu apt도 충돌)
 
-_THORIUM_DEB_URL="https://github.com/Alex313031/Thorium-Raspi/releases/download/M124.0.6367.218/thorium-browser_124.0.6367.218_arm64.deb"
+_THORIUM_DEB_URL="https://github.com/Alex313031/Thorium-Raspi/releases/download/M138.0.7204.303/thorium-browser_138.0.7204.303_arm64.deb"
 
 app_install_thorium() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }

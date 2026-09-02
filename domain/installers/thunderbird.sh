@@ -2,6 +2,7 @@
 # DOMAIN: Thunderbird — Termux native
 
 app_install_thunderbird() {
+    termux_pkg_enable_repo x11-repo || return 1
     termux_pkg_install thunderbird || return 1
     desktop_register "thunderbird" "Thunderbird" "thunderbird %u" "thunderbird" \
         "Network;Email;News;" \

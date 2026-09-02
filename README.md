@@ -34,11 +34,18 @@ app-installer
 | **LibreOffice** | Office suite | proot | bwrap stub installed |
 | **Thunderbird** | Email client | Termux native | |
 | **VLC** | Multimedia player | Termux native | |
+| **GIMP** | Image editor | Termux native | |
+| **Inkscape** | Vector graphics editor | Termux native | |
+| **Audacity** | Audio editor | Termux native | |
 | **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
 | **Notion** | Notes & productivity | proot | AppImage extracted |
 | **Teams** | Microsoft Teams for Linux | proot | community Electron client |
 | **Wine (Box64+Staging)** | Run Windows apps via Box64 | proot / native | ELF→box64 wrapper (no binfmt_misc) |
 | **Wine (Hangover)** | Run Windows apps via FEX/ARM64EC | Termux native | faster; separate WINEPREFIX |
+| **Notepad++** | Text editor | Wine | |
+| **7-Zip** | Archive tool | Wine | |
+| **Sumatra PDF** | PDF/EPUB/MOBI viewer | Wine | |
+| **WinMerge** | File/folder diff & merge | Wine | |
 | **Miniforge** | Conda package manager | proot | CLI only |
 | **DBeaver** | Universal database client | proot | |
 | **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
@@ -46,6 +53,7 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
+| **Claude Code** | AI coding assistant CLI | Termux native | pairs with glibc-runner |
 | **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
@@ -59,7 +67,33 @@ app-installer
 | **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
 | **wayvnc** | VNC server for the desktop | Termux native | wayland sessions only (`wayvnc-start`) |
 | **Neovim / Helix** | Terminal modal editors | Termux native | |
+| **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
 | **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
+
+## System Apps (시스템 tab)
+
+| App | Description | Install target | Notes |
+|-----|-------------|----------------|-------|
+| **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | |
+| **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
+| **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI layer | proot | Snapdragon only |
+| **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | |
+| **Korean Locale** | force_gettext.so-based UI localization | Termux native | |
+| **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
+
+## Termux API Apps (Termux API tab)
+
+| App | Description | Install target | Notes |
+|-----|-------------|----------------|-------|
+| **Brightness Control** | Screen brightness script for the XFCE panel | Termux native | |
+| **Volume Control** | Volume control script for the XFCE panel | Termux native | |
+| **Conky Battery** | Battery level/temperature widget for Conky | Termux native | |
+| **Notification Tool** | Send Android notifications from scripts | Termux native | |
+| **TTS Voice** | Text-to-speech (Android TTS) | Termux native | |
+| **Speech Recognition** | Speech-to-text (Android STT) | Termux native | |
+| **Wallpaper Sync** | Sync XFCE wallpaper to Android | Termux native | |
+
+Termux API apps require the `termux-api` package and the Termux:API APK.
 
 ## arm64 Compatibility Notes
 

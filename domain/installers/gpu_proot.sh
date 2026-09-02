@@ -27,7 +27,7 @@ app_install_gpu_proot() {
     # 1) Termux native GPU 드라이버 확인
     if ! app_is_installed_gpu_native 2>/dev/null; then
         echo "  Termux native GPU 드라이버 설치 중..."
-        app_install_gpu_native
+        app_install_gpu_native || return 1
     fi
 
     # 2) proot 검증 도구 설치

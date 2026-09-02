@@ -42,6 +42,8 @@ proot_pkg_install_zlib()        { _port_not_impl "proot_pkg_install_zlib"; }
 proot_pkg_install_sasm()        { _port_not_impl "proot_pkg_install_sasm"; }
 proot_pkg_install_box64()       { _port_not_impl "proot_pkg_install_box64"; }
 proot_pkg_install_wine_mesa()   { _port_not_impl "proot_pkg_install_wine_mesa"; }
+# Tor Browser 실행 의존성(curl + dbus-glib) 설치 — 패키지명이 distro마다 다름
+proot_pkg_install_tor_deps()    { _port_not_impl "proot_pkg_install_tor_deps"; }
 
 # --- proot 환경 설정 ---
 proot_setup_sudo_path()      { _port_not_impl "proot_setup_sudo_path"; }

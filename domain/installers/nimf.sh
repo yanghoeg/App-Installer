@@ -21,6 +21,7 @@ _NIMF_DEPS=(
 )
 
 app_install_nimf() {
+    termux_pkg_enable_repo x11-repo || return 1
     local total=${#_NIMF_DEPS[@]} i=0
     for p in "${_NIMF_DEPS[@]}"; do
         ((++i))

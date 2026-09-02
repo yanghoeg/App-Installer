@@ -11,6 +11,7 @@ app_install_notion() {
         wget -O Notion-2.0.18-1-arm64.AppImage https://github.com/notion-enhancer/notion-repackaged/releases/download/v2.0.18-1/Notion-2.0.18-1-arm64.AppImage
         chmod +x Notion-2.0.18-1-arm64.AppImage
         ./Notion-2.0.18-1-arm64.AppImage --appimage-extract
+        rm -rf notion
         mv squashfs-root notion
         rm -f Notion-2.0.18-1-arm64.AppImage
     " || { echo "[ERROR] Notion 다운로드/설치 실패" >&2; return 1; }

@@ -9,7 +9,7 @@ app_install_dbeaver() {
 
     proot_exec bash -c "
         set -e
-        wget 'https://github.com/dbeaver/dbeaver/releases/download/24.3.1/dbeaver-ce-24.3.1-linux.gtk.aarch64-nojdk.tar.gz' \
+        wget 'https://github.com/dbeaver/dbeaver/releases/download/26.2.0/dbeaver-ce-26.2.0-linux-aarch64.tar.gz' \
             -O /tmp/dbeaver.tar.gz
         tar -xzf /tmp/dbeaver.tar.gz -C /tmp
         sudo rm -rf /opt/dbeaver

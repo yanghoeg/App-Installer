@@ -28,6 +28,7 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_install_sasm
     proot_pkg_install_box64
     proot_pkg_install_wine_mesa
+    proot_pkg_install_tor_deps
 )
 
 PKG_TERMUX_CONTRACTS=(

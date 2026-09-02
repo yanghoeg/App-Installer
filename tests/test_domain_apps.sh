@@ -163,6 +163,29 @@ _test_native_pkg_failure_propagates_without_desktop() {
 it "native pkg 실패 → non-zero 반환, .desktop 미생성" _test_native_pkg_failure_propagates_without_desktop
 
 # =============================================================================
+# btop — Termux native (root-repo)
+# =============================================================================
+describe "btop — Termux native 설치 (root-repo)"
+
+_test_btop_enables_root_repo() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_btop 2>/dev/null || true
+    assert_was_called "termux_pkg_enable_repo root-repo"
+    assert_was_called "termux_pkg_install btop"
+    cleanup_sandbox "$sb"
+}
+it "install → root-repo를 켜고 btop을 깐다" _test_btop_enables_root_repo
+
+_test_btop_install_failure_propagates() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    termux_pkg_install() { return 1; }
+    rc=0; app_install_btop >/dev/null 2>&1 || rc=$?
+    assert_nonzero "$rc" "termux_pkg_install 실패는 app_install_btop 실패로 이어져야 함" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "termux_pkg_install 실패 → app_install_btop non-zero 반환" _test_btop_install_failure_propagates
+
+# =============================================================================
 # VS Code — proot 설치
 # =============================================================================
 describe "VS Code — proot 설치"
@@ -190,6 +213,14 @@ _test_vscode_install_calls_update_first() {
     cleanup_sandbox "$sb"
 }
 it "install → proot_pkg_update를 먼저 호출한다" _test_vscode_install_calls_update_first
+
+_test_vscode_remove_calls_proot_pkg_remove_vscode() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_remove_vscode
+    assert_was_called "proot_pkg_remove_vscode"
+    cleanup_sandbox "$sb"
+}
+it "remove → proot_pkg_remove_vscode 호출" _test_vscode_remove_calls_proot_pkg_remove_vscode
 
 # =============================================================================
 # LibreOffice — proot 설치 (패키지명 추상화)
@@ -582,6 +613,18 @@ _test_claude_download_writes_version() {
 }
 it "download → VERSION 파일에 버전 기록" _test_claude_download_writes_version
 
+_test_claude_download_tar_failure_propagates() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    curl() { :; }        # 다운로드(성공) 흉내 — tarball 내용은 만들지 않음
+    tar()  { return 1; } # 압축해제 실패 흉내
+    local rc=0
+    _claude_code_download_native "9.9.9" >/dev/null 2>&1 || rc=$?
+    assert_nonzero "$rc" "tar 실패 시 _claude_code_download_native가 실패해야 함" || { cleanup_sandbox "$sb"; return 1; }
+    [ ! -f "${CLAUDE_CODE_VERSION_FILE}" ] || { echo "[ASSERT] tar 실패인데 VERSION 파일이 기록됨" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "curl 성공 + tar 실패 → download가 실패를 전파한다 (VERSION 미기록)" _test_claude_download_tar_failure_propagates
+
 _test_claude_installed_version_empty_when_absent() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     assert_eq "" "$(_claude_code_installed_version)" "미설치 시 빈 문자열"
@@ -845,5 +888,234 @@ for _f in "${APP_DIR}/adapters/output/"*.sh; do
     _test_adapter_syntax() { bash -n "$_f" 2>/dev/null; }
     it "${_name} — 문법 오류 없음" _test_adapter_syntax
 done
+
+# =============================================================================
+# TAB_GROUPS — 탭 소속 불변식 (install.sh _category_in_tab 로직 복제)
+# =============================================================================
+describe "TAB_GROUPS — 탭 소속 불변식"
+
+# install.sh의 _category_in_tab과 동일한 매칭 로직
+_category_in_tab() {
+    local category="$1" tab_categories="$2"
+    IFS=',' read -ra _cats <<< "$tab_categories"
+    for _c in "${_cats[@]}"; do
+        [ "$_c" = "$category" ] && return 0
+    done
+    return 1
+}
+
+_test_registry_categories_map_to_exactly_one_tab() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id _ category _ <<< "$entry"
+        local match_count=0 tab_label
+        for group in "${TAB_GROUPS[@]}"; do
+            IFS='|' read -r tab_label tab_cats <<< "$group"
+            _category_in_tab "$category" "$tab_cats" && (( match_count++ )) || true
+        done
+        if [ "$match_count" -ne 1 ]; then
+            echo "[ASSERT] id=${id} category=${category} 가 탭 ${match_count}개에 매칭됨 (기대: 1)" >&2
+            failed=1
+        fi
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "모든 APP_REGISTRY 항목의 카테고리는 정확히 하나의 탭에만 속한다" _test_registry_categories_map_to_exactly_one_tab
+
+_test_wine_ids_resolve_to_wine_tab() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    local wine_ids=(wine hangover notepadpp winmerge sevenzip sumatrapdf)
+    local id
+    for id in "${wine_ids[@]}"; do
+        local found=0
+        for entry in "${APP_REGISTRY[@]}"; do
+            IFS='|' read -r _id _name _category _desc <<< "$entry"
+            [ "$_id" = "$id" ] || continue
+            found=1
+            _category_in_tab "$_category" "Wine" || {
+                echo "[ASSERT] id=${id} category=${_category} 가 Wine 탭에 속하지 않음" >&2
+                failed=1
+            }
+        done
+        if [ "$found" -eq 0 ]; then
+            echo "[ASSERT] id=${id} 가 APP_REGISTRY에 없음" >&2
+            failed=1
+        fi
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "wine/hangover/notepadpp/winmerge/sevenzip/sumatrapdf — Wine 탭에 소속" _test_wine_ids_resolve_to_wine_tab
+
+# =============================================================================
+# 설치기 계약 — 전체 APP_REGISTRY 파라메트릭 테스트
+# domain/apps.sh app_install() 위의 계약 주석 참조:
+#   app_install_<id>는 critical 명령(pkg install/curl/proot_exec 등) 실패 시
+#   반드시 non-zero를 반환해야 하며, 실패 시 .desktop 런처를 만들지 말 것.
+# =============================================================================
+describe "설치기 계약 — 전체 APP_REGISTRY (파라메트릭)"
+
+# (a) 모든 id가 app_install_*/app_remove_*/app_is_installed_* 를 정의하는가
+_test_contract_functions_defined_for_all_ids() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0 entry id
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id _ _ _ <<< "$entry"
+        local fn
+        for fn in app_install app_remove app_is_installed; do
+            declare -F "${fn}_${id}" >/dev/null 2>&1 || {
+                echo "[ASSERT] id=${id} — ${fn}_${id} 미정의" >&2
+                failed=1
+            }
+        done
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "APP_REGISTRY 전체 — app_install_*/app_remove_*/app_is_installed_* 정의됨" _test_contract_functions_defined_for_all_ids
+
+# (b) 모든 critical primitive가 실패하면 app_install_<id>는 반드시 non-zero를 반환하고
+#     .desktop을 생성하지 않아야 한다. has_proot_distro는 true로 고정해
+#     proot 설치기가 "proot 없음" 조기 에러가 아니라 실제 critical 명령까지 도달하게 한다.
+_test_contract_install_failure_propagates_for_all_ids() {
+    local sb; sb=$(make_sandbox)
+    _setup "$sb"
+    MOCK_HAS_PROOT=true
+    mock_all_install_primitives_fail
+    local failed=0 entry id
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id _ _ _ <<< "$entry"
+
+        # 외부 critical 명령이 전혀 없는(순수 로컬 파일 생성) 설치기 — 실패시킬 primitive가
+        # 없으므로 이 mock 하에서도 정상적으로 0을 반환/desktop 등록함. (a) 함수 정의 여부는
+        # 위 테스트에서 이미 검증됨 — 여기서는 (b) 실패 전파 단정만 건너뛴다.
+        case "$id" in
+            api_brightness|api_volume|api_notification|api_tts|api_stt|api_wallpaper)
+                continue ;;
+        esac
+
+        rm -rf "${HOME:?}" "${PREFIX:?}"
+        setup_fs_sandbox "$sb"
+        reset_mock_calls
+
+        local rc=0
+        app_install "$id" >/dev/null 2>&1 || rc=$?
+        if [ "$rc" -eq 0 ]; then
+            echo "[ASSERT] id=${id} — 모든 critical primitive가 실패했는데 app_install_${id}가 0을 반환함 (계약 위반)" >&2
+            failed=1
+        fi
+        if [ -n "$(ls -A "${PREFIX}/share/applications" 2>/dev/null)" ]; then
+            echo "[ASSERT] id=${id} — 실패했는데 .desktop이 생성됨: $(ls "${PREFIX}/share/applications")" >&2
+            failed=1
+        fi
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "APP_REGISTRY 전체 — critical primitive 전부 실패 시 app_install이 실패를 전파하고 .desktop을 만들지 않는다" \
+    _test_contract_install_failure_propagates_for_all_ids
+
+# wine은 proot/native 양쪽으로 분기하는 유일한 설치기 — native 분기도 별도 확인
+_test_contract_wine_native_failure_propagates() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mock_all_install_primitives_fail
+    MOCK_HAS_PROOT=false
+    local rc=0
+    app_install_wine >/dev/null 2>&1 || rc=$?
+    assert_nonzero "$rc" "wine native 분기 — critical primitive 실패 시 실패해야 함" || { cleanup_sandbox "$sb"; return 1; }
+    if [ -e "${PREFIX}/share/applications/wine.desktop" ]; then
+        echo "[ASSERT] wine native 분기 — 실패했는데 .desktop이 생성됨" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "wine — native 분기도 critical primitive 실패 시 실패를 전파한다" _test_contract_wine_native_failure_propagates
+
+# (c) 정상(성공) mock에서는 app_install_<id>가 0을 반환해야 한다 (Task2 수정이 성공 경로를
+#     깨지 않았는지 확인). 순수 로컬 파일 생성만 하는 api_* 류도 포함해 전부 검증한다.
+#     gpu_proot/korean_locale은 app-installer 밖 의존성(실기기 sysfs / 상위 프로젝트 파일)
+#     때문에 유닛 테스트로 재현 불가 — skip.
+_test_contract_install_success_for_all_ids() {
+    local sb; sb=$(make_sandbox)
+    _setup "$sb"
+    local failed=0 entry id
+
+    for entry in "${APP_REGISTRY[@]}"; do
+        IFS='|' read -r id _ _ _ <<< "$entry"
+
+        case "$id" in
+            gpu_proot)
+                skip "app_install_gpu_proot — 실기기 /sys/class/kgsl/kgsl-3d0/gpu_model 필요, 유닛 테스트로 재현 불가"
+                continue ;;
+            korean_locale)
+                skip "app_install_korean_locale — 메인 프로젝트(Termux_XFCE) domain/locale_ko.sh + ports/ui.sh(ui_warn 등) 의존, app-installer 단독 테스트 불가"
+                continue ;;
+        esac
+
+        rm -rf "${HOME:?}" "${PREFIX:?}"
+        setup_fs_sandbox "$sb"
+        MOCK_INSTALLED_PKGS=""
+        MOCK_PROOT_INSTALLED_PKGS=""
+        MOCK_HAS_PROOT=true
+        reset_mock_calls
+        unset -f curl wget tar dpkg npm 2>/dev/null || true
+
+        # mock만으로는 만들 수 없는 "실제 업스트림 산출물"이 필요한 소수의 설치기만
+        # 최소한으로 보강한다 (다운로드 파이프라인 자체를 검증하는 게 아니라, 그 이후의
+        # 계약 로직 — 실패 전파/= desktop 등록 — 이 성공 경로에서 깨지지 않았는지만 본다).
+        case "$id" in
+            hangover)
+                : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
+                ;;
+            notepadpp|winmerge)
+                curl() { return 1; }   # 실네트워크 회피 — 설치기 내장 v-fallback(|| echo vX) 사용
+                ;;
+            claude_code)
+                curl() { :; }
+                tar()  { :; }
+                npm()  { return 1; }
+                mkdir -p "${CLAUDE_CODE_PREFIX}"
+                : > "${CLAUDE_CODE_PREFIX}/claude"
+                ;;
+            nimf)
+                wget() {
+                    local out="" prev=""
+                    for a in "$@"; do [ "$prev" = "-O" ] && out="$a"; prev="$a"; done
+                    [ -n "$out" ] && : > "$out"
+                }
+                dpkg() { return 0; }
+                ;;
+            teams)
+                # proot_exec가 GitHub API curl 결과를 파이프로 파싱해 URL을 뽑는 구조라
+                # 표준 mock_pkg_adapter의 "which만 처리" 버전으로는 stdout이 항상 비어
+                # latest_url이 빈 문자열 → 계약상 정상 실패(-z 체크)로 떨어진다.
+                # 성공 경로 자체를 검증하려면 그 stdout을 레코딩 스타일로 흉내낸다.
+                proot_exec() {
+                    _record_call "proot_exec $*"
+                    if [ "${1:-}" = "which" ]; then
+                        echo "$MOCK_PROOT_INSTALLED_PKGS" | grep -qw "${2:-}"
+                    elif [ "${1:-}" = "curl" ]; then
+                        printf '  "browser_download_url": "https://github.com/x/teams-for-linux_1.0.0_arm64.deb"\n'
+                    fi
+                }
+                ;;
+        esac
+
+        local rc=0
+        app_install "$id" >/dev/null 2>&1 || rc=$?
+        if [ "$rc" -ne 0 ]; then
+            echo "[ASSERT] id=${id} — 정상(성공) mock에서도 app_install_${id}가 실패함 (rc=${rc})" >&2
+            failed=1
+        fi
+    done
+
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "APP_REGISTRY 전체 — 정상 mock에서는 app_install이 성공한다 (gpu_proot/korean_locale은 skip)" \
+    _test_contract_install_success_for_all_ids
 
 print_results

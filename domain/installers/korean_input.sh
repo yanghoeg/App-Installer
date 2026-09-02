@@ -10,17 +10,8 @@ _PKGS_KOREAN_INPUT=(
 )
 
 app_install_korean_input() {
-    # tur-repo 필요 (fcitx5 패키지 소스)
-    termux_pkg_is_installed tur-repo || termux_pkg_install tur-repo || return 1
-
-    # tur-multilib 활성화
-    local tur_list="${PREFIX}/etc/apt/sources.list.d/tur.list"
-    if [ -f "$tur_list" ]; then
-        if ! command grep -q 'tur-multilib' "$tur_list" 2>/dev/null; then
-            sed -i '/^deb /s|$| tur-multilib|' "$tur_list" 2>/dev/null || true
-            apt update -y 2>/dev/null || true
-        fi
-    fi
+    # x11-repo 필요 (fcitx5 패키지 소스)
+    termux_pkg_enable_repo x11-repo || return 1
 
     local total=${#_PKGS_KOREAN_INPUT[@]} i=0
     for p in "${_PKGS_KOREAN_INPUT[@]}"; do

@@ -34,11 +34,18 @@ app-installer
 | **LibreOffice** | 오피스 스위트 | proot | bwrap 스텁 설치 |
 | **Thunderbird** | 이메일 클라이언트 | Termux native | |
 | **VLC** | 멀티미디어 플레이어 | Termux native | |
+| **GIMP** | 이미지 편집 | Termux native | |
+| **Inkscape** | 벡터 그래픽 편집 | Termux native | |
+| **Audacity** | 오디오 편집 | Termux native | |
 | **Nautilus** | GNOME 파일 관리자 | proot | 소프트웨어 렌더러 (MIT-SHM 우회) |
 | **Notion** | 메모·생산성 앱 | proot | AppImage 추출 방식 |
 | **Teams** | Microsoft Teams for Linux | proot | 커뮤니티 Electron 클라이언트 |
 | **Wine (Box64+Staging)** | Box64로 Windows 앱 실행 | proot / native | ELF→box64 래퍼 (binfmt_misc 없음) |
 | **Wine (Hangover)** | FEX/ARM64EC로 Windows 앱 실행 | Termux native | 더 빠름; WINEPREFIX 분리 |
+| **Notepad++** | 텍스트 에디터 | Wine | |
+| **7-Zip** | 파일 압축/해제 | Wine | |
+| **Sumatra PDF** | PDF/EPUB/MOBI 뷰어 | Wine | |
+| **WinMerge** | 파일/폴더 비교·병합 | Wine | |
 | **Miniforge** | Conda 패키지 관리자 | proot | CLI 전용 |
 | **DBeaver** | 유니버설 데이터베이스 클라이언트 | proot | |
 | **Thorium** | Chromium 기반 고성능 브라우저 | proot | .deb 직접 추출 (AUR x86 전용) |
@@ -46,6 +53,7 @@ app-installer
 | **SASM** | 어셈블리 IDE | proot | Arch: 소스 빌드 (fasm x86 전용) |
 | **Burp Suite** | 웹 보안 테스트 도구 | proot | arm64 인스톨러 |
 | **1Password** | 패스워드 매니저 CLI (`op`) | proot | GUI는 arm64 미지원 |
+| **Claude Code** | AI 코딩 어시스턴트 CLI | Termux native | glibc-runner 병행 필요 |
 | **llama.cpp** | GGUF 추론 (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = 네이티브 OpenCL GPU 가속 (기본 컨텍스트 4096, `LLAMA_CTX`로 변경); `llama-model-get`로 Qwen2.5/Qwen3.5 GGUF 다운로드 (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | 로컬(`llama-server`)/클라우드 API 연동 |
 | **Crush** | 터미널 AI 코딩 에이전트 | Termux native | 제공자 API 키 필요 |
@@ -59,7 +67,33 @@ app-installer
 | **uutils-coreutils** | Rust 재구현 coreutils | Termux native | GNU coreutils와 병존 |
 | **wayvnc** | 데스크탑 VNC 서버 | Termux native | wayland 세션 전용 (`wayvnc-start`) |
 | **Neovim / Helix** | 터미널 모달 에디터 | Termux native | |
+| **btop** | 시각적 리소스 모니터 (htop 후속) | Termux native | root-repo 활성화 필요 |
 | **개발 CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv는 셸 hook 직접 추가 필요 |
+
+## 시스템 앱 (시스템 탭)
+
+| 앱 | 설명 | 설치 위치 | 비고 |
+|----|------|-----------|------|
+| **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | |
+| **GPU 개발 도구** | clvk, clinfo 등 | Termux native | |
+| **GPU 가속 (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon 전용 |
+| **한글 입력기 (fcitx5)** | fcitx5-hangul 한글 입력 | Termux native | |
+| **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | |
+| **한글 입력기 (nimf)** | nimf 한글 입력 | Termux native | 흡혈귀왕 빌드 |
+
+## Termux API 앱 (Termux API 탭)
+
+| 앱 | 설명 | 설치 위치 | 비고 |
+|----|------|-----------|------|
+| **밝기 조절** | XFCE 패널용 화면 밝기 조절 스크립트 | Termux native | |
+| **볼륨 조절** | XFCE 패널용 볼륨 조절 스크립트 | Termux native | |
+| **Conky 배터리** | Conky 위젯에 배터리 잔량·온도 표시 | Termux native | |
+| **알림 도구** | 스크립트에서 Android 알림바 전송 | Termux native | |
+| **TTS 음성** | 텍스트를 음성으로 변환 (Android TTS) | Termux native | |
+| **음성인식** | 음성을 텍스트로 변환 (Android STT) | Termux native | |
+| **배경화면 동기화** | XFCE 배경화면을 Android에 동기화 | Termux native | |
+
+Termux API 앱은 `termux-api` 패키지와 Termux:API APK가 필요합니다.
 
 ## arm64 호환성 비고
 

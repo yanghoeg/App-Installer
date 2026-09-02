@@ -187,31 +187,6 @@ _run_yad_notebook() {
         ) &
     done
 
-    # Wine 탭 (별도)
-    _tab_num=$((_tab_num + 1))
-    _tab_args+=(--tab="Wine")
-    (
-        local rows=("➡️" "" "앱을 클릭하여 선택" "" "")
-        for _entry in "${APP_REGISTRY[@]}"; do
-            IFS='|' read -r _id _name _category _desc <<< "$_entry"
-            [[ "$_desc" == *"(Wine)"* ]] || [ "$_id" = "wine" ] || [ "$_id" = "hangover" ] || continue
-            rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
-        done
-
-        [ ${#rows[@]} -gt 0 ] && yad --plug=$_KEY --tabnum=$_tab_num --list \
-            --column='  :TEXT' \
-            --column='분류:TEXT' \
-            --column='이름:TEXT' \
-            --column='설명:TEXT' \
-            --column='ID:HD' \
-            --search-column=3 \
-            --print-column=5 \
-            --separator="" \
-            --tooltip-column=4 \
-            --expand-column=4 \
-            "${rows[@]}" 2>/dev/null
-    ) &
-
     local result
     result=$(yad --notebook --key=$_KEY \
         "${_tab_args[@]}" \
@@ -232,9 +207,7 @@ _run_yad_flat() {
 
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
-        if [ -n "$_FILTER" ] && [[ "$_desc" != *"($_FILTER)"* ]] && [ "$_id" != "wine" ]; then
-            continue
-        fi
+        [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
         rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 
@@ -264,9 +237,7 @@ _run_zenity() {
 
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
-        if [ -n "$_FILTER" ] && [[ "$_desc" != *"($_FILTER)"* ]] && [ "$_id" != "wine" ]; then
-            continue
-        fi
+        [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
         zenity_rows+=("FALSE" "$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 

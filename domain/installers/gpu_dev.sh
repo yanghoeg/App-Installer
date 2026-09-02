@@ -14,6 +14,7 @@ _PKGS_GPU_DEV=(
 )
 
 app_install_gpu_dev() {
+    termux_pkg_enable_repo x11-repo || return 1
     local total=${#_PKGS_GPU_DEV[@]} i=0
     for p in "${_PKGS_GPU_DEV[@]}"; do
         ((++i))
