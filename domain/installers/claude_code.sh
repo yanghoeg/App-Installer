@@ -9,7 +9,7 @@ CLAUDE_CODE_BIN_PATH="${PREFIX}/bin/claude"
 CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 # 설치된 버전 기록 — self-update를 끈 상태라 업그레이드 판단 근거로 사용
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
-# 핀 버전 — 이후 릴리스에서 회귀가 발견되어 이 버전에 고정.
+# 핀 버전 — 이후 릴리스에서 Termux /login 회귀가 발견되어 이 버전에 고정 (docs/claude-code-login-regression.md).
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
 CLAUDE_CODE_PIN_VERSION="2.1.132"
 
@@ -34,7 +34,7 @@ _claude_code_download_native() {
     mkdir -p "${CLAUDE_CODE_PREFIX}"
     local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
     curl -sSLf "$url" -o "$tarball" || return 1
-    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1
+    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1 || return 1
     rm -f "$tarball"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"
     printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
