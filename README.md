@@ -12,7 +12,7 @@
 ---
 
 A **GUI tool for installing and removing extra apps** in the [Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) environment.  
-Select an app from the zenity dialog and it installs automatically into proot (Ubuntu/Arch) or Termux native.
+Select an app from the yad notebook tabbed GUI (zenity fallback) and it installs automatically into proot (Ubuntu/Arch) or Termux native.
 
 **Tested devices**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
 
@@ -25,6 +25,8 @@ app-installer
 # From XFCE desktop
 # Desktop icon → App Installer  or  Application menu → App Installer
 ```
+
+Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
 
 ## Supported Apps
 
@@ -166,7 +168,7 @@ ubuntu <cmd>    # run single command in Ubuntu proot
 
 ```
 app-installer/
-├── install.sh                  ← zenity GUI main (install/remove loop)
+├── install.sh                  ← yad notebook tabbed GUI main (zenity fallback; install/remove loop)
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/

@@ -12,7 +12,7 @@
 ---
 
 [Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) 환경에서 동작하는 **앱 추가 설치/제거 GUI** 도구입니다.  
-zenity 다이얼로그로 앱을 선택하면 proot(Ubuntu/Arch) 또는 Termux native에 자동으로 설치합니다.
+yad notebook 탭 GUI(zenity 폴백)로 앱을 선택하면 proot(Ubuntu/Arch) 또는 Termux native에 자동으로 설치합니다.
 
 **테스트 기기**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
 
@@ -25,6 +25,8 @@ app-installer
 # XFCE 데스크탑에서
 # 바탕화면 아이콘 → App Installer  또는  애플리케이션 메뉴 → App Installer
 ```
+
+헤드리스 CLI(GUI 없음): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
 
 ## 지원 앱 목록
 
@@ -165,7 +167,7 @@ ubuntu <명령>   # Ubuntu proot에서 단일 명령 실행
 
 ```
 app-installer/
-├── install.sh                  ← zenity GUI 메인 (설치·제거 루프)
+├── install.sh                  ← yad notebook 탭 GUI 메인 (zenity 폴백; 설치·제거 루프)
 ├── ports/
 │   └── pkg_manager.sh          ← 패키지 관리 계약 (인터페이스)
 ├── adapters/
