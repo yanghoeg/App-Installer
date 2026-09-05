@@ -347,12 +347,12 @@ it "proot 있음 → proot_pkg_install_wine_mesa 호출" _test_wine_proot_path_c
 _test_wine_native_path_calls_termux_pkg() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     MOCK_HAS_PROOT=false
-    # _wine_install_native에서 wget이 없으면 실패하지만, termux_pkg_install 기록은 됨
+    # _wine_install_native에서 wget이 없으면 실패하지만, 호출 기록은 됨
     app_install_wine 2>/dev/null || true
-    assert_was_called "termux_pkg_install glibc-repo"
+    assert_was_called "termux_pkg_enable_repo glibc-repo"
     cleanup_sandbox "$sb"
 }
-it "proot 없음 → termux_pkg_install glibc-repo 호출 (native 경로)" _test_wine_native_path_calls_termux_pkg
+it "proot 없음 → termux_pkg_enable_repo glibc-repo 호출 (native 경로, L14)" _test_wine_native_path_calls_termux_pkg
 
 _test_wine_proot_path_does_not_call_termux_glibc() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -626,6 +626,24 @@ it "wine.sh native 패키지 목록에 존재하지 않는 mesa-zink-glibc 대�
     _test_wine_native_pkg_list_has_no_mesa_zink
 
 # =============================================================================
+# L13 — api_stt.sh --debug 모드가 /tmp를 하드코딩하는 문제
+# =============================================================================
+describe "STT — --debug 임시파일 경로"
+
+_test_stt_debug_uses_tmpdir_fallback() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_api_stt
+    assert_file_contains "${_STT_SCRIPT}" 'TMPDIR:-/tmp}/stt_debug.txt'
+    if grep -qE '[^}]/tmp/stt_debug' "${_STT_SCRIPT}"; then
+        echo "[ASSERT] 생성된 스크립트에 하드코딩된 /tmp/stt_debug가 남아 있음" >&2
+        cleanup_sandbox "$sb"
+        return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "stt-recognize --debug → \${TMPDIR:-/tmp}/stt_debug.txt 사용, 하드코딩 없음" _test_stt_debug_uses_tmpdir_fallback
+
+# =============================================================================
 # M8 — 제거 루프가 마지막 && 의 rc를 그대로 흘리는 문제
 # =============================================================================
 describe "제거 루프 — 마지막 패키지 미설치 시 rc"
@@ -689,6 +707,36 @@ _claude_fake_install() {
     printf 'binary\n'    > "${CLAUDE_CODE_PREFIX}/claude"; chmod +x "${CLAUDE_CODE_PREFIX}/claude"
     printf '%s\n' "$ver" > "${CLAUDE_CODE_VERSION_FILE}"
 }
+
+# L14: glibc-repo는 termux_pkg_install이 아니라 termux_pkg_enable_repo로 활성화해야
+# 한다 (termux_pkg_enable_repo가 is_installed 단락 처리를 소유).
+_test_claude_glibc_repo_uses_enable_repo_not_install() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_INSTALLED_PKGS="glibc-repo"
+    _claude_code_remove_npm_wrapper() { :; }
+    _claude_code_download_native()    { :; }
+    _claude_code_install_wrapper()    { :; }
+    _claude_code_configure_settings() { :; }
+    app_install_claude_code
+    assert_not_called "termux_pkg_install glibc-repo"
+    assert_was_called "termux_pkg_install glibc-runner"
+    cleanup_sandbox "$sb"
+}
+it "glibc-repo 이미 설치 → app_install_claude_code가 termux_pkg_install glibc-repo를 호출하지 않는다 (L14)" \
+    _test_claude_glibc_repo_uses_enable_repo_not_install
+
+_test_glibc_repo_idiom_used_in_wine_and_claude() {
+    grep -q "termux_pkg_enable_repo glibc-repo" "${APP_DIR}/domain/installers/wine.sh" || {
+        echo "[ASSERT] wine.sh에 termux_pkg_enable_repo glibc-repo 없음" >&2
+        return 1
+    }
+    grep -q "termux_pkg_enable_repo glibc-repo" "${APP_DIR}/domain/installers/claude_code.sh" || {
+        echo "[ASSERT] claude_code.sh에 termux_pkg_enable_repo glibc-repo 없음" >&2
+        return 1
+    }
+}
+it "wine.sh/claude_code.sh 모두 glibc-repo에 termux_pkg_enable_repo 사용 (L14)" \
+    _test_glibc_repo_idiom_used_in_wine_and_claude
 
 _test_claude_supports_upgrade() {
     local sb; sb=$(make_sandbox); _setup "$sb"

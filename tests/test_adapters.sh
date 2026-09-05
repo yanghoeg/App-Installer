@@ -129,6 +129,57 @@ _test_arch_deb_or_aur_delegates_to_aur() {
 it "proot_pkg_install_deb_or_aur → Arch는 AUR에 위임" _test_arch_deb_or_aur_delegates_to_aur
 
 # =============================================================================
+# proot_pkg_install_box64 — 실패 전파 (L9)
+# =============================================================================
+describe "proot_pkg_install_box64 — 실패 전파"
+
+_test_ubuntu_box64_propagates_failure() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec()        { return 1; }
+        proot_pkg_install() { return 1; }
+        curl()               { return 1; }
+        _proot_rootfs()      { echo "/nonexistent-test-rootfs"; }
+
+        if proot_pkg_install_box64; then
+            echo "[ASSERT] proot_exec/proot_pkg_install 실패인데 box64가 성공 처리됨" >&2
+            exit 1
+        fi
+    )
+}
+it "pkg_ubuntu proot_pkg_install_box64 → 실패 시 rc!=0 전파" _test_ubuntu_box64_propagates_failure
+
+_test_arch_box64_propagates_failure() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        proot_exec()        { return 1; }
+        proot_pkg_install() { return 1; }
+
+        if proot_pkg_install_box64; then
+            echo "[ASSERT] proot_exec 실패인데 box64가 성공 처리됨" >&2
+            exit 1
+        fi
+    )
+}
+it "pkg_arch proot_pkg_install_box64 → 실패 시 rc!=0 전파" _test_arch_box64_propagates_failure
+
+# =============================================================================
+# proot_pkg_add_external_repo — set -e 안전성 (L10)
+# =============================================================================
+describe "proot_pkg_add_external_repo — set -e 안전성"
+
+_test_ubuntu_add_repo_script_has_set_e() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        local captured=""
+        proot_exec() { captured="$*"; }
+        proot_pkg_add_external_repo "test" "https://example.com/key.asc" "deb test line"
+        [[ "$captured" == *"set -eo pipefail"* ]]
+    )
+}
+it "proot_pkg_add_external_repo → bash -c 스크립트에 set -eo pipefail 있음" _test_ubuntu_add_repo_script_has_set_e
+
+# =============================================================================
 # lib/common.sh — 하위 호환 래퍼
 # =============================================================================
 describe "lib/common.sh — 하위 호환 API"

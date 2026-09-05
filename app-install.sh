@@ -14,22 +14,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/wine_backend.sh"
 
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_detect_proot_user() {
-    local home_dir="$(_proot_rootfs)/home"
-    local d
-    for d in "$home_dir"/*/; do
-        [ -d "$d" ] || continue
-        basename "$d"
-        return
-    done
-    echo "user"
-}
-
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then

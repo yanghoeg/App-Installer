@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/wine_backend.sh"
 _FILTER=""
 case "${1:-}" in
@@ -19,17 +20,6 @@ esac
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_detect_proot_user() {
-    if [ -z "${PROOT_DISTRO:-}" ]; then
-        echo "user"
-        return
-    fi
-    local detected
-    detected=$(ls "$(_proot_rootfs)/home/" 2>/dev/null \
-        | head -1) || true
-    echo "${detected:-user}"
-}
-
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then

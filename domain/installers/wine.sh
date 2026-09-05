@@ -94,7 +94,7 @@ _wine_install_native() {
         return 0
     fi
 
-    termux_pkg_install glibc-repo || return 1
+    termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner box64-glibc || return 1
 
     for p in \

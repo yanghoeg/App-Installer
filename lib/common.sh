@@ -8,6 +8,24 @@
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${_COMMON_DIR}/lib/proot_path.sh"
 
+# install.sh / app-install.sh 공용 — proot 내부 rootfs의 home/ 아래 첫 사용자 디렉토리를
+# 탐지. PROOT_DISTRO가 비어있으면(native only) 즉시 "user"로 폴백하고, 있으면
+# for 루프(파이프라인 없음 — pipefail 아래에서도 안전)로 첫 디렉토리를 찾는다.
+_detect_proot_user() {
+    if [ -z "${PROOT_DISTRO:-}" ]; then
+        echo "user"
+        return
+    fi
+    local home_dir="$(_proot_rootfs)/home"
+    local d
+    for d in "$home_dir"/*/; do
+        [ -d "$d" ] || continue
+        basename "$d"
+        return
+    done
+    echo "user"
+}
+
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then

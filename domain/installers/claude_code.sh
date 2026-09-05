@@ -72,7 +72,7 @@ EOF
 }
 
 app_install_claude_code() {
-    termux_pkg_install glibc-repo || return 1
+    termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner || return 1
     _claude_code_remove_npm_wrapper
     local version

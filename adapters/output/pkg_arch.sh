@@ -73,8 +73,8 @@ proot_pkg_install_box64() {
             'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' 2>/dev/null || true
         grep -q '\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null || \
             printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
-        pacman -Sy --noconfirm box64 2>/dev/null || echo '[WARN] Box64 설치 실패'
-    " 2>/dev/null || true
+        pacman -Sy --noconfirm box64 2>/dev/null
+    " 2>/dev/null
 }
 
 proot_pkg_install_wine_mesa() {

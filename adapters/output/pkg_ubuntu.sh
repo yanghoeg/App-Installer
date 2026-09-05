@@ -30,6 +30,7 @@ proot_pkg_install_deb_or_aur() {
 proot_pkg_add_external_repo() {
     local name="$1" gpg_key_url="$2" sources_line="$3"
     proot_exec sudo bash -c '
+        set -eo pipefail
         apt install -y gpg software-properties-common apt-transport-https 2>/dev/null || true
         wget -qO- "$1" | gpg --dearmor > "/usr/share/keyrings/$2.gpg"
         echo "$3" > "/etc/apt/sources.list.d/$2.list"
@@ -104,9 +105,9 @@ proot_pkg_install_box64() {
         proot_exec sudo bash -c '
             wget -q "$1" -O /tmp/box64.deb 2>/dev/null \
             && dpkg -i /tmp/box64.deb && rm -f /tmp/box64.deb
-        ' _ "$box64_url" || proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
+        ' _ "$box64_url" || proot_pkg_install box64 2>/dev/null
     else
-        proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
+        proot_pkg_install box64 2>/dev/null
     fi
 }
 
