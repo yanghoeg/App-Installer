@@ -39,6 +39,7 @@ app_remove_gpu_native() {
     for p in mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev mesa-demos; do
         termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
     done
+    return 0
 }
 
 app_is_installed_gpu_native() {

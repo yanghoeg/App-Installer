@@ -574,6 +574,108 @@ _test_wine_exec_shell_uses_proot_for_box64() {
 }
 it "box64+proot에서는 proot_exec_wine을 탄다" _test_wine_exec_shell_uses_proot_for_box64
 
+# H6: Termux native 문맥(하이브리드 앱 4종 + wine.sh _wine_install_native)은 Android에 없는
+# 하드코딩 /tmp를 쓰면 안 된다. ${TMPDIR:-/tmp}로 폴백해야 한다.
+# wine.sh의 _wine_install_tarball_proot는 proot 컨테이너 내부(실제 리눅스 /tmp 존재)에서
+# 실행되므로 범위 밖 — _wine_install_native 함수 본문만 검사한다.
+_test_wine_apps_no_bare_tmp() {
+    local f failed=0
+    for f in notepadpp sumatrapdf winmerge sevenzip; do
+        if command grep -nE '(^|[^A-Za-z0-9_}])/tmp/' "${APP_DIR}/domain/installers/${f}.sh"; then
+            echo "[ASSERT] ${f}.sh에 bare /tmp/ 가 남아 있음 (위 라인)" >&2
+            failed=1
+        fi
+    done
+    local native_body
+    native_body=$(sed -n '/^_wine_install_native()/,/^}/p' "${APP_DIR}/domain/installers/wine.sh")
+    if echo "$native_body" | command grep -nE '(^|[^A-Za-z0-9_}])/tmp/'; then
+        echo "[ASSERT] wine.sh _wine_install_native에 bare /tmp/ 가 남아 있음 (위 라인)" >&2
+        failed=1
+    fi
+    return $failed
+}
+it "Wine 계열 설치기가 Termux 문맥에서 bare /tmp를 쓰지 않는다" _test_wine_apps_no_bare_tmp
+
+_test_notepadpp_snippet_uses_tmpdir() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    curl() { return 1; }   # 실네트워크 회피 — 내장 v-fallback 사용
+    wget() { return 0; }
+    unzip() { return 0; }
+    local captured=""
+    wine_exec_shell() { captured="$1"; return 0; }
+    app_install_notepadpp >/dev/null 2>&1
+    assert_output_contains "$captured" '${TMPDIR:-/tmp}/npp.zip' "notepadpp 스니펫이 TMPDIR 폴백을 쓴다"
+    cleanup_sandbox "$sb"
+}
+it "notepadpp 스니펫이 \${TMPDIR:-/tmp}를 주입한다 (hangover 문맥)" _test_notepadpp_snippet_uses_tmpdir
+
+# H7: mesa-zink-glibc는 termux-glibc repo에 존재하지 않는 패키지명
+# (오라클: https://packages.termux.dev/apt/termux-glibc/dists/glibc/stable/binary-aarch64/Packages)
+_test_wine_native_pkg_list_has_no_mesa_zink() {
+    if command grep -q "mesa-zink-glibc" "${APP_DIR}/domain/installers/wine.sh"; then
+        echo "[ASSERT] wine.sh에 존재하지 않는 패키지 mesa-zink-glibc가 남아 있음" >&2
+        return 1
+    fi
+    command grep -q "mesa-glibc" "${APP_DIR}/domain/installers/wine.sh" || {
+        echo "[ASSERT] wine.sh에 mesa-glibc가 없음" >&2
+        return 1
+    }
+}
+it "wine.sh native 패키지 목록에 존재하지 않는 mesa-zink-glibc 대신 mesa-glibc가 있다" \
+    _test_wine_native_pkg_list_has_no_mesa_zink
+
+# =============================================================================
+# M8 — 제거 루프가 마지막 && 의 rc를 그대로 흘리는 문제
+# =============================================================================
+describe "제거 루프 — 마지막 패키지 미설치 시 rc"
+
+_test_gpu_dev_remove_rc0_when_last_missing() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    # _PKGS_GPU_DEV 마지막 항목(libpeas)만 미설치로 남긴다
+    MOCK_INSTALLED_PKGS="clvk clinfo gtkmm4 libsigc++-3.0 libcairomm-1.16 libglibmm-2.68 libpangomm-2.48 swig"
+    rc=0; app_remove_gpu_dev || rc=$?
+    assert_zero "$rc" "마지막 패키지(libpeas)가 이미 없어도 rc 0"
+    cleanup_sandbox "$sb"
+}
+it "gpu_dev 제거: 마지막 패키지가 이미 없어도 rc 0" _test_gpu_dev_remove_rc0_when_last_missing
+
+_test_gpu_native_remove_rc0_when_last_missing() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    # app_remove_gpu_native 목록 마지막 항목(mesa-demos)만 미설치로 남긴다
+    MOCK_INSTALLED_PKGS="mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev"
+    rc=0; app_remove_gpu_native || rc=$?
+    assert_zero "$rc" "마지막 패키지(mesa-demos)가 이미 없어도 rc 0"
+    cleanup_sandbox "$sb"
+}
+it "gpu_native 제거: 마지막 패키지가 이미 없어도 rc 0" _test_gpu_native_remove_rc0_when_last_missing
+
+_test_korean_input_remove_rc0_when_last_missing() {
+    local sb rc; sb=$(make_sandbox); _setup "$sb"
+    # app_remove_korean_input 목록 마지막 항목(libhangul)만 미설치로 남긴다.
+    # libhangul-static은 일부러 뺀다 — grep -qw가 하이픈 경계에서 "libhangul"을
+    # "libhangul-static" 안의 단어로도 매치해 버려 last-missing 조건이 깨진다.
+    MOCK_INSTALLED_PKGS="fcitx5-configtool fcitx5-hangul fcitx5"
+    rc=0; app_remove_korean_input || rc=$?
+    assert_zero "$rc" "마지막 패키지(libhangul)가 이미 없어도 rc 0"
+    cleanup_sandbox "$sb"
+}
+it "korean_input 제거: 마지막 패키지가 이미 없어도 rc 0" _test_korean_input_remove_rc0_when_last_missing
+
+# =============================================================================
+# M9 — llama-model-get 헬퍼: curl -f 없이 404/403 HTML을 .gguf로 저장하는 문제
+# =============================================================================
+describe "llama.cpp — 모델 다운로드 헬퍼"
+
+_test_llama_model_get_uses_curl_f_and_cleans_up() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_llama_cpp >/dev/null 2>&1
+    assert_file_contains "$_LLAMA_MODEL_GET_BIN" "curl -fL -C -" "curl -f로 HTTP 오류를 감지해야 함"
+    assert_file_contains "$_LLAMA_MODEL_GET_BIN" 'rm -f "$OUT"' "실패 시 손상된 부분 파일을 지워야 함"
+    cleanup_sandbox "$sb"
+}
+it "llama-model-get 헬퍼가 curl -f로 실패를 감지하고 부분 파일을 지운다" _test_llama_model_get_uses_curl_f_and_cleans_up
+
 # =============================================================================
 # Claude Code — 업그레이드 지원
 # =============================================================================

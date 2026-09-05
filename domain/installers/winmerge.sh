@@ -28,17 +28,17 @@ app_install_winmerge() {
     echo "[WinMerge] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
     wine_exec_shell "
         set -e
-        wget -q '${url}' -O /tmp/winmerge.zip || \
-            curl -fsSL '${url}' -o /tmp/winmerge.zip
+        wget -q '${url}' -O \${TMPDIR:-/tmp}/winmerge.zip || \
+            curl -fsSL '${url}' -o \${TMPDIR:-/tmp}/winmerge.zip
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/WinMerge\"
-        unzip -qo /tmp/winmerge.zip -d \"\$WINEPREFIX/drive_c/Program Files/WinMerge/\"
+        unzip -qo \${TMPDIR:-/tmp}/winmerge.zip -d \"\$WINEPREFIX/drive_c/Program Files/WinMerge/\"
         # zip 내 서브디렉토리가 있으면 한 단계 올림
         cd \"\$WINEPREFIX/drive_c/Program Files/WinMerge\"
         if [ -d WinMerge ]; then
             mv WinMerge/* . 2>/dev/null
             rmdir WinMerge 2>/dev/null || rm -rf WinMerge
         fi
-        rm -f /tmp/winmerge.zip
+        rm -f \${TMPDIR:-/tmp}/winmerge.zip
         test -e \"\$WINEPREFIX/drive_c/Program Files/WinMerge/WinMergeU.exe\"
     " || { echo "[ERROR] WinMerge 설치 실패" >&2; return 1; }
 

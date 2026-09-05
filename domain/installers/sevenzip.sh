@@ -17,10 +17,10 @@ app_install_sevenzip() {
     echo "[7-Zip] 다운로드 및 설치 중... (백엔드: $(wine_backend))"
     wine_exec_shell "
         set -e
-        wget -q '${_SEVENZIP_URL}' -O /tmp/7z_install.exe || \
-            curl -fsSL '${_SEVENZIP_URL}' -o /tmp/7z_install.exe
-        wine /tmp/7z_install.exe /S 2>/dev/null || true
-        rm -f /tmp/7z_install.exe
+        wget -q '${_SEVENZIP_URL}' -O \${TMPDIR:-/tmp}/7z_install.exe || \
+            curl -fsSL '${_SEVENZIP_URL}' -o \${TMPDIR:-/tmp}/7z_install.exe
+        wine \${TMPDIR:-/tmp}/7z_install.exe /S 2>/dev/null || true
+        rm -f \${TMPDIR:-/tmp}/7z_install.exe
         test -f \"\$WINEPREFIX/drive_c/7-Zip/7zFM.exe\"
     " || { echo "[ERROR] 7-Zip 설치 실패" >&2; return 1; }
 

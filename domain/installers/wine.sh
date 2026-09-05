@@ -98,7 +98,7 @@ _wine_install_native() {
     termux_pkg_install glibc-runner box64-glibc || return 1
 
     for p in \
-        mesa-zink-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
+        mesa-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
         pulseaudio-glibc \
         libxcb-glibc libxext-glibc libxrender-glibc libxfixes-glibc \
         libxcursor-glibc libxinerama-glibc libice-glibc libsm-glibc \
@@ -111,17 +111,18 @@ _wine_install_native() {
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     mkdir -p "$_WINE_NATIVE_DIR"
-    if ! wget -q "$wine_url" -O /tmp/wine-staging.tar.xz; then
-        rm -f /tmp/wine-staging.tar.xz
+    local _tmp_tar="${TMPDIR:-/tmp}/wine-staging.tar.xz"
+    if ! wget -q "$wine_url" -O "$_tmp_tar"; then
+        rm -f "$_tmp_tar"
         echo "[ERROR] Wine 다운로드 실패" >&2
         return 1
     fi
-    if ! tar -xJf /tmp/wine-staging.tar.xz -C "$_WINE_NATIVE_DIR" --strip-components=1; then
-        rm -f /tmp/wine-staging.tar.xz
+    if ! tar -xJf "$_tmp_tar" -C "$_WINE_NATIVE_DIR" --strip-components=1; then
+        rm -f "$_tmp_tar"
         echo "[ERROR] Wine 압축 해제 실패" >&2
         return 1
     fi
-    rm -f /tmp/wine-staging.tar.xz
+    rm -f "$_tmp_tar"
     [ -x "$_WINE_NATIVE_DIR/bin/wine64" ] || {
         echo "[ERROR] Wine 실행 파일을 찾을 수 없습니다." >&2
         return 1

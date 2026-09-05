@@ -23,16 +23,16 @@ app_install_sumatrapdf() {
     wine_exec_shell "
         set -e
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"
-        wget -q '$(_sumatrapdf_portable_url)' -O /tmp/sumatra.zip || \
-            curl -fsSL '$(_sumatrapdf_portable_url)' -o /tmp/sumatra.zip
-        unzip -qo /tmp/sumatra.zip -d \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/\"
+        wget -q '$(_sumatrapdf_portable_url)' -O \${TMPDIR:-/tmp}/sumatra.zip || \
+            curl -fsSL '$(_sumatrapdf_portable_url)' -o \${TMPDIR:-/tmp}/sumatra.zip
+        unzip -qo \${TMPDIR:-/tmp}/sumatra.zip -d \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/\"
         # zip 안의 파일명을 SumatraPDF.exe로 통일
         cd \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"
         for f in SumatraPDF-*.exe; do
             [ -f \"\$f\" ] && mv \"\$f\" SumatraPDF.exe
         done
         [ -f \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/SumatraPDF.exe\" ]
-        rm -f /tmp/sumatra.zip
+        rm -f \${TMPDIR:-/tmp}/sumatra.zip
     " || { echo "[ERROR] Sumatra PDF 다운로드/설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"

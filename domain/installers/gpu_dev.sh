@@ -31,6 +31,7 @@ app_remove_gpu_dev() {
     for p in "${_PKGS_GPU_DEV[@]}"; do
         termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
     done
+    return 0
 }
 
 app_is_installed_gpu_dev() {

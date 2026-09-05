@@ -86,8 +86,8 @@ if [ -f "$OUT" ]; then
     echo "이미 있음: $OUT"
 else
     echo "다운로드: $F"
-    curl -L -C - -o "$OUT" "https://huggingface.co/$REPO/resolve/main/$F" \
-        || { echo "다운로드 실패: $F" >&2; exit 1; }
+    curl -fL -C - -o "$OUT" "https://huggingface.co/$REPO/resolve/main/$F" \
+        || { rm -f "$OUT"; echo "다운로드 실패: $F" >&2; exit 1; }
 fi
 echo "완료: $OUT"
 echo "실행 예: llama-gpu -m \"$OUT\" -st -p \"대한민국의 수도는?\""

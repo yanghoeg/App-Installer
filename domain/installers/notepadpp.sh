@@ -26,11 +26,11 @@ app_install_notepadpp() {
     echo "[Notepad++] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
     if ! wine_exec_shell "
         set -e
-        wget -q '${url}' -O /tmp/npp.zip || \
-            curl -fsSL '${url}' -o /tmp/npp.zip
+        wget -q '${url}' -O \${TMPDIR:-/tmp}/npp.zip || \
+            curl -fsSL '${url}' -o \${TMPDIR:-/tmp}/npp.zip
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
-        unzip -qo /tmp/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
-        rm -f /tmp/npp.zip
+        unzip -qo \${TMPDIR:-/tmp}/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
+        rm -f \${TMPDIR:-/tmp}/npp.zip
         [ -f \"\$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe\" ]
     "; then
         echo "[ERROR] Notepad++ 다운로드/설치 실패" >&2
