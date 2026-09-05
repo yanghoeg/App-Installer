@@ -1143,7 +1143,7 @@ _test_korean_proot_ubuntu_installs_pkgs_and_deb() {
     # url|sha 형식 인자 2개 (nimf + nimf-i18n)
     assert_was_called "proot_pkg_install_deb_url https://github.com/hamonikr/nimf/releases/download/v1.4.17/nimf_1.4.17_arm64-ubuntu.2404.arm64.deb|0530909cf696828bdcd54c122ad465af8bbdf83b1e7eb2fe7a6d6da388334c58 https://github.com/hamonikr/nimf/releases/download/v1.4.17/nimf-i18n_1.4.17_arm64-ubuntu.2404.arm64.deb|7a1f9c3b3893439fa14a4d369e6eac722f40128a595bd98e032e14857e0201b4" \
         || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$(_korean_proot_profile)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_locale_file)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_exists "$(_proot_rootfs)/etc/default/locale" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$(_proot_rootfs)/etc/default/locale" "LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
@@ -1169,7 +1169,7 @@ _test_korean_proot_arch_nimf_success() {
     app_install_korean_proot >/dev/null
     assert_was_called "proot_pkg_install noto-fonts-cjk" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "proot_pkg_install_aur nimf" || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$(_korean_proot_profile)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_locale_file)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_not_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
@@ -1183,7 +1183,7 @@ _test_korean_proot_arch_fcitx5_fallback() {
     app_install_korean_proot >/dev/null 2>&1
     assert_was_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "proot_pkg_install fcitx5-configtool" || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$(_korean_proot_profile)" "@im=fcitx5" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_locale_file)" "@im=fcitx5" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
 it "archlinux → AUR nimf 실패 시 fcitx5 폴백" _test_korean_proot_arch_fcitx5_fallback
@@ -1207,48 +1207,46 @@ _test_korean_proot_idempotent_profile() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_korean_proot >/dev/null
     app_install_korean_proot >/dev/null
-    local n; n=$(grep -c '^# termux-xfce-korean$' "$(_korean_proot_profile)")
+    local n; n=$(grep -c '^# termux-xfce-korean$' "$(_korean_proot_locale_file)")
     cleanup_sandbox "$sb"
     assert_eq "1" "$n" "두 번 설치했는데 마커가 중복됨"
 }
 it "멱등 — 두 번 설치해도 profile 마커는 1개" _test_korean_proot_idempotent_profile
 
-_test_korean_proot_profile_nimf_autostart() {
+_test_korean_proot_locale_file_nimf_autostart() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_korean_proot >/dev/null
-    local profile; profile="$(_korean_proot_profile)"
+    local profile; profile="$(_korean_proot_locale_file)"
     assert_file_contains "$profile" "command -v nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$profile" "pgrep -x nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$profile" "disown" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$profile" "export LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_korean_proot_profile_nimf_autostart
+it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_korean_proot_locale_file_nimf_autostart
 
 _test_korean_proot_remove_strips_block() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    local profile; profile="$(_korean_proot_profile)"
-    mkdir -p "$(dirname "$profile")"
-    printf 'BEFORE_LINE\n' > "$profile"
+    local lf; lf="$(_korean_proot_locale_file)"
     app_install_korean_proot >/dev/null
     app_is_installed_korean_proot || { echo "[ASSERT] 설치 후 is_installed false" >&2; cleanup_sandbox "$sb"; return 1; }
+    assert_file_exists "$lf" || { cleanup_sandbox "$sb"; return 1; }
 
     local rc=0
     app_remove_korean_proot >/dev/null || rc=$?
     assert_zero "$rc" "remove가 rc!=0" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "proot_pkg_remove nimf nimf-i18n" || { cleanup_sandbox "$sb"; return 1; }
-    if grep -q 'termux-xfce-korean' "$profile"; then
-        echo "[ASSERT] remove 후에도 마커 블록이 남아 있음" >&2
+    if [ -f "$lf" ]; then
+        echo "[ASSERT] remove 후에도 로케일 파일이 남아 있음" >&2
         cleanup_sandbox "$sb"; return 1
     fi
-    assert_file_contains "$profile" "BEFORE_LINE" || { cleanup_sandbox "$sb"; return 1; }
     if app_is_installed_korean_proot; then
         echo "[ASSERT] remove 후에도 is_installed true" >&2
         cleanup_sandbox "$sb"; return 1
     fi
     cleanup_sandbox "$sb"
 }
-it "remove → profile 블록 제거 + rc 0 + is_installed false" _test_korean_proot_remove_strips_block
+it "remove → 로케일 파일 삭제 + rc 0 + is_installed false" _test_korean_proot_remove_strips_block
 
 # =============================================================================
 # 설치기 계약 — 전체 APP_REGISTRY 파라메트릭 테스트

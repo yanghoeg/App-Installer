@@ -47,12 +47,16 @@ _KOREAN_PROOT_PKGS_ARCH_FCITX5=(
     fcitx5-configtool
 )
 
-# .profile 블록 마커 — 시작/끝 쌍으로 감싸야 제거(sed 범위 삭제)가 가능하다
+# 생성 파일(/etc/profile.d/termux-xfce-locale.sh) 식별용 헤더/푸터 마커
 _KOREAN_PROOT_MARK="# termux-xfce-korean"
 _KOREAN_PROOT_END_MARK="# end-termux-xfce-korean"
 
-_korean_proot_profile() {
-    echo "$(_proot_rootfs)/home/${PROOT_USER}/.profile"
+# 로케일/IM env 파일 경로 — /etc/profile.d에 둔다.
+# Arch 기본 스켈레톤은 ~/.bash_profile을 포함해 bash 로그인이 ~/.profile을 읽지 않으므로
+# (~/.bash_profile → ~/.bashrc 체인), 모든 로그인 셸(bash/zsh)이 /etc/profile 경유로 읽는
+# profile.d에 두어야 GUI 앱에 로케일이 전파된다. GPU env(부모 setup_proot_env)와 동일 채널.
+_korean_proot_locale_file() {
+    echo "$(_proot_rootfs)/etc/profile.d/termux-xfce-locale.sh"
 }
 
 # 패키지 목록 설치 — 이미 설치된 것은 건너뛰고, 하나라도 실패하면 rc 1
@@ -70,43 +74,32 @@ _korean_proot_install_pkgs() {
     return 0
 }
 
-# $1 = nimf | fcitx5 — 멱등: 시작 마커가 이미 있으면 재작성하지 않는다
-_korean_proot_write_profile() {
-    local im="$1" profile
-    profile="$(_korean_proot_profile)"
-    grep -q "^${_KOREAN_PROOT_MARK}\$" "$profile" 2>/dev/null && return 0
+# $1 = nimf | fcitx5 — /etc/profile.d에 로케일/IM env를 쓴다.
+# export 필수 — 로그인 쉘이 source하므로 export 없으면 쉘 변수로만 남아 GUI 앱에 전파 안 됨.
+# 전체가 생성 파일이므로 항상 덮어쓴다(멱등). 마커로 감싸 식별을 단순화한다.
+_korean_proot_write_locale() {
+    local im="$1" f
+    f="$(_korean_proot_locale_file)"
+    mkdir -p "$(dirname "$f")"
 
-    mkdir -p "$(dirname "$profile")"
-
-    cat >> "$profile" << EOF
-
-${_KOREAN_PROOT_MARK}
-EOF
-    # export 필수 — .profile은 로그인 쉘에서 source되므로 export 없으면 쉘 변수로만
-    # 남아 자식 프로세스(GUI 앱)에 로케일이 전파되지 않는다.
-    cat >> "$profile" << 'EOF'
-export LANG=ko_KR.UTF-8
-export LANGUAGE=ko_KR.UTF-8
-export LC_ALL=ko_KR.UTF-8
-EOF
-
-    if [ "$im" = "nimf" ]; then
-        cat >> "$profile" << 'EOF'
-export GTK_IM_MODULE=nimf
-export QT_IM_MODULE=nimf
-export XMODIFIERS="@im=nimf"
-command -v nimf >/dev/null 2>&1 && ! pgrep -x nimf >/dev/null 2>&1 && { nimf & disown; } 2>/dev/null
-EOF
-    else
-        cat >> "$profile" << 'EOF'
-export GTK_IM_MODULE=fcitx5
-export QT_IM_MODULE=fcitx5
-export XMODIFIERS="@im=fcitx5"
-{ fcitx5 -d --replace 2>/dev/null & disown; } 2>/dev/null
-EOF
-    fi
-
-    printf '%s\n' "$_KOREAN_PROOT_END_MARK" >> "$profile"
+    {
+        echo "$_KOREAN_PROOT_MARK"
+        echo "export LANG=ko_KR.UTF-8"
+        echo "export LANGUAGE=ko_KR.UTF-8"
+        echo "export LC_ALL=ko_KR.UTF-8"
+        if [ "$im" = "nimf" ]; then
+            echo "export GTK_IM_MODULE=nimf"
+            echo "export QT_IM_MODULE=nimf"
+            echo 'export XMODIFIERS="@im=nimf"'
+            echo 'command -v nimf >/dev/null 2>&1 && ! pgrep -x nimf >/dev/null 2>&1 && { nimf & disown; } 2>/dev/null'
+        else
+            echo "export GTK_IM_MODULE=fcitx5"
+            echo "export QT_IM_MODULE=fcitx5"
+            echo 'export XMODIFIERS="@im=fcitx5"'
+            echo 'command -v fcitx5 >/dev/null 2>&1 && ! pgrep -x fcitx5 >/dev/null 2>&1 && { fcitx5 -d --replace 2>/dev/null & disown; } 2>/dev/null'
+        fi
+        echo "$_KOREAN_PROOT_END_MARK"
+    } > "$f"
     return 0
 }
 
@@ -127,7 +120,7 @@ _korean_proot_install_ubuntu() {
         proot_pkg_install_deb_url "${urls[@]}" || return 1
     fi
 
-    _korean_proot_write_profile nimf || return 1
+    _korean_proot_write_locale nimf || return 1
 
     local locale_file
     locale_file="$(_proot_rootfs)/etc/default/locale"
@@ -155,11 +148,11 @@ _korean_proot_install_arch() {
     done
 
     if $use_nimf; then
-        _korean_proot_write_profile nimf || return 1
+        _korean_proot_write_locale nimf || return 1
     else
         echo "[WARN] nimf AUR 빌드 실패 → fcitx5로 폴백" >&2
         _korean_proot_install_pkgs "${_KOREAN_PROOT_PKGS_ARCH_FCITX5[@]}" || return 1
-        _korean_proot_write_profile fcitx5 || return 1
+        _korean_proot_write_locale fcitx5 || return 1
     fi
 
     local locale_gen
@@ -198,12 +191,7 @@ app_install_korean_proot() {
 }
 
 app_remove_korean_proot() {
-    local profile
-    profile="$(_korean_proot_profile)"
-    if [ -f "$profile" ]; then
-        sed -i "/^${_KOREAN_PROOT_MARK}\$/,/^${_KOREAN_PROOT_END_MARK}\$/d" \
-            "$profile" 2>/dev/null || true
-    fi
+    rm -f "$(_korean_proot_locale_file)" 2>/dev/null || true
 
     # 폰트/로케일 패키지는 남긴다 (다른 앱이 의존) — IME만 제거
     case "${PROOT_DISTRO:-}" in
@@ -225,7 +213,5 @@ app_remove_korean_proot() {
 }
 
 app_is_installed_korean_proot() {
-    local profile
-    profile="$(_korean_proot_profile)"
-    grep -q "^${_KOREAN_PROOT_MARK}\$" "$profile" 2>/dev/null
+    [ -f "$(_korean_proot_locale_file)" ]
 }

@@ -87,7 +87,7 @@ _nimf_setup_autostart() {
 [Desktop Entry]
 Type=Application
 Name=Nimf
-Exec=nimf
+Exec=bash -c "pgrep -x nimf >/dev/null 2>&1 || exec nimf"
 Hidden=false
 X-GNOME-Autostart-enabled=true
 EOF
