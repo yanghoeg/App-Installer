@@ -30,6 +30,7 @@ proot_pkg_install_aur() {
 proot_pkg_install_deb_or_aur() {
     local _deb_url="$1"  # Arch에서는 미사용
     local aur_pkg="$2"
+    local _sha="${3:-}"  # Arch는 AUR 경로라 .deb sha256 미사용
     proot_pkg_install_aur "$aur_pkg"
 }
 

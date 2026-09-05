@@ -181,8 +181,23 @@ app-installer/
 │   ├── apps.sh                 ← 앱 레지스트리 + install/remove 디스패처
 │   ├── desktop.sh              ← .desktop 파일 생성 헬퍼
 │   └── installers/             ← 앱별 설치 스크립트
+├── lib/
+│   ├── fetch.sh                ← fetch_verified — 다운로드 + sha256 검증 (스니펫 주입 지원)
+│   ├── common.sh, proot_path.sh, wine_backend.sh
 └── tests/
 ```
+
+## 다운로드 무결성
+
+외부에서 받는 모든 파일(.deb, tarball, zip, AppImage, 설치 exe)은 **버전이 고정**되어 있고
+**sha256 상수**가 설치기 파일 상단에 박혀 있습니다 (예: `domain/installers/wine.sh`의
+`_WINE_STAGING_VER` / `_WINE_STAGING_SHA256`). `lib/fetch.sh`의 `fetch_verified`가 받은 뒤
+해시를 대조하고, **불일치면 받은 파일을 지우고 설치를 중단**합니다(rc≠0).
+`releases/latest` 같은 "항상 최신" API 조회는 쓰지 않습니다 — 업스트림이 바뀌면 조용히
+다른 바이너리가 설치되기 때문입니다. (예외: `llama_cpp.sh`의 사용자 선택 모델)
+
+버전을 올릴 때는 새 URL을 받아 `sha256sum <파일>`로 해시를 구한 뒤 해당 설치기의
+`_*_VER` / `_*_SHA256` 상수를 함께 갱신합니다.
 
 ## 브랜치 전략
 

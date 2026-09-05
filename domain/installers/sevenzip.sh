@@ -6,6 +6,7 @@
 
 _SEVENZIP_DESKTOP="${PREFIX}/share/applications/sevenzip.desktop"
 _SEVENZIP_URL="https://www.7-zip.org/a/7z2601-x64.exe"
+_SEVENZIP_SHA256="d64a0468f5b5b0b0fc5b2188450bcd655b70809d97b1c4535f2884635094377d"
 _SEVENZIP_WIN_PATH='C:\7-Zip\7zFM.exe'
 
 app_install_sevenzip() {
@@ -15,10 +16,9 @@ app_install_sevenzip() {
     fi
 
     echo "[7-Zip] 다운로드 및 설치 중... (백엔드: $(wine_backend))"
-    wine_exec_shell "
+    wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
-        wget -q '${_SEVENZIP_URL}' -O \${TMPDIR:-/tmp}/7z_install.exe || \
-            curl -fsSL '${_SEVENZIP_URL}' -o \${TMPDIR:-/tmp}/7z_install.exe
+        fetch_verified '${_SEVENZIP_URL}' \${TMPDIR:-/tmp}/7z_install.exe '${_SEVENZIP_SHA256}'
         wine \${TMPDIR:-/tmp}/7z_install.exe /S 2>/dev/null || true
         rm -f \${TMPDIR:-/tmp}/7z_install.exe
         test -f \"\$WINEPREFIX/drive_c/7-Zip/7zFM.exe\"

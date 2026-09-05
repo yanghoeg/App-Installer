@@ -211,6 +211,10 @@ STUB
 echo "dpkg $*" >> "${DEB_TEST_LOG}"
 STUB
     printf '#!/bin/bash\nexit 0\n' > "${sb}/bin/apt-get"
+    cat > "${sb}/bin/apt" << 'STUB'
+#!/bin/bash
+echo "apt $*" >> "${DEB_TEST_LOG}"
+STUB
     chmod +x "${sb}/bin/"*
 }
 
@@ -336,5 +340,93 @@ _test_common_exposes_legacy_api() {
     )
 }
 it "_prun, _pkg_install, _pkg_remove, _load_config 함수 존재" _test_common_exposes_legacy_api
+
+# =============================================================================
+# proot_pkg_install_deb_or_aur — sha256 3번째 인자 (M10)
+# =============================================================================
+describe "pkg_ubuntu.sh — proot_pkg_install_deb_or_aur sha256"
+
+_test_deb_or_aur_sha_match_installs() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" ok
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export DEB_TEST_LOG="${sb}/apt.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        local sha; sha=$(_deb_url_expected_sha)
+        proot_pkg_install_deb_or_aur "https://example.invalid/deb-or-aur-test.deb" "pkg" "$sha" || {
+            echo "[ASSERT] sha 일치인데 rc!=0" >&2; exit 1; }
+        assert_file_contains "$DEB_TEST_LOG" "deb-or-aur-test.deb"
+    )
+    local rc=$?
+    rm -f /tmp/deb-or-aur-test.deb
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "deb_or_aur sha256 일치 → apt install 호출 + rc 0" _test_deb_or_aur_sha_match_installs
+
+_test_deb_or_aur_sha_mismatch_aborts() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" ok
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export DEB_TEST_LOG="${sb}/apt.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        local rc=0
+        proot_pkg_install_deb_or_aur "https://example.invalid/deb-or-aur-test.deb" "pkg" \
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" 2>/dev/null || rc=$?
+        assert_nonzero "$rc" "sha256 불일치인데 rc 0" || exit 1
+        if [ -s "$DEB_TEST_LOG" ]; then
+            echo "[ASSERT] sha256 불일치인데 apt가 호출됨: $(cat "$DEB_TEST_LOG")" >&2
+            exit 1
+        fi
+        if [ -e /tmp/deb-or-aur-test.deb ]; then
+            echo "[ASSERT] sha256 불일치인데 받은 .deb가 남아 있음" >&2
+            exit 1
+        fi
+    )
+    local rc=$?
+    rm -f /tmp/deb-or-aur-test.deb
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "deb_or_aur sha256 불일치 → apt 미호출 + .deb 삭제 + rc!=0" _test_deb_or_aur_sha_mismatch_aborts
+
+_test_arch_deb_or_aur_ignores_sha() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        local captured=""
+        proot_pkg_install_aur() { captured="$*"; }
+        proot_pkg_install_deb_or_aur "https://example.invalid/x.deb" "teams-for-linux" \
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        assert_eq "teams-for-linux" "$captured" "Arch는 sha를 무시하고 AUR 패키지명만 넘긴다"
+    )
+}
+it "pkg_arch deb_or_aur → sha256 인자를 무시하고 AUR에 위임" _test_arch_deb_or_aur_ignores_sha
+
+# =============================================================================
+# proot_pkg_install_box64 — 죽은 GitHub .deb 경로 제거 (M10)
+# =============================================================================
+describe "pkg_ubuntu.sh — box64 GitHub 경로 제거"
+
+_test_ubuntu_box64_has_no_github_api() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        if declare -f proot_pkg_install_box64 | grep -q 'api\.github\.com'; then
+            echo "[ASSERT] proot_pkg_install_box64에 GitHub API 조회가 남아 있음" >&2
+            exit 1
+        fi
+        if declare -f proot_pkg_install_box64 | grep -q 'box64_Ubuntu_'; then
+            echo "[ASSERT] proot_pkg_install_box64에 .deb 미제공 에셋 경로가 남아 있음" >&2
+            exit 1
+        fi
+        declare -f proot_pkg_install_box64 | grep -q 'proot_pkg_install box64'
+    )
+}
+it "proot_pkg_install_box64 → GitHub 릴리스 경로 없이 apt만 사용" _test_ubuntu_box64_has_no_github_api
 
 print_results

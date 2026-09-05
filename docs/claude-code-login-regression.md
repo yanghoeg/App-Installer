@@ -1,18 +1,31 @@
-# Claude Code 버전 핀(2.1.132) — Termux `/login` 회귀 추적 기록
+# Claude Code 버전 핀 2.1.132 → **2.1.261 상향(2026-09-05)**, 실기기 미검증
 
-최종 갱신: 2026-09-02
+최종 갱신: 2026-09-05
 
 ## 요약
 
-- `domain/installers/claude_code.sh`의 `CLAUDE_CODE_PIN_VERSION="2.1.132"`는 **의도된 고정**이다.
-  일정 버전 이상에서 Termux 환경의 `/login`(브라우저 OAuth)이 실패해 이 버전에 묶어 두었다
-  (핀 커밋 c92ebf3 · 9086b6a, 2026-07 — "v2.1.207에서 로그인 회귀 발생 사례").
-- 업스트림에서 이 회귀가 **고쳐졌다는 확증은 없다**. Termux 를 직접 언급한 이슈·CHANGELOG 항목이 없다.
-- 기기 테스트가 가능해지기 전까지 핀을 올리지 않는다. 테스트 가능해지면 아래 계획대로 **후보 1개만** 시험한다.
+- `domain/installers/claude_code.sh`의 `CLAUDE_CODE_PIN_VERSION`을 **2.1.132 → 2.1.261**로 올렸다.
+- 상향 근거:
+  - **GHSA-7835-87q9-rgvv (HIGH, `>=2.1.38 <2.1.163`) 해소** — 2.1.261은 수정 버전 2.1.163 위다.
+    같은 하한의 GHSA-fg94-h982-f3mm 도 함께 해소.
+  - npm `@anthropic-ai/claude-code-linux-arm64` **latest = 2.1.261** 대조.
+  - tarball **sha256 상수화**(`CLAUDE_CODE_TARBALL_SHA256["2.1.261"]`) — npm integrity(sha512)와 교차 대조.
+    `_claude_code_download_native`가 `fetch_verified`로 받으며 sha256 불일치면 설치를 중단한다.
+- **실기기 `/login`은 아직 검증하지 않았다.** 아래 "핀 유지의 대가" 이하 조사 기록은 2.1.132 시절
+  근거로 그대로 보존한다 — 업스트림이 Termux `/login` 회귀를 고쳤다는 확증은 여전히 없다.
 
-## 핀 유지의 대가 (보안 advisory)
+### 회귀 시 롤백 절차
 
-2.1.132 에는 공개된 취약점 2건이 걸려 있다.
+1. 이전 버전 백업이 있는 경우(업그레이드로 올라온 설치):
+   `app_rollback_claude_code 2.1.132` — `${PREFIX}/share/claude-code/claude.bak.v2.1.132`가 있어야 한다.
+2. **신규 설치는 백업이 없다.** `CLAUDE_CODE_PIN_VERSION`을 `2.1.132`로 되돌리고
+   `app_install_claude_code`를 다시 실행한다 (해당 버전 sha256은 미등록 → 검증 생략 경고만 뜬다).
+3. 또는 브라우저 OAuth를 우회한다: PC에서 `claude setup-token` → Termux에서
+   `CLAUDE_CODE_OAUTH_TOKEN` 환경변수로 사용 (아래 "핀 유지 중 우회" 절 참조).
+
+## 핀 유지의 대가 (보안 advisory) — 2.1.132 시절 기록
+
+2.1.132 에는 공개된 취약점 2건이 걸려 있었다 (2.1.261 상향으로 둘 다 해소).
 
 | Advisory | 심각도 | 영향 범위 | 수정 버전 |
 |---|---|---|---|

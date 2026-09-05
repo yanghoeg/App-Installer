@@ -181,8 +181,24 @@ app-installer/
 │   ├── apps.sh                 ← app registry + install/remove dispatcher
 │   ├── desktop.sh              ← .desktop file creation helper
 │   └── installers/             ← one file per app
+├── lib/
+│   ├── fetch.sh                ← fetch_verified — download + sha256 verification (snippet-injectable)
+│   ├── common.sh, proot_path.sh, wine_backend.sh
 └── tests/
 ```
+
+## Download Integrity
+
+Every externally downloaded file (.deb, tarball, zip, AppImage, installer exe) is **version
+pinned**, with its **sha256 constant** declared at the top of the installer (e.g.
+`_WINE_STAGING_VER` / `_WINE_STAGING_SHA256` in `domain/installers/wine.sh`).
+`fetch_verified` in `lib/fetch.sh` checks the hash after download and, **on mismatch, deletes
+the file and aborts the install** (rc != 0). No `releases/latest`-style "always newest" API
+lookups are used — an upstream change would otherwise silently install a different binary.
+(Exception: user-selected models in `llama_cpp.sh`.)
+
+To bump a version: download the new URL, run `sha256sum <file>`, and update that installer's
+`_*_VER` / `_*_SHA256` constants together.
 
 ## Branch Strategy
 

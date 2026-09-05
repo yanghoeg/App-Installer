@@ -6,12 +6,13 @@
 
 _NOTEPADPP_DESKTOP="${PREFIX}/share/applications/notepadpp.desktop"
 
+# 버전 핀 + sha256 (GitHub API latest 조회 없음 — 재현 가능한 설치 + 무결성 검증)
+# 버전을 올릴 때: 새 zip을 받아 sha256sum으로 아래 상수를 갱신할 것.
+_NOTEPADPP_VER="8.9.8"
+_NOTEPADPP_SHA256="b269383239464a945d17cfabfccf53935b83d80d907922310fdfd50d80274c66"
+
 _notepadpp_portable_url() {
-    local tag ver
-    tag=$(curl -sf "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "v8.9.5")
-    ver="${tag#v}"
-    echo "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/${tag}/npp.${ver}.portable.x64.zip"
+    echo "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v${_NOTEPADPP_VER}/npp.${_NOTEPADPP_VER}.portable.x64.zip"
 }
 
 app_install_notepadpp() {
@@ -24,10 +25,9 @@ app_install_notepadpp() {
     url=$(_notepadpp_portable_url)
 
     echo "[Notepad++] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
-    if ! wine_exec_shell "
+    if ! wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
-        wget -q '${url}' -O \${TMPDIR:-/tmp}/npp.zip || \
-            curl -fsSL '${url}' -o \${TMPDIR:-/tmp}/npp.zip
+        fetch_verified '${url}' \${TMPDIR:-/tmp}/npp.zip '${_NOTEPADPP_SHA256}'
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
         unzip -qo \${TMPDIR:-/tmp}/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
         rm -f \${TMPDIR:-/tmp}/npp.zip

@@ -8,8 +8,11 @@
 _SUMATRA_DESKTOP="${PREFIX}/share/applications/sumatrapdf.desktop"
 _SUMATRA_WIN_PATH='C:\Program Files\SumatraPDF\SumatraPDF.exe'
 
+_SUMATRA_VER="3.5.2"
+_SUMATRA_SHA256="66ccb395c9184dce6822dfbb9970c877383b3ead6d9417b5106a844aac512989"
+
 _sumatrapdf_portable_url() {
-    local ver="${1:-3.5.2}"
+    local ver="${1:-${_SUMATRA_VER}}"
     echo "https://www.sumatrapdfreader.org/dl/rel/${ver}/SumatraPDF-${ver}-64.zip"
 }
 
@@ -20,11 +23,10 @@ app_install_sumatrapdf() {
     fi
 
     echo "[Sumatra PDF] portable exe 다운로드 중... (백엔드: $(wine_backend))"
-    wine_exec_shell "
+    wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"
-        wget -q '$(_sumatrapdf_portable_url)' -O \${TMPDIR:-/tmp}/sumatra.zip || \
-            curl -fsSL '$(_sumatrapdf_portable_url)' -o \${TMPDIR:-/tmp}/sumatra.zip
+        fetch_verified '$(_sumatrapdf_portable_url)' \${TMPDIR:-/tmp}/sumatra.zip '${_SUMATRA_SHA256}'
         unzip -qo \${TMPDIR:-/tmp}/sumatra.zip -d \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/\"
         # zip 안의 파일명을 SumatraPDF.exe로 통일
         cd \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\"

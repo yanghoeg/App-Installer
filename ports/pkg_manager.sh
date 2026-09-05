@@ -27,7 +27,9 @@ proot_pkg_is_installed() { _port_not_impl "proot_pkg_is_installed"; }
 # AUR 설치: Ubuntu=apt 폴백, Arch=yay
 proot_pkg_install_aur()  { _port_not_impl "proot_pkg_install_aur"; }
 
-# .deb(Ubuntu) / AUR(Arch) 설치 | $1=deb_url $2=aur_pkg
+# .deb(Ubuntu) / AUR(Arch) 설치 | $1=deb_url $2=aur_pkg $3=sha256(선택)
+#   계약: sha256이 주어지면 .deb 설치 전에 검증하고, 불일치 시 받은 파일을 지운 뒤
+#         설치하지 않으며 rc≠0을 반환한다. Arch 어댑터는 AUR을 쓰므로 sha256을 무시한다.
 proot_pkg_install_deb_or_aur() { _port_not_impl "proot_pkg_install_deb_or_aur"; }
 
 # proot_pkg_install_deb_url <url[|sha256]>...

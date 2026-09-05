@@ -3,15 +3,16 @@
 # arm64 .deb 직접 추출 방식 (AUR thorium은 x86 only, Ubuntu apt도 충돌)
 
 _THORIUM_DEB_URL="https://github.com/Alex313031/Thorium-Raspi/releases/download/M138.0.7204.303/thorium-browser_138.0.7204.303_arm64.deb"
+_THORIUM_DEB_SHA256="c6eba5536cde23659e2a7f60ae003d2cc29ac456fbb804ad18a602f5d0d80035"
 
 app_install_thorium() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     # arm64 .deb에서 바이너리 직접 추출 — distro 무관하게 동작
     # Ubuntu 25.10: coreutils-from-uutils 충돌로 apt 불가 → dpkg --force-depends 폴백
     # Arch: pacman에 등록 안 됨 → ar로 수동 추출
-    proot_exec sudo bash -c '
+    proot_exec sudo bash -c "$(fetch_verified_src)"$'\n''
         set -e
-        curl -fsSL "$1" -o /tmp/thorium.deb
+        fetch_verified "$1" /tmp/thorium.deb "$2"
 
         # ar 방식 시도 (binutils 필요)
         if command -v ar &>/dev/null; then
@@ -28,7 +29,7 @@ app_install_thorium() {
         fi
         rm -f /tmp/thorium.deb
         command -v thorium-browser >/dev/null
-    ' _ "$_THORIUM_DEB_URL" || { echo "[ERROR] Thorium 다운로드/설치 실패" >&2; return 1; }
+    ' _ "$_THORIUM_DEB_URL" "$_THORIUM_DEB_SHA256" || { echo "[ERROR] Thorium 다운로드/설치 실패" >&2; return 1; }
 
     desktop_register "thorium-browser" "Thorium" \
         'bash -c "prun thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \

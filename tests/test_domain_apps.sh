@@ -15,6 +15,7 @@ _setup() {
     export PROOT_USER="testuser"
     setup_fs_sandbox "$sb"
     source "${APP_DIR}/ports/pkg_manager.sh"
+    source "${APP_DIR}/lib/fetch.sh"
     unset _WINE_BACKEND_SH   # 샌드박스마다 HOME/PREFIX가 바뀌므로 재소싱 강제
     source "${APP_DIR}/lib/wine_backend.sh"
     source "${APP_DIR}/domain/desktop.sh"
@@ -599,9 +600,6 @@ it "Wine 계열 설치기가 Termux 문맥에서 bare /tmp를 쓰지 않는다" 
 _test_notepadpp_snippet_uses_tmpdir() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
-    curl() { return 1; }   # 실네트워크 회피 — 내장 v-fallback 사용
-    wget() { return 0; }
-    unzip() { return 0; }
     local captured=""
     wine_exec_shell() { captured="$1"; return 0; }
     app_install_notepadpp >/dev/null 2>&1
@@ -754,7 +752,8 @@ it "thunderbird는 업그레이드를 지원하지 않는다" _test_thunderbird_
 
 _test_claude_download_writes_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    curl() { :; }   # 다운로드 성공 흉내
+    # fetch_verified는 빈 파일을 실패로 보므로(무결성 계약) 실제로 내용을 만드는 stub을 쓴다
+    fetch_verified() { printf 'tgz\n' > "$2"; }
     tar()  { :; }   # 압축해제 성공 흉내
     mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
     _claude_code_download_native "9.9.9"
@@ -765,7 +764,7 @@ it "download → VERSION 파일에 버전 기록" _test_claude_download_writes_v
 
 _test_claude_download_tar_failure_propagates() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    curl() { :; }        # 다운로드(성공) 흉내 — tarball 내용은 만들지 않음
+    fetch_verified() { printf 'tgz\n' > "$2"; }  # 다운로드(성공+검증통과) 흉내
     tar()  { return 1; } # 압축해제 실패 흉내
     local rc=0
     _claude_code_download_native "9.9.9" >/dev/null 2>&1 || rc=$?
@@ -773,7 +772,7 @@ _test_claude_download_tar_failure_propagates() {
     [ ! -f "${CLAUDE_CODE_VERSION_FILE}" ] || { echo "[ASSERT] tar 실패인데 VERSION 파일이 기록됨" >&2; cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "curl 성공 + tar 실패 → download가 실패를 전파한다 (VERSION 미기록)" _test_claude_download_tar_failure_propagates
+it "다운로드 성공 + tar 실패 → download가 실패를 전파한다 (VERSION 미기록)" _test_claude_download_tar_failure_propagates
 
 _test_claude_installed_version_empty_when_absent() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -1362,7 +1361,8 @@ _test_contract_install_success_for_all_ids() {
         MOCK_PROOT_INSTALLED_PKGS=""
         MOCK_HAS_PROOT=true
         reset_mock_calls
-        unset -f curl wget tar dpkg npm 2>/dev/null || true
+        unset -f curl wget tar dpkg npm fetch_verified 2>/dev/null || true
+        source "${APP_DIR}/lib/fetch.sh"
 
         # mock만으로는 만들 수 없는 "실제 업스트림 산출물"이 필요한 소수의 설치기만
         # 최소한으로 보강한다 (다운로드 파이프라인 자체를 검증하는 게 아니라, 그 이후의
@@ -1371,37 +1371,17 @@ _test_contract_install_success_for_all_ids() {
             hangover)
                 : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
                 ;;
-            notepadpp|winmerge)
-                curl() { return 1; }   # 실네트워크 회피 — 설치기 내장 v-fallback(|| echo vX) 사용
-                ;;
             claude_code)
-                curl() { :; }
+                # 실다운로드 회피 — fetch_verified는 빈 파일을 무결성 실패로 보므로 내용을 만든다
+                fetch_verified() { printf 'tgz\n' > "$2"; }
                 tar()  { :; }
                 npm()  { return 1; }
                 mkdir -p "${CLAUDE_CODE_PREFIX}"
                 : > "${CLAUDE_CODE_PREFIX}/claude"
                 ;;
             nimf)
-                wget() {
-                    local out="" prev=""
-                    for a in "$@"; do [ "$prev" = "-O" ] && out="$a"; prev="$a"; done
-                    [ -n "$out" ] && : > "$out"
-                }
+                fetch_verified() { printf 'deb\n' > "$2"; }
                 dpkg() { return 0; }
-                ;;
-            teams)
-                # proot_exec가 GitHub API curl 결과를 파이프로 파싱해 URL을 뽑는 구조라
-                # 표준 mock_pkg_adapter의 "which만 처리" 버전으로는 stdout이 항상 비어
-                # latest_url이 빈 문자열 → 계약상 정상 실패(-z 체크)로 떨어진다.
-                # 성공 경로 자체를 검증하려면 그 stdout을 레코딩 스타일로 흉내낸다.
-                proot_exec() {
-                    _record_call "proot_exec $*"
-                    if [ "${1:-}" = "which" ]; then
-                        echo "$MOCK_PROOT_INSTALLED_PKGS" | grep -qw "${2:-}"
-                    elif [ "${1:-}" = "curl" ]; then
-                        printf '  "browser_download_url": "https://github.com/x/teams-for-linux_1.0.0_arm64.deb"\n'
-                    fi
-                }
                 ;;
         esac
 
@@ -1418,5 +1398,137 @@ _test_contract_install_success_for_all_ids() {
 }
 it "APP_REGISTRY 전체 — 정상 mock에서는 app_install이 성공한다 (gpu_proot/korean_locale은 skip)" \
     _test_contract_install_success_for_all_ids
+
+# =============================================================================
+# M10: 다운로드 무결성 — 버전 핀 + sha256 상수 + 스니펫 주입
+# =============================================================================
+describe "다운로드 무결성 — sha256 상수"
+
+_test_sha256_constants_are_64hex() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0 v val
+    for v in _SEVENZIP_SHA256 _SUMATRA_SHA256 _NOTEPADPP_SHA256 _WINMERGE_SHA256 \
+             _WINE_STAGING_SHA256 _WINETRICKS_SHA256 _NIMF_DEB_SHA256 _TOR_SHA256 \
+             _THORIUM_DEB_SHA256 _DBEAVER_SHA256 _NOTION_SHA256 _BURP_SHA256 \
+             _MINIFORGE_SHA256 _TEAMS_DEB_SHA256
+    do
+        val="${!v:-}"
+        if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "[ASSERT] ${v}가 64자 hex가 아님: '${val}'" >&2
+            failed=1
+        fi
+    done
+    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.261]:-}"
+    if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.261]가 64자 hex가 아님: '${val}'" >&2
+        failed=1
+    fi
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "설치기 sha256 상수 15종이 모두 64자 hex다" _test_sha256_constants_are_64hex
+
+describe "다운로드 무결성 — 스니펫 주입"
+
+# wine_exec_shell 문맥(별도 셸)에는 fetch_verified 정의가 텍스트로 주입돼야 한다.
+_test_sevenzip_snippet_injects_fetch_verified() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    local captured=""
+    wine_exec_shell() { captured="$1"; return 0; }
+    app_install_sevenzip >/dev/null 2>&1
+    assert_output_contains "$captured" "fetch_verified ()" || { cleanup_sandbox "$sb"; return 1; }
+    assert_output_contains "$captured" "$_SEVENZIP_SHA256" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "sevenzip 스니펫에 fetch_verified 정의 + sha256이 주입된다" _test_sevenzip_snippet_injects_fetch_verified
+
+_test_wine_apps_snippets_inject_fetch_verified() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/wine-hangover"; chmod +x "${PREFIX}/bin/wine-hangover"
+    local failed=0 id sha_var captured
+    for id in sumatrapdf:_SUMATRA_SHA256 notepadpp:_NOTEPADPP_SHA256 winmerge:_WINMERGE_SHA256; do
+        sha_var="${id#*:}"; id="${id%%:*}"
+        captured=""
+        wine_exec_shell() { captured="$1"; return 0; }
+        "app_install_${id}" >/dev/null 2>&1
+        [[ "$captured" == *"fetch_verified ()"* ]] || { echo "[ASSERT] ${id} 스니펫에 fetch_verified 정의 없음" >&2; failed=1; }
+        [[ "$captured" == *"${!sha_var}"* ]] || { echo "[ASSERT] ${id} 스니펫에 ${sha_var} 값 없음" >&2; failed=1; }
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "sumatrapdf/notepadpp/winmerge 스니펫에도 fetch_verified + sha256이 주입된다" \
+    _test_wine_apps_snippets_inject_fetch_verified
+
+# proot 문맥(proot_exec bash -c ... _ url sha)에도 sha 값이 위치인자로 넘어가야 한다.
+_test_proot_installers_pass_sha_to_snippet() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0 pair id sha_var
+    for pair in tor_browser:_TOR_SHA256 thorium:_THORIUM_DEB_SHA256 dbeaver:_DBEAVER_SHA256 \
+                notion:_NOTION_SHA256 burpsuite:_BURP_SHA256 miniforge:_MINIFORGE_SHA256
+    do
+        id="${pair%%:*}"; sha_var="${pair#*:}"
+        reset_mock_calls
+        "app_install_${id}" >/dev/null 2>&1 || true
+        assert_was_called "${!sha_var}" || {
+            echo "[ASSERT] ${id}: proot_exec 인자에 ${sha_var} 값이 없음" >&2; failed=1; }
+        assert_was_called "fetch_verified" || {
+            echo "[ASSERT] ${id}: 스니펫에 fetch_verified 주입 없음" >&2; failed=1; }
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "tor/thorium/dbeaver/notion/burp/miniforge가 스니펫에 sha256을 넘긴다" \
+    _test_proot_installers_pass_sha_to_snippet
+
+describe "teams — GitHub API 제거 + 3인자 deb_or_aur"
+
+_test_teams_uses_pinned_url_with_sha() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_teams >/dev/null 2>&1
+    assert_was_called "proot_pkg_install_deb_or_aur ${_TEAMS_DEB_URL} teams-for-linux ${_TEAMS_DEB_SHA256}" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    assert_not_called "proot_exec curl" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "teams → 핀 URL + sha256 3인자, API curl 호출 없음" _test_teams_uses_pinned_url_with_sha
+
+describe "claude_code — M11 핀 상향"
+
+_test_claude_pin_version() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    assert_eq "2.1.261" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "2.1.261" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "CLAUDE_CODE_PIN_VERSION = 2.1.261 (M11)" _test_claude_pin_version
+
+_test_claude_download_uses_fetch_verified() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local captured=""
+    fetch_verified() { captured="$3"; printf 'tgz\n' > "$2"; }
+    tar() { :; }
+    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
+    _claude_code_download_native "2.1.261"
+    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.261]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "download → 등록된 sha256을 fetch_verified에 넘긴다" _test_claude_download_uses_fetch_verified
+
+_test_claude_download_unknown_version_skips_sha() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local captured="UNSET"
+    fetch_verified() { captured="${3:-}"; printf 'tgz\n' > "$2"; }
+    tar() { :; }
+    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
+    _claude_code_download_native "9.9.9"
+    assert_eq "" "$captured" "미등록 버전은 빈 sha(검증 생략)로 넘어가야 함" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "미등록 버전 → 빈 sha256(검증 생략)" _test_claude_download_unknown_version_skips_sha
 
 print_results

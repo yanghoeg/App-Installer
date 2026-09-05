@@ -8,12 +8,13 @@
 _WINMERGE_DESKTOP="${PREFIX}/share/applications/winmerge.desktop"
 _WINMERGE_WIN_PATH='C:\Program Files\WinMerge\WinMergeU.exe'
 
+# 버전 핀 + sha256 (GitHub API latest 조회 없음). 에셋명은 소문자 winmerge-...
+# 버전을 올릴 때: 새 zip을 받아 sha256sum으로 아래 상수를 갱신할 것.
+_WINMERGE_VER="2.16.58.2"
+_WINMERGE_SHA256="5732474add39283f44bd20c66e57503d26f435e695feabc4140ba2f91d2e7804"
+
 _winmerge_portable_url() {
-    local tag ver
-    tag=$(curl -sf "https://api.github.com/repos/WinMerge/winmerge/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "v2.16.56")
-    ver="${tag#v}"
-    echo "https://github.com/WinMerge/winmerge/releases/download/${tag}/WinMerge-${ver}-x64-exe.zip"
+    echo "https://github.com/WinMerge/winmerge/releases/download/v${_WINMERGE_VER}/winmerge-${_WINMERGE_VER}-x64-exe.zip"
 }
 
 app_install_winmerge() {
@@ -26,10 +27,9 @@ app_install_winmerge() {
     url=$(_winmerge_portable_url)
 
     echo "[WinMerge] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
-    wine_exec_shell "
+    wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
-        wget -q '${url}' -O \${TMPDIR:-/tmp}/winmerge.zip || \
-            curl -fsSL '${url}' -o \${TMPDIR:-/tmp}/winmerge.zip
+        fetch_verified '${url}' \${TMPDIR:-/tmp}/winmerge.zip '${_WINMERGE_SHA256}'
         mkdir -p \"\$WINEPREFIX/drive_c/Program Files/WinMerge\"
         unzip -qo \${TMPDIR:-/tmp}/winmerge.zip -d \"\$WINEPREFIX/drive_c/Program Files/WinMerge/\"
         # zip 내 서브디렉토리가 있으면 한 단계 올림

@@ -9,9 +9,17 @@ CLAUDE_CODE_BIN_PATH="${PREFIX}/bin/claude"
 CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 # 설치된 버전 기록 — self-update를 끈 상태라 업그레이드 판단 근거로 사용
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
-# 핀 버전 — 이후 릴리스에서 Termux /login 회귀가 발견되어 이 버전에 고정 (docs/claude-code-login-regression.md).
+# 핀 버전 — Termux /login 회귀 조사 이력은 docs/claude-code-login-regression.md 참조.
+# 2026-09-05: 2.1.132 → 2.1.261 상향. 근거는 GHSA-7835-87q9-rgvv(HIGH, <2.1.163) 해소 +
+# npm latest 대조. 실기기 /login 은 아직 미검증 — 회귀 시 롤백 절차는 위 문서 참조.
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
-CLAUDE_CODE_PIN_VERSION="2.1.132"
+CLAUDE_CODE_PIN_VERSION="2.1.261"
+
+# 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
+# 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
+declare -gA CLAUDE_CODE_TARBALL_SHA256=(
+    ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
+)
 
 _claude_code_fetch_latest_version() {
     if [ -n "${CLAUDE_CODE_PIN_VERSION}" ]; then
@@ -33,7 +41,7 @@ _claude_code_download_native() {
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
     mkdir -p "${CLAUDE_CODE_PREFIX}"
     local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
-    curl -sSLf "$url" -o "$tarball" || return 1
+    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" || return 1
     tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1 || return 1
     rm -f "$tarball"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"

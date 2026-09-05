@@ -15,13 +15,19 @@ _WINECFG_DESKTOP="${PREFIX}/share/applications/winecfg.desktop"
 _WINE_APPS_DESKTOP="${PREFIX}/share/applications/wine-apps.desktop"
 _WINE_NATIVE_DIR="${HOME}/.wine-staging"
 
-# GitHub Releases에서 최신 Wine-Staging WoW64 URL 조회
+# Wine-Staging WoW64 — 버전 핀 + sha256 (GitHub API latest 조회 없음)
 # wow64 빌드: 64-bit wine만으로 32-bit PE 실행 (Box64 환경 필수)
+# 버전을 올릴 때: Kron4ek 릴리스의 sha256sums.txt와 대조해 아래 상수를 갱신할 것.
+_WINE_STAGING_VER="11.16"
+_WINE_STAGING_SHA256="746d3d571e474a7a603e084a0d35649699c3d5c98e5ea3e9994e1e5fa693af92"
+
+# winetricks — master 대신 커밋 핀 (raw 콘텐츠가 조용히 바뀌지 않도록)
+_WINETRICKS_COMMIT="f3890f670867b5ffbc3938726db45c0f7d16c8ba"
+_WINETRICKS_URL="https://raw.githubusercontent.com/Winetricks/winetricks/${_WINETRICKS_COMMIT}/src/winetricks"
+_WINETRICKS_SHA256="672a1ff4442e8691a3ffc0e6860137e201a1d1227e9b3044245f1731e9e9837e"
+
 _wine_tarball_url() {
-    local ver
-    ver=$(curl -sf "https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "11.9")
-    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${ver}/wine-${ver}-staging-amd64-wow64.tar.xz"
+    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${_WINE_STAGING_VER}/wine-${_WINE_STAGING_VER}-staging-amd64-wow64.tar.xz"
 }
 
 # proot 내부: Wine-Staging tarball 설치
@@ -33,10 +39,10 @@ _wine_install_tarball_proot() {
     local wine_url
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
-    proot_exec_wine sudo bash -c "
+    proot_exec_wine sudo bash -c "$(fetch_verified_src)"$'\n'"
         set -e
         mkdir -p /opt/wine-staging
-        wget -q '${wine_url}' -O /tmp/wine-staging.tar.xz
+        fetch_verified '${wine_url}' /tmp/wine-staging.tar.xz '${_WINE_STAGING_SHA256}'
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
         rm -f /tmp/wine-staging.tar.xz
 
@@ -64,12 +70,15 @@ _wine_install_tarball_proot() {
 }
 
 # proot 내부: winetricks 설치
+# 검증 실패한 파일이 /usr/local/bin에 남지 않도록 임시경로에 받은 뒤 mv 한다.
+# (winetricks는 비임계 — 실패해도 Wine 설치 자체는 계속 진행)
 _wine_install_winetricks_proot() {
-    proot_exec sudo bash -c "
-        command -v winetricks &>/dev/null && exit 0
-        wget -q https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
-            -O /usr/local/bin/winetricks
-        chmod +x /usr/local/bin/winetricks
+    proot_exec sudo bash -c "$(fetch_verified_src)"$'\n'"
+        command -v winetricks >/dev/null 2>&1 && exit 0
+        _wt=\$(mktemp) || exit 1
+        fetch_verified '${_WINETRICKS_URL}' \"\$_wt\" '${_WINETRICKS_SHA256}' || { rm -f \"\$_wt\"; exit 1; }
+        chmod +x \"\$_wt\"
+        mv \"\$_wt\" /usr/local/bin/winetricks
     " 2>/dev/null || true
 }
 
@@ -112,11 +121,10 @@ _wine_install_native() {
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     mkdir -p "$_WINE_NATIVE_DIR"
     local _tmp_tar="${TMPDIR:-/tmp}/wine-staging.tar.xz"
-    if ! wget -q "$wine_url" -O "$_tmp_tar"; then
-        rm -f "$_tmp_tar"
+    fetch_verified "$wine_url" "$_tmp_tar" "$_WINE_STAGING_SHA256" || {
         echo "[ERROR] Wine 다운로드 실패" >&2
         return 1
-    fi
+    }
     if ! tar -xJf "$_tmp_tar" -C "$_WINE_NATIVE_DIR" --strip-components=1; then
         rm -f "$_tmp_tar"
         echo "[ERROR] Wine 압축 해제 실패" >&2

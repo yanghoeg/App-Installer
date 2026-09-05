@@ -3,6 +3,7 @@
 # deb 제공: 흡혈귀왕 @ 미코(미니기기코리아)
 
 _NIMF_DEB_URL="https://github.com/yanghoeg/Termux_XFCE/releases/download/nimf-termux-v1.4.19/nimf_1.4.19_aarch64.deb"
+_NIMF_DEB_SHA256="42e6f5a27ec99bc26b2492e08181d433caf26a3832867eef664bb935144c7fbe"
 
 _NIMF_DEPS=(
     glib
@@ -35,8 +36,8 @@ app_install_nimf() {
 
     local deb_file="${TMPDIR:-/tmp}/nimf_1.4.19_aarch64.deb"
     echo "nimf deb 다운로드 중..."
-    wget -q "$_NIMF_DEB_URL" -O "$deb_file" || {
-        echo "[ERROR] nimf deb 다운로드 실패" >&2
+    fetch_verified "$_NIMF_DEB_URL" "$deb_file" "$_NIMF_DEB_SHA256" || {
+        echo "[ERROR] nimf deb 다운로드/검증 실패" >&2
         return 1
     }
 

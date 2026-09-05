@@ -16,15 +16,17 @@ proot_pkg_install_aur() {
     proot_pkg_install "$@"
 }
 
+# $3=sha256(선택) — 주어지면 apt install 전에 검증하고, 불일치 시 rc≠0 (포트 계약 참조).
 proot_pkg_install_deb_or_aur() {
     local deb_url="$1"
     local deb="${deb_url##*/}"
-    proot_exec bash -c '
+    local sha="${3:-}"
+    proot_exec bash -c "$(fetch_verified_src)"$'\n''
         set -e
-        curl -fsSL "$1" -o "/tmp/$2"
+        fetch_verified "$1" "/tmp/$2" "$3"
         sudo apt install -y "/tmp/$2"
         rm -f "/tmp/$2"
-    ' _ "$deb_url" "$deb"
+    ' _ "$deb_url" "$deb" "$sha"
 }
 
 # 공식 apt repo에 없는 .deb를 URL로 직접 설치 (nimf 등).
@@ -41,23 +43,11 @@ proot_pkg_install_deb_url() {
         else
             sha="${entry#*|}"
         fi
-        proot_exec bash -c '
+        proot_exec bash -c "$(fetch_verified_src)"$'\n''
             url="$1"; sha="$2"
             name="${url##*/}"
             deb="${TMPDIR:-/tmp}/${name}"
-            if ! { wget -q -O "$deb" "$url" || curl -fsSL -o "$deb" "$url"; } || [ ! -s "$deb" ]; then
-                echo "[ERROR] ${name} 다운로드 실패" >&2
-                rm -f "$deb"
-                exit 1
-            fi
-            if [ -n "$sha" ]; then
-                actual=$(sha256sum "$deb" | cut -d" " -f1)
-                if [ "$actual" != "$sha" ]; then
-                    echo "[ERROR] ${name} sha256 불일치 — 설치 건너뜀" >&2
-                    rm -f "$deb"
-                    exit 1
-                fi
-            fi
+            fetch_verified "$url" "$deb" "$sha" || exit 1
             sudo dpkg -i "$deb" || echo "[WARN] ${name} dpkg 의존성 미해결 — apt-get install -f로 보정" >&2
             rm -f "$deb"
             exit 0
@@ -130,25 +120,10 @@ proot_pkg_install_sasm() {
     proot_exec dpkg -s sasm &>/dev/null || return 1
 }
 
+# GitHub 릴리스는 .deb 미제공(2026-09 확인 — v0.3.x~v0.4.4 어느 릴리스에도 Ubuntu .deb 에셋 없음)
+# → apt 경로만 남긴다. 실패는 그대로 rc≠0으로 전파.
 proot_pkg_install_box64() {
-    local rootfs="$(_proot_rootfs)"
-    local codename
-    codename=$(grep "^VERSION_CODENAME=" "${rootfs}/etc/os-release" 2>/dev/null \
-        | cut -d= -f2 | tr -d '"' || echo "jammy")
-
-    local box64_tag
-    box64_tag=$(curl -sf "https://api.github.com/repos/ptitSeb/box64/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "")
-
-    if [ -n "$box64_tag" ]; then
-        local box64_url="https://github.com/ptitSeb/box64/releases/download/${box64_tag}/box64_Ubuntu_${codename}_arm64.deb"
-        proot_exec sudo bash -c '
-            wget -q "$1" -O /tmp/box64.deb 2>/dev/null \
-            && dpkg -i /tmp/box64.deb && rm -f /tmp/box64.deb
-        ' _ "$box64_url" || proot_pkg_install box64 2>/dev/null
-    else
-        proot_pkg_install box64 2>/dev/null
-    fi
+    proot_pkg_install box64 2>/dev/null
 }
 
 proot_pkg_install_wine_mesa() {
