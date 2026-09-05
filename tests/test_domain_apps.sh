@@ -1101,6 +1101,157 @@ _test_wine_ids_resolve_to_wine_tab() {
 it "wine/hangover/notepadpp/winmerge/sevenzip/sumatrapdf — Wine 탭에 소속" _test_wine_ids_resolve_to_wine_tab
 
 # =============================================================================
+# korean_proot — proot 한글 IME (M1: 부모 repo domain/proot_env.sh에서 이관)
+# =============================================================================
+describe "korean_proot — proot 한글 IME"
+
+# "nimf 미설치" 상황: 표준 mock의 proot_exec는 항상 rc 0이라 command -v nimf가
+# 성공으로 보인다 → bash -c 호출만 실패시켜 .deb 경로로 진입시킨다.
+_korean_proot_mock_nimf_missing() {
+    proot_exec() {
+        _record_call "proot_exec $*"
+        [ "${1:-}" = "bash" ] && return 1
+        return 0
+    }
+}
+
+_test_korean_proot_requires_proot() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_HAS_PROOT=false
+    local rc=0
+    app_install_korean_proot >/dev/null 2>&1 || rc=$?
+    cleanup_sandbox "$sb"
+    assert_nonzero "$rc" "proot 없음인데 rc 0"
+}
+it "proot 없음 → rc!=0" _test_korean_proot_requires_proot
+
+_test_korean_proot_unsupported_distro() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO="debian"
+    local rc=0
+    app_install_korean_proot >/dev/null 2>&1 || rc=$?
+    cleanup_sandbox "$sb"
+    assert_nonzero "$rc" "미지원 distro인데 rc 0"
+}
+it "지원하지 않는 PROOT_DISTRO → rc!=0" _test_korean_proot_unsupported_distro
+
+_test_korean_proot_ubuntu_installs_pkgs_and_deb() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _korean_proot_mock_nimf_missing
+    app_install_korean_proot >/dev/null
+    assert_was_called "proot_pkg_install language-pack-ko" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_pkg_install im-config" || { cleanup_sandbox "$sb"; return 1; }
+    # url|sha 형식 인자 2개 (nimf + nimf-i18n)
+    assert_was_called "proot_pkg_install_deb_url https://github.com/hamonikr/nimf/releases/download/v1.4.17/nimf_1.4.17_arm64-ubuntu.2404.arm64.deb|0530909cf696828bdcd54c122ad465af8bbdf83b1e7eb2fe7a6d6da388334c58 https://github.com/hamonikr/nimf/releases/download/v1.4.17/nimf-i18n_1.4.17_arm64-ubuntu.2404.arm64.deb|7a1f9c3b3893439fa14a4d369e6eac722f40128a595bd98e032e14857e0201b4" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_profile)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_exists "$(_proot_rootfs)/etc/default/locale" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_proot_rootfs)/etc/default/locale" "LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "ubuntu → 로케일 패키지 + nimf .deb(url|sha) 설치 + profile/기본 locale 작성" \
+    _test_korean_proot_ubuntu_installs_pkgs_and_deb
+
+_test_korean_proot_ubuntu_deb_failure_propagates() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _korean_proot_mock_nimf_missing
+    proot_pkg_install_deb_url() { _record_call "proot_pkg_install_deb_url $*"; return 1; }
+    local rc=0
+    app_install_korean_proot >/dev/null 2>&1 || rc=$?
+    cleanup_sandbox "$sb"
+    assert_nonzero "$rc" ".deb 설치 실패인데 rc 0"
+}
+it "ubuntu → proot_pkg_install_deb_url 실패 시 rc!=0 전파" _test_korean_proot_ubuntu_deb_failure_propagates
+
+_test_korean_proot_arch_nimf_success() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO="archlinux"
+    setup_fs_sandbox "$sb"
+    app_install_korean_proot >/dev/null
+    assert_was_called "proot_pkg_install noto-fonts-cjk" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_pkg_install_aur nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_profile)" "GTK_IM_MODULE=nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_not_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "archlinux → AUR nimf 성공 시 nimf profile, fcitx5 미설치" _test_korean_proot_arch_nimf_success
+
+_test_korean_proot_arch_fcitx5_fallback() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO="archlinux"
+    setup_fs_sandbox "$sb"
+    proot_pkg_install_aur() { _record_call "proot_pkg_install_aur $*"; return 1; }
+    app_install_korean_proot >/dev/null 2>&1
+    assert_was_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_pkg_install fcitx5-configtool" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_profile)" "@im=fcitx5" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "archlinux → AUR nimf 실패 시 fcitx5 폴백" _test_korean_proot_arch_fcitx5_fallback
+
+_test_korean_proot_arch_locale_gen() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO="archlinux"
+    setup_fs_sandbox "$sb"
+    app_install_korean_proot >/dev/null
+    app_install_korean_proot >/dev/null   # 2회 실행해도 locale.gen 중복 없음
+    local lg; lg="$(_proot_rootfs)/etc/locale.gen"
+    assert_file_contains "$lg" "ko_KR.UTF-8 UTF-8" || { cleanup_sandbox "$sb"; return 1; }
+    local n; n=$(grep -c '^ko_KR.UTF-8 UTF-8$' "$lg")
+    assert_eq "1" "$n" "locale.gen 항목 중복" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_exec sudo locale-gen" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "archlinux → locale.gen에 ko_KR.UTF-8 추가 (중복 없음) + locale-gen 실행" _test_korean_proot_arch_locale_gen
+
+_test_korean_proot_idempotent_profile() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_korean_proot >/dev/null
+    app_install_korean_proot >/dev/null
+    local n; n=$(grep -c '^# termux-xfce-korean$' "$(_korean_proot_profile)")
+    cleanup_sandbox "$sb"
+    assert_eq "1" "$n" "두 번 설치했는데 마커가 중복됨"
+}
+it "멱등 — 두 번 설치해도 profile 마커는 1개" _test_korean_proot_idempotent_profile
+
+_test_korean_proot_profile_nimf_autostart() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_korean_proot >/dev/null
+    local profile; profile="$(_korean_proot_profile)"
+    assert_file_contains "$profile" "command -v nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$profile" "pgrep -x nimf" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$profile" "disown" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$profile" "LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_korean_proot_profile_nimf_autostart
+
+_test_korean_proot_remove_strips_block() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local profile; profile="$(_korean_proot_profile)"
+    mkdir -p "$(dirname "$profile")"
+    printf 'BEFORE_LINE\n' > "$profile"
+    app_install_korean_proot >/dev/null
+    app_is_installed_korean_proot || { echo "[ASSERT] 설치 후 is_installed false" >&2; cleanup_sandbox "$sb"; return 1; }
+
+    local rc=0
+    app_remove_korean_proot >/dev/null || rc=$?
+    assert_zero "$rc" "remove가 rc!=0" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "proot_pkg_remove nimf nimf-i18n" || { cleanup_sandbox "$sb"; return 1; }
+    if grep -q 'termux-xfce-korean' "$profile"; then
+        echo "[ASSERT] remove 후에도 마커 블록이 남아 있음" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    assert_file_contains "$profile" "BEFORE_LINE" || { cleanup_sandbox "$sb"; return 1; }
+    if app_is_installed_korean_proot; then
+        echo "[ASSERT] remove 후에도 is_installed true" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "remove → profile 블록 제거 + rc 0 + is_installed false" _test_korean_proot_remove_strips_block
+
+# =============================================================================
 # 설치기 계약 — 전체 APP_REGISTRY 파라메트릭 테스트
 # domain/apps.sh app_install() 위의 계약 주석 참조:
 #   app_install_<id>는 critical 명령(pkg install/curl/proot_exec 등) 실패 시

@@ -180,6 +180,148 @@ _test_ubuntu_add_repo_script_has_set_e() {
 it "proot_pkg_add_external_repo → bash -c 스크립트에 set -eo pipefail 있음" _test_ubuntu_add_repo_script_has_set_e
 
 # =============================================================================
+# proot_pkg_install_deb_url — sha256 검증 (M14)
+# 실제 동작 테스트: 샌드박스 stub 실행파일을 PATH 선두에 두고 proot_exec를 로컬 실행으로
+# 대체해, 다운로드→sha256 검증→dpkg 경로를 그대로 태운다.
+# =============================================================================
+describe "pkg_ubuntu.sh — proot_pkg_install_deb_url sha256"
+
+# $1 = 샌드박스, $2 = "ok"(wget 성공) 또는 "fail"(wget/curl 모두 실패)
+_deb_url_make_stubs() {
+    local sb="$1" mode="${2:-ok}"
+    mkdir -p "${sb}/bin" "${sb}/tmp"
+
+    if [ "$mode" = "ok" ]; then
+        cat > "${sb}/bin/wget" << 'STUB'
+#!/bin/bash
+out=""; prev=""
+for a in "$@"; do [ "$prev" = "-O" ] && out="$a"; prev="$a"; done
+[ -n "$out" ] || exit 1
+printf 'DEB-PAYLOAD\n' > "$out"
+STUB
+    else
+        printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/wget"
+    fi
+
+    # curl 폴백은 항상 실패 — wget 경로/실패 전파를 명확히 갈라 보기 위함
+    printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/curl"
+    printf '#!/bin/bash\nexec "$@"\n' > "${sb}/bin/sudo"
+    cat > "${sb}/bin/dpkg" << 'STUB'
+#!/bin/bash
+echo "dpkg $*" >> "${DEB_TEST_LOG}"
+STUB
+    printf '#!/bin/bash\nexit 0\n' > "${sb}/bin/apt-get"
+    chmod +x "${sb}/bin/"*
+}
+
+_deb_url_expected_sha() { printf 'DEB-PAYLOAD\n' | sha256sum | cut -d' ' -f1; }
+
+_test_deb_url_sha_match_installs() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" ok
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
+        export DEB_TEST_LOG="${sb}/dpkg.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        local sha; sha=$(_deb_url_expected_sha)
+        proot_pkg_install_deb_url "https://example.invalid/foo.deb|${sha}" || {
+            echo "[ASSERT] sha 일치인데 rc!=0" >&2; exit 1; }
+        assert_file_contains "$DEB_TEST_LOG" "foo.deb"
+    )
+    local rc=$?
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "sha256 일치 → dpkg 호출 + rc 0" _test_deb_url_sha_match_installs
+
+_test_deb_url_sha_mismatch_aborts() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" ok
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
+        export DEB_TEST_LOG="${sb}/dpkg.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        local rc=0
+        proot_pkg_install_deb_url \
+            "https://example.invalid/foo.deb|deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" \
+            2>/dev/null || rc=$?
+        assert_nonzero "$rc" "sha256 불일치인데 rc 0" || exit 1
+        if [ -s "$DEB_TEST_LOG" ]; then
+            echo "[ASSERT] sha256 불일치인데 dpkg가 호출됨: $(cat "$DEB_TEST_LOG")" >&2
+            exit 1
+        fi
+        if [ -e "${TMPDIR}/foo.deb" ]; then
+            echo "[ASSERT] sha256 불일치인데 받은 .deb가 남아 있음" >&2
+            exit 1
+        fi
+    )
+    local rc=$?
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "sha256 불일치 → dpkg 미호출 + .deb 삭제 + rc!=0" _test_deb_url_sha_mismatch_aborts
+
+_test_deb_url_without_sha_installs() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" ok
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
+        export DEB_TEST_LOG="${sb}/dpkg.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        proot_pkg_install_deb_url "https://example.invalid/bar.deb" || {
+            echo "[ASSERT] sha 미지정인데 rc!=0" >&2; exit 1; }
+        assert_file_contains "$DEB_TEST_LOG" "bar.deb"
+    )
+    local rc=$?
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "sha256 미지정 → 검증 생략하고 dpkg 호출 + rc 0" _test_deb_url_without_sha_installs
+
+_test_deb_url_download_failure_propagates() {
+    local sb; sb=$(make_sandbox)
+    _deb_url_make_stubs "$sb" fail
+    (
+        export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
+        export DEB_TEST_LOG="${sb}/dpkg.log"
+        : > "$DEB_TEST_LOG"
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { "$@"; }
+        local rc=0
+        proot_pkg_install_deb_url "https://example.invalid/baz.deb" 2>/dev/null || rc=$?
+        assert_nonzero "$rc" "wget/curl 모두 실패인데 rc 0" || exit 1
+        if [ -s "$DEB_TEST_LOG" ]; then
+            echo "[ASSERT] 다운로드 실패인데 dpkg가 호출됨" >&2
+            exit 1
+        fi
+    )
+    local rc=$?
+    cleanup_sandbox "$sb"
+    return "$rc"
+}
+it "다운로드 실패(wget+curl) → rc!=0" _test_deb_url_download_failure_propagates
+
+_test_arch_deb_url_unsupported() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        local rc=0
+        proot_pkg_install_deb_url "https://example.invalid/foo.deb" 2>/dev/null || rc=$?
+        assert_nonzero "$rc" "Arch는 .deb 직접 설치를 지원하지 않으므로 rc!=0이어야 함"
+    )
+}
+it "pkg_arch.sh — .deb 직접 설치 미지원 → rc 1" _test_arch_deb_url_unsupported
+
+# =============================================================================
 # lib/common.sh — 하위 호환 래퍼
 # =============================================================================
 describe "lib/common.sh — 하위 호환 API"

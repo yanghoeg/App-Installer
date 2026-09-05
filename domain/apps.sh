@@ -57,6 +57,7 @@ APP_REGISTRY=(
     "gpu_dev|GPU 개발 도구|시스템|clvk, clinfo 등 (Termux native)"
     "gpu_proot|GPU 가속 (proot)|시스템|KGSL mesa + Vulkan WSI Layer (proot, Snapdragon 전용)"
     "korean_input|한글 입력기 (fcitx5)|시스템|fcitx5-hangul 한글 입력 (Termux native)"
+    "korean_proot|한글 입력기 (proot)|시스템|proot 내부 한글 로케일 + nimf/fcitx5 입력기 (Ubuntu/Arch)"
     "korean_locale|한글 로케일|시스템|force_gettext.so 기반 UI 한글화 (Termux native)"
     "api_conky_battery|Conky 배터리|Termux API|Conky 위젯에 배터리 잔량·온도 표시"
     "api_brightness|밝기 조절|Termux API|XFCE 패널용 화면 밝기 조절 스크립트"

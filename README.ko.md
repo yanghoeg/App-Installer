@@ -80,6 +80,7 @@ app-installer
 | **GPU 개발 도구** | clvk, clinfo 등 | Termux native | |
 | **GPU 가속 (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon 전용 |
 | **한글 입력기 (fcitx5)** | fcitx5-hangul 한글 입력 | Termux native | |
+| **한글 입력기 (proot)** | proot 내부 한글 로케일 + nimf/fcitx5 입력기 | proot | Ubuntu=nimf .deb, Arch=nimf AUR→fcitx5 폴백 |
 | **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | |
 | **한글 입력기 (nimf)** | nimf 한글 입력 | Termux native | 흡혈귀왕 빌드 |
 

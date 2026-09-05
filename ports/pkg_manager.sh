@@ -30,6 +30,17 @@ proot_pkg_install_aur()  { _port_not_impl "proot_pkg_install_aur"; }
 # .deb(Ubuntu) / AUR(Arch) 설치 | $1=deb_url $2=aur_pkg
 proot_pkg_install_deb_or_aur() { _port_not_impl "proot_pkg_install_deb_or_aur"; }
 
+# proot_pkg_install_deb_url <url[|sha256]>...
+#   설명: 공식 repo에 없는 .deb를 URL로 직접 설치 (Ubuntu 전용).
+#         각 .deb를 proot 내부에 다운로드 후 dpkg -i, 마지막에 apt-get install -f -y로
+#         의존성을 해결한다.
+#   인자: $@ = "URL" 또는 "URL|sha256"
+#   계약: sha256이 주어지면 dpkg 전에 검증하고, 불일치 시 받은 파일을 삭제하고
+#         그 항목을 설치하지 않으며 함수는 rc≠0을 반환한다(무결성 위반은 관대 처리 금지).
+#         다운로드 실패도 rc≠0. Arch 어댑터는 에러 메시지 + rc 1.
+#   반환: 0=모든 항목 설치 시도 성공, 1=하나 이상 다운로드/sha256 실패
+proot_pkg_install_deb_url() { _port_not_impl "proot_pkg_install_deb_url"; }
+
 # 외부 APT 저장소 추가 (Arch: no-op) | $1=name $2=gpg_key_url $3=sources_line
 proot_pkg_add_external_repo()  { _port_not_impl "proot_pkg_add_external_repo"; }
 

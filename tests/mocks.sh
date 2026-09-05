@@ -53,6 +53,7 @@ mock_pkg_adapter() {
     proot_pkg_is_installed()      { echo "$MOCK_PROOT_INSTALLED_PKGS" | grep -qw "$1"; }
     proot_pkg_install_aur()       { _record_call "proot_pkg_install_aur $*"; }
     proot_pkg_install_deb_or_aur(){ _record_call "proot_pkg_install_deb_or_aur $*"; }
+    proot_pkg_install_deb_url()   { _record_call "proot_pkg_install_deb_url $*"; }
     proot_pkg_add_external_repo() { _record_call "proot_pkg_add_external_repo $*"; }
     proot_pkg_install_libreoffice(){ _record_call "proot_pkg_install_libreoffice"; }
     proot_pkg_remove_libreoffice() { _record_call "proot_pkg_remove_libreoffice"; }
@@ -99,6 +100,7 @@ mock_all_install_primitives_fail() {
     proot_pkg_update()              { _record_call "proot_pkg_update"; return 1; }
     proot_pkg_install_aur()         { _record_call "proot_pkg_install_aur $*"; return 1; }
     proot_pkg_install_deb_or_aur()  { _record_call "proot_pkg_install_deb_or_aur $*"; return 1; }
+    proot_pkg_install_deb_url()     { _record_call "proot_pkg_install_deb_url $*"; return 1; }
     proot_pkg_add_external_repo()   { _record_call "proot_pkg_add_external_repo $*"; return 1; }
     proot_pkg_install_libreoffice() { _record_call "proot_pkg_install_libreoffice"; return 1; }
     proot_pkg_install_jdk()         { _record_call "proot_pkg_install_jdk"; return 1; }

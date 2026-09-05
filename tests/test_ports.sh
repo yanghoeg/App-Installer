@@ -19,6 +19,7 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_is_installed
     proot_pkg_install_aur
     proot_pkg_install_deb_or_aur
+    proot_pkg_install_deb_url
     proot_pkg_add_external_repo
     proot_pkg_install_libreoffice
     proot_pkg_remove_libreoffice

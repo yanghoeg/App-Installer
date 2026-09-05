@@ -27,6 +27,46 @@ proot_pkg_install_deb_or_aur() {
     ' _ "$deb_url" "$deb"
 }
 
+# 공식 apt repo에 없는 .deb를 URL로 직접 설치 (nimf 등).
+# 각 인자는 "URL" 또는 "URL|sha256" — sha256이 주어지면 dpkg -i 전에 무결성을 검증하고,
+# 불일치 시 받은 파일을 지운 뒤 그 항목을 설치하지 않으며 함수 전체가 rc≠0을 반환한다.
+# (GitHub Releases 변조/오다운로드를 조용히 통과시키지 않는다 — 포트 계약 참조.)
+# dpkg 자체의 의존성 미해결 실패는 뒤따르는 apt-get install -f -y가 보정하므로 관대 처리.
+proot_pkg_install_deb_url() {
+    local entry url sha rc=0
+    for entry in "$@"; do
+        url="${entry%%|*}"
+        if [ "$entry" = "$url" ]; then
+            sha=""
+        else
+            sha="${entry#*|}"
+        fi
+        proot_exec bash -c '
+            url="$1"; sha="$2"
+            name="${url##*/}"
+            deb="${TMPDIR:-/tmp}/${name}"
+            if ! { wget -q -O "$deb" "$url" || curl -fsSL -o "$deb" "$url"; } || [ ! -s "$deb" ]; then
+                echo "[ERROR] ${name} 다운로드 실패" >&2
+                rm -f "$deb"
+                exit 1
+            fi
+            if [ -n "$sha" ]; then
+                actual=$(sha256sum "$deb" | cut -d" " -f1)
+                if [ "$actual" != "$sha" ]; then
+                    echo "[ERROR] ${name} sha256 불일치 — 설치 건너뜀" >&2
+                    rm -f "$deb"
+                    exit 1
+                fi
+            fi
+            sudo dpkg -i "$deb" || echo "[WARN] ${name} dpkg 의존성 미해결 — apt-get install -f로 보정" >&2
+            rm -f "$deb"
+            exit 0
+        ' _ "$url" "$sha" || rc=1
+    done
+    proot_exec sudo apt-get install -f -y 2>/dev/null || true
+    return "$rc"
+}
+
 proot_pkg_add_external_repo() {
     local name="$1" gpg_key_url="$2" sources_line="$3"
     proot_exec sudo bash -c '

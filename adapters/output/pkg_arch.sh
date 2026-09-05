@@ -33,6 +33,12 @@ proot_pkg_install_deb_or_aur() {
     proot_pkg_install_aur "$aur_pkg"
 }
 
+# Arch에는 .deb 개념 없음 — AUR(proot_pkg_install_aur)을 쓸 것
+proot_pkg_install_deb_url() {
+    echo "[ERROR] Arch: .deb 직접 설치 미지원 — AUR을 사용하세요" >&2
+    return 1
+}
+
 # Arch에는 APT 저장소 개념 없음 — no-op
 proot_pkg_add_external_repo() {
     echo "[INFO] Arch: proot_pkg_add_external_repo 불필요 (no-op)" >&2
