@@ -183,8 +183,11 @@ app-installer/
 │   └── installers/             ← 앱별 설치 스크립트
 ├── lib/
 │   ├── fetch.sh                ← fetch_verified — 다운로드 + sha256 검증 (스니펫 주입 지원)
-│   ├── common.sh, proot_path.sh, wine_backend.sh
-└── tests/
+│   └── common.sh, proot_path.sh, wine_backend.sh
+├── docs/
+│   └── claude-code-login-regression.md ← Claude Code 핀 상향/롤백 기록
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+                                   (test_nimf_*_real.sh: 실기기 전용)
 ```
 
 ## 다운로드 무결성
@@ -198,6 +201,15 @@ app-installer/
 
 버전을 올릴 때는 새 URL을 받아 `sha256sum <파일>`로 해시를 구한 뒤 해당 설치기의
 `_*_VER` / `_*_SHA256` 상수를 함께 갱신합니다.
+
+## 테스트
+
+```bash
+for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+```
+
+**223**개 (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). PC에서는 mock / 정적
+검사만 가능하며, `tests/test_nimf_*_real.sh`는 실기기의 proot 안에서 실행합니다.
 
 ## 브랜치 전략
 

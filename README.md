@@ -80,6 +80,7 @@ Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status
 | **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
 | **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI layer | proot | Snapdragon only |
 | **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | |
+| **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
 | **Korean Locale** | force_gettext.so-based UI localization | Termux native | |
 | **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
 
@@ -183,8 +184,11 @@ app-installer/
 │   └── installers/             ← one file per app
 ├── lib/
 │   ├── fetch.sh                ← fetch_verified — download + sha256 verification (snippet-injectable)
-│   ├── common.sh, proot_path.sh, wine_backend.sh
-└── tests/
+│   └── common.sh, proot_path.sh, wine_backend.sh
+├── docs/
+│   └── claude-code-login-regression.md ← Claude Code pin bump / rollback record
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+                                   (test_nimf_*_real.sh: real device only)
 ```
 
 ## Download Integrity
@@ -199,6 +203,15 @@ lookups are used — an upstream change would otherwise silently install a diffe
 
 To bump a version: download the new URL, run `sha256sum <file>`, and update that installer's
 `_*_VER` / `_*_SHA256` constants together.
+
+## Tests
+
+```bash
+for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+```
+
+**223** tests (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). On a PC these are
+mock / static checks only; `tests/test_nimf_*_real.sh` run inside the proot distro on a real device.
 
 ## Branch Strategy
 

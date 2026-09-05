@@ -1220,7 +1220,7 @@ _test_korean_proot_profile_nimf_autostart() {
     assert_file_contains "$profile" "command -v nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$profile" "pgrep -x nimf" || { cleanup_sandbox "$sb"; return 1; }
     assert_file_contains "$profile" "disown" || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$profile" "LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$profile" "export LANG=ko_KR.UTF-8" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
 it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_korean_proot_profile_nimf_autostart

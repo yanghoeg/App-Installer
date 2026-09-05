@@ -82,10 +82,12 @@ _korean_proot_write_profile() {
 
 ${_KOREAN_PROOT_MARK}
 EOF
+    # export 필수 — .profile은 로그인 쉘에서 source되므로 export 없으면 쉘 변수로만
+    # 남아 자식 프로세스(GUI 앱)에 로케일이 전파되지 않는다.
     cat >> "$profile" << 'EOF'
-LANG=ko_KR.UTF-8
-LANGUAGE=ko_KR.UTF-8
-LC_ALL=ko_KR.UTF-8
+export LANG=ko_KR.UTF-8
+export LANGUAGE=ko_KR.UTF-8
+export LC_ALL=ko_KR.UTF-8
 EOF
 
     if [ "$im" = "nimf" ]; then
