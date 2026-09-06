@@ -16,17 +16,17 @@ _fetch_make_stubs() {
     mkdir -p "${sb}/bin"
     if [ "$mode" = "ok" ]; then
         cat > "${sb}/bin/wget" << 'STUB'
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 out=""; prev=""
 for a in "$@"; do [ "$prev" = "-O" ] && out="$a"; prev="$a"; done
 [ -n "$out" ] || exit 1
 printf 'FETCH-PAYLOAD\n' > "$out"
 STUB
     else
-        printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/wget"
+        printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 1\n' > "${sb}/bin/wget"
     fi
     # curl 폴백은 항상 실패 — wget 경로/실패 전파를 명확히 갈라 보기 위함
-    printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/curl"
+    printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 1\n' > "${sb}/bin/curl"
     chmod +x "${sb}/bin/"*
 }
 

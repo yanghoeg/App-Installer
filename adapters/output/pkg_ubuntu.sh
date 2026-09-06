@@ -23,9 +23,10 @@ proot_pkg_install_deb_or_aur() {
     local sha="${3:-}"
     proot_exec bash -c "$(fetch_verified_src)"$'\n''
         set -e
-        fetch_verified "$1" "/tmp/$2" "$3"
-        sudo apt install -y "/tmp/$2"
-        rm -f "/tmp/$2"
+        dst="${TMPDIR:-/tmp}/$2"
+        fetch_verified "$1" "$dst" "$3"
+        sudo apt install -y "$dst"
+        rm -f "$dst"
     ' _ "$deb_url" "$deb" "$sha"
 }
 

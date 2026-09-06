@@ -193,26 +193,26 @@ _deb_url_make_stubs() {
 
     if [ "$mode" = "ok" ]; then
         cat > "${sb}/bin/wget" << 'STUB'
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 out=""; prev=""
 for a in "$@"; do [ "$prev" = "-O" ] && out="$a"; prev="$a"; done
 [ -n "$out" ] || exit 1
 printf 'DEB-PAYLOAD\n' > "$out"
 STUB
     else
-        printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/wget"
+        printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 1\n' > "${sb}/bin/wget"
     fi
 
     # curl 폴백은 항상 실패 — wget 경로/실패 전파를 명확히 갈라 보기 위함
-    printf '#!/bin/bash\nexit 1\n' > "${sb}/bin/curl"
-    printf '#!/bin/bash\nexec "$@"\n' > "${sb}/bin/sudo"
+    printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 1\n' > "${sb}/bin/curl"
+    printf '#!/data/data/com.termux/files/usr/bin/bash\nexec "$@"\n' > "${sb}/bin/sudo"
     cat > "${sb}/bin/dpkg" << 'STUB'
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 echo "dpkg $*" >> "${DEB_TEST_LOG}"
 STUB
-    printf '#!/bin/bash\nexit 0\n' > "${sb}/bin/apt-get"
+    printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 0\n' > "${sb}/bin/apt-get"
     cat > "${sb}/bin/apt" << 'STUB'
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 echo "apt $*" >> "${DEB_TEST_LOG}"
 STUB
     chmod +x "${sb}/bin/"*
@@ -351,6 +351,7 @@ _test_deb_or_aur_sha_match_installs() {
     _deb_url_make_stubs "$sb" ok
     (
         export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
         export DEB_TEST_LOG="${sb}/apt.log"
         : > "$DEB_TEST_LOG"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
@@ -361,7 +362,6 @@ _test_deb_or_aur_sha_match_installs() {
         assert_file_contains "$DEB_TEST_LOG" "deb-or-aur-test.deb"
     )
     local rc=$?
-    rm -f /tmp/deb-or-aur-test.deb
     cleanup_sandbox "$sb"
     return "$rc"
 }
@@ -372,6 +372,7 @@ _test_deb_or_aur_sha_mismatch_aborts() {
     _deb_url_make_stubs "$sb" ok
     (
         export PATH="${sb}/bin:${PATH}"
+        export TMPDIR="${sb}/tmp"
         export DEB_TEST_LOG="${sb}/apt.log"
         : > "$DEB_TEST_LOG"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
@@ -384,13 +385,12 @@ _test_deb_or_aur_sha_mismatch_aborts() {
             echo "[ASSERT] sha256 불일치인데 apt가 호출됨: $(cat "$DEB_TEST_LOG")" >&2
             exit 1
         fi
-        if [ -e /tmp/deb-or-aur-test.deb ]; then
+        if [ -e "${TMPDIR}/deb-or-aur-test.deb" ]; then
             echo "[ASSERT] sha256 불일치인데 받은 .deb가 남아 있음" >&2
             exit 1
         fi
     )
     local rc=$?
-    rm -f /tmp/deb-or-aur-test.deb
     cleanup_sandbox "$sb"
     return "$rc"
 }
