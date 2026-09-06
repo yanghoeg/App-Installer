@@ -14,6 +14,7 @@ _PKGS_GPU_DEV=(
 )
 
 app_install_gpu_dev() {
+    termux_pkg_enable_repo x11-repo || return 1
     local total=${#_PKGS_GPU_DEV[@]} i=0
     for p in "${_PKGS_GPU_DEV[@]}"; do
         ((++i))
@@ -21,7 +22,7 @@ app_install_gpu_dev() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 }
@@ -30,6 +31,7 @@ app_remove_gpu_dev() {
     for p in "${_PKGS_GPU_DEV[@]}"; do
         termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
     done
+    return 0
 }
 
 app_is_installed_gpu_dev() {

@@ -1,23 +1,33 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # =============================================================================
-# DOMAIN: Wine — Box64 + Wine-Staging
+# DOMAIN: Wine — Box64 + Wine-Staging (백엔드 id: box64)
 # =============================================================================
 # proot 있음 → proot 내부 Box64 + Wine-Staging (adapter가 distro 차이 흡수)
 # proot 없음 → Termux native (glibc-runner + box64-glibc)
+#
+# 이 설치기는 $PREFIX/bin/wine-box64 래퍼만 만든다. PATH 상의 `wine`은
+# lib/wine_backend.sh가 만드는 디스패처이며 활성 백엔드로 위임한다.
+# WINEPREFIX는 $HOME/.wine (hangover 백엔드와 분리 — lib/wine_backend.sh 참조)
 
-_WINE_BIN="${PREFIX}/bin/wine"
+_WINE_BIN="${PREFIX}/bin/wine-box64"
 _WINE_DESKTOP="${PREFIX}/share/applications/wine64.desktop"
 _WINECFG_DESKTOP="${PREFIX}/share/applications/winecfg.desktop"
 _WINE_APPS_DESKTOP="${PREFIX}/share/applications/wine-apps.desktop"
 _WINE_NATIVE_DIR="${HOME}/.wine-staging"
 
-# GitHub Releases에서 최신 Wine-Staging WoW64 URL 조회
+# Wine-Staging WoW64 — 버전 핀 + sha256 (GitHub API latest 조회 없음)
 # wow64 빌드: 64-bit wine만으로 32-bit PE 실행 (Box64 환경 필수)
+# 버전을 올릴 때: Kron4ek 릴리스의 sha256sums.txt와 대조해 아래 상수를 갱신할 것.
+_WINE_STAGING_VER="11.16"
+_WINE_STAGING_SHA256="746d3d571e474a7a603e084a0d35649699c3d5c98e5ea3e9994e1e5fa693af92"
+
+# winetricks — master 대신 커밋 핀 (raw 콘텐츠가 조용히 바뀌지 않도록)
+_WINETRICKS_COMMIT="f3890f670867b5ffbc3938726db45c0f7d16c8ba"
+_WINETRICKS_URL="https://raw.githubusercontent.com/Winetricks/winetricks/${_WINETRICKS_COMMIT}/src/winetricks"
+_WINETRICKS_SHA256="672a1ff4442e8691a3ffc0e6860137e201a1d1227e9b3044245f1731e9e9837e"
+
 _wine_tarball_url() {
-    local ver
-    ver=$(curl -sf "https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "11.9")
-    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${ver}/wine-${ver}-staging-amd64-wow64.tar.xz"
+    echo "https://github.com/Kron4ek/Wine-Builds/releases/download/${_WINE_STAGING_VER}/wine-${_WINE_STAGING_VER}-staging-amd64-wow64.tar.xz"
 }
 
 # proot 내부: Wine-Staging tarball 설치
@@ -29,14 +39,15 @@ _wine_install_tarball_proot() {
     local wine_url
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
-    proot_exec_wine sudo bash -c "
+    proot_exec_wine sudo bash -c "$(fetch_verified_src)"$'\n'"
+        set -e
         mkdir -p /opt/wine-staging
-        wget -q '${wine_url}' -O /tmp/wine-staging.tar.xz
+        fetch_verified '${wine_url}' /tmp/wine-staging.tar.xz '${_WINE_STAGING_SHA256}'
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
         rm -f /tmp/wine-staging.tar.xz
 
         # x86-64 ELF를 .elf/ 서브디렉토리로 이동 후 box64 wrapper 생성
-        # argv[0] 보존: box64가 basename(경로)="wine"을 argv[0]으로 전달
+        # argv[0] 보존: box64가 wine 경로의 basename을 argv[0]으로 전달
         cd /opt/wine-staging/bin
         mkdir -p .elf
         for f in wine wine64 wineserver wineboot winedbg; do
@@ -59,12 +70,15 @@ _wine_install_tarball_proot() {
 }
 
 # proot 내부: winetricks 설치
+# 검증 실패한 파일이 /usr/local/bin에 남지 않도록 임시경로에 받은 뒤 mv 한다.
+# (winetricks는 비임계 — 실패해도 Wine 설치 자체는 계속 진행)
 _wine_install_winetricks_proot() {
-    proot_exec sudo bash -c "
-        command -v winetricks &>/dev/null && exit 0
-        wget -q https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
-            -O /usr/local/bin/winetricks
-        chmod +x /usr/local/bin/winetricks
+    proot_exec sudo bash -c "$(fetch_verified_src)"$'\n'"
+        command -v winetricks >/dev/null 2>&1 && exit 0
+        _wt=\$(mktemp) || exit 1
+        fetch_verified '${_WINETRICKS_URL}' \"\$_wt\" '${_WINETRICKS_SHA256}' || { rm -f \"\$_wt\"; exit 1; }
+        chmod +x \"\$_wt\"
+        mv \"\$_wt\" /usr/local/bin/winetricks
     " 2>/dev/null || true
 }
 
@@ -81,16 +95,19 @@ _wine_init_prefix_proot() {
 _wine_install_native() {
     echo "[Wine] Termux native: glibc-runner + box64-glibc + Wine-Staging"
 
-    if [ -d "$_WINE_NATIVE_DIR" ] && [ -f "$_WINE_BIN" ]; then
-        echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
+    # 래퍼가 아니라 wine 트리 자체로 판정한다.
+    # (래퍼 경로가 wine → wine-box64로 바뀐 기존 설치도 재다운로드하지 않도록)
+    if [ -x "$_WINE_NATIVE_DIR/bin/wine64" ]; then
+        echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
+        _wine_write_box64_native_wrapper
         return 0
     fi
 
-    termux_pkg_install glibc-repo
-    termux_pkg_install glibc-runner box64-glibc
+    termux_pkg_enable_repo glibc-repo || return 1
+    termux_pkg_install glibc-runner box64-glibc || return 1
 
     for p in \
-        mesa-zink-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
+        mesa-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
         pulseaudio-glibc \
         libxcb-glibc libxext-glibc libxrender-glibc libxfixes-glibc \
         libxcursor-glibc libxinerama-glibc libice-glibc libsm-glibc \
@@ -103,40 +120,53 @@ _wine_install_native() {
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     mkdir -p "$_WINE_NATIVE_DIR"
-    wget -q "$wine_url" -O /tmp/wine-staging.tar.xz
-    tar -xJf /tmp/wine-staging.tar.xz -C "$_WINE_NATIVE_DIR" --strip-components=1
-    rm -f /tmp/wine-staging.tar.xz
+    local _tmp_tar="${TMPDIR:-/tmp}/wine-staging.tar.xz"
+    fetch_verified "$wine_url" "$_tmp_tar" "$_WINE_STAGING_SHA256" || {
+        echo "[ERROR] Wine 다운로드 실패" >&2
+        return 1
+    }
+    if ! tar -xJf "$_tmp_tar" -C "$_WINE_NATIVE_DIR" --strip-components=1; then
+        rm -f "$_tmp_tar"
+        echo "[ERROR] Wine 압축 해제 실패" >&2
+        return 1
+    fi
+    rm -f "$_tmp_tar"
+    [ -x "$_WINE_NATIVE_DIR/bin/wine64" ] || {
+        echo "[ERROR] Wine 실행 파일을 찾을 수 없습니다." >&2
+        return 1
+    }
 
-    cat > "$_WINE_BIN" << 'WRAPEOF'
+    _wine_write_box64_native_wrapper
+
+    DISPLAY="${DISPLAY:-:0.0}" "$_WINE_BIN" wineboot --init 2>/dev/null || true
+}
+
+# $PREFIX/bin/wine-box64 — Termux native (glibc-runner) 래퍼
+# Mesa/Vulkan/Wine 공통 env는 wine_emit_env_block()(lib/wine_backend.sh)에서 온다.
+_wine_write_box64_native_wrapper() {
+    {
+        cat << 'WRAP_HEAD'
 #!/data/data/com.termux/files/usr/bin/bash
-# Wine wrapper — Termux native (glibc-runner)
+# Wine wrapper — Termux native (glibc-runner), 백엔드 id: box64
 # WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
 
 WINE_DPI="${WINE_DPI:-240}"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
 
 # Android CPU 쓰로틀링 방지
 termux-wake-lock 2>/dev/null
 
 # Wine 레지스트리 DPI 동기화
-_reg="${WINEPREFIX:-$HOME/.wine}/user.reg"
+_reg="${WINEPREFIX}/user.reg"
 if [ -f "$_reg" ]; then
     _hex=$(printf '%08x' "$WINE_DPI")
     grep -q "\"LogPixels\"=dword:${_hex}" "$_reg" 2>/dev/null || \
         sed -i "s/\"LogPixels\"=dword:[0-9a-f]\{8\}/\"LogPixels\"=dword:${_hex}/" "$_reg"
 fi
 
-export DISPLAY="${DISPLAY:-:0.0}"
-# Mesa / Vulkan
-export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-zink}"
-export TU_DEBUG=noconform
-export ZINK_DESCRIPTORS=lazy
-export MESA_NO_ERROR=1
-export MESA_GL_VERSION_OVERRIDE="${MESA_GL_VERSION_OVERRIDE:-4.6COMPAT}"
-export MESA_GLSL_VERSION_OVERRIDE="${MESA_GLSL_VERSION_OVERRIDE:-460}"
-export MESA_GLES_VERSION_OVERRIDE="${MESA_GLES_VERSION_OVERRIDE:-3.2}"
-# Wine
-export WINEESYNC=1
-export WINEDEBUG="${WINEDEBUG:--all}"
+WRAP_HEAD
+        wine_emit_env_block
+        cat << 'WRAP_TAIL'
 # Box64
 export BOX64_MMAP32=1
 export BOX64_X11THREADS=1
@@ -146,10 +176,9 @@ export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
 grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
 exec grun "$HOME/.wine-staging/bin/wine64" "$@"
-WRAPEOF
+WRAP_TAIL
+    } > "$_WINE_BIN"
     chmod +x "$_WINE_BIN"
-
-    DISPLAY="${DISPLAY:-:0.0}" wine wineboot --init 2>/dev/null || true
 }
 
 # .desktop + proot 래퍼 스크립트 생성
@@ -157,7 +186,7 @@ _wine_create_launchers() {
     if has_proot_distro; then
         cat > "$_WINE_BIN" << 'WRAPEOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# Wine wrapper — prun을 통해 proot 내 wine-staging 실행
+# Wine wrapper — prun을 통해 proot 내 wine-staging 실행, 백엔드 id: box64
 # WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
 
 WINE_DPI="${WINE_DPI:-240}"
@@ -169,8 +198,15 @@ termux-wake-lock 2>/dev/null
 _conf="$HOME/.config/termux-xfce/config"
 [ -f "$_conf" ] && . "$_conf"
 _distro="${PROOT_DISTRO:-archlinux}"
-_user="${PROOT_USER:-$(ls -1 "$PREFIX/var/lib/proot-distro/installed-rootfs/$_distro/home/" 2>/dev/null | grep -v '^alarm$' | head -1)}"
-_reg="$PREFIX/var/lib/proot-distro/installed-rootfs/$_distro/home/$_user/.wine/user.reg"
+# rootfs 레이아웃 자동 판별 (신규 containers/<distro>/rootfs 우선, 레거시 폴백)
+_base="$PREFIX/var/lib/proot-distro"
+if [ -d "$_base/containers/$_distro/rootfs" ]; then
+    _rootfs="$_base/containers/$_distro/rootfs"
+else
+    _rootfs="$_base/installed-rootfs/$_distro"
+fi
+_user="${PROOT_USER:-$(ls -1 "$_rootfs/home/" 2>/dev/null | grep -v '^alarm$' | head -1)}"
+_reg="$_rootfs/home/$_user/.wine/user.reg"
 
 # Wine 레지스트리 DPI 동기화 (sed — wineserver 불필요, 즉시 반영)
 if [ -f "$_reg" ]; then
@@ -202,13 +238,24 @@ WRAPEOF
     fi
 
     mkdir -p "${PREFIX}/share/applications"
-    cat > "$_WINE_DESKTOP" << 'EOF'
+
+    # native는 prun-gui(proot 전용) 대신 wine 래퍼를 직접 호출
+    local _wine_exec_cmd _winecfg_exec_cmd
+    if has_proot_distro; then
+        _wine_exec_cmd="prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer"
+        _winecfg_exec_cmd="prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg"
+    else
+        _wine_exec_cmd="wine-box64 explorer"
+        _winecfg_exec_cmd="wine-box64 winecfg"
+    fi
+
+    cat > "$_WINE_DESKTOP" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Wine
+Name=Wine (Box64)
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=bash -c "prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "${_wine_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
@@ -216,13 +263,13 @@ StartupNotify=false
 Terminal=false
 EOF
 
-    cat > "$_WINECFG_DESKTOP" << 'EOF'
+    cat > "$_WINECFG_DESKTOP" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Wine 설정
+Name=Wine 설정 (Box64)
 Comment=Wine 환경 구성 (winecfg)
-Exec=bash -c "prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg </dev/null >/dev/null 2>&1 &"
+Exec=bash -c "${_winecfg_exec_cmd} </dev/null >/dev/null 2>&1 &"
 Icon=wine-winecfg
 Categories=Settings;System;
 Terminal=false
@@ -251,6 +298,10 @@ EOF
         "${HOME}/Desktop/wine-apps.desktop" 2>/dev/null || true
     gio set "${HOME}/Desktop/wine64.desktop" metadata::trusted true 2>/dev/null || true
     gio set "${HOME}/Desktop/winecfg.desktop" metadata::trusted true 2>/dev/null || true
+
+    # PATH 상의 `wine` 디스패처 + wine-backend CLI 배선
+    wine_wire_frontend || return 1
+    wine_backend_set_default box64
 }
 
 app_install_wine() {
@@ -261,29 +312,31 @@ app_install_wine() {
         if proot_exec which wine &>/dev/null 2>&1; then
             echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
         else
-            proot_pkg_update
-            proot_pkg_install_box64
+            proot_pkg_update || return 1
+            proot_pkg_install_box64 || return 1
             if ! proot_exec which box64 &>/dev/null; then
                 echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
                 return 1
             fi
-            _wine_install_tarball_proot
-            proot_pkg_install_wine_mesa
+            _wine_install_tarball_proot || { echo "[ERROR] Wine 다운로드/설치 실패" >&2; return 1; }
+            proot_pkg_install_wine_mesa || return 1
             _wine_install_winetricks_proot
             _wine_init_prefix_proot
         fi
     else
         echo "[Wine] proot 없음: Termux native (glibc-runner) 방식"
-        _wine_install_native
+        _wine_install_native || return 1
     fi
 
-    _wine_create_launchers
+    _wine_create_launchers || return 1
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Wine 설치 완료"
-    echo "  wine program.exe  — Windows 앱 실행"
+    echo "  Wine (Box64 + Wine-Staging) 설치 완료"
+    echo "  wine program.exe  — Windows 앱 실행 (활성 백엔드)"
     echo "  wine winecfg      — Wine 설정"
+    echo "  wine-backend      — 활성 백엔드 확인 / 전환"
+    echo "  WINEPREFIX        — \$HOME/.wine"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -303,6 +356,13 @@ app_remove_wine() {
     rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP"
     rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
         "${HOME}/Desktop/wine-apps.desktop"
+
+    # 디스패처: 다른 백엔드가 남아 있으면 그쪽으로 넘기고, 없으면 함께 제거
+    if [ -x "$_WINE_HANGOVER_BIN" ]; then
+        wine_backend_set hangover
+    else
+        rm -f "$_WINE_DISPATCHER" "$_WINE_BACKEND_CLI" "$_WINE_BACKEND_CONF"
+    fi
 }
 
 app_is_installed_wine() {

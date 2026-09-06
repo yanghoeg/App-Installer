@@ -5,6 +5,9 @@
 # pkg_ubuntu.sh / pkg_arch.sh 가 각각 source 하여 사용.
 # 직접 source 하지 말 것 — DI 컨테이너(install.sh)는 distro 어댑터만 로드.
 
+# fetch_verified / fetch_verified_src — .deb 다운로드 무결성 검증 (스니펫 주입 포함)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/fetch.sh"
+
 proot_exec() {
     proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
         --shared-tmp -- env DISPLAY="${DISPLAY:-:0.0}" "$@"

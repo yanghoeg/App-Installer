@@ -2,7 +2,7 @@
 # DOMAIN: VLC — Termux native
 
 app_install_vlc() {
-    termux_pkg_install vlc
+    termux_pkg_install vlc || return 1
     desktop_register "vlc" "VLC media player" "vlc --no-cli" "vlc" \
         "AudioVideo;Player;Recorder;" \
         "MimeType=video/mpeg;video/x-avi;audio/mpeg;"

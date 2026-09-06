@@ -7,19 +7,21 @@ app_install_onepassword() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
     case "${PROOT_DISTRO:-}" in
         archlinux)
-            proot_pkg_install_aur 1password-cli
+            proot_pkg_install_aur 1password-cli || return 1
             ;;
         *)
             # Ubuntu: 공식 apt repo → 1password-cli (arm64 GUI 미지원)
             proot_exec sudo bash -c "
+                set -e
                 apt install -y gpg curl 2>/dev/null
-                curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+                curl -fsS https://downloads.1password.com/linux/keys/1password.asc \
                     | gpg --dearmor > /usr/share/keyrings/1password-archive-keyring.gpg
                 echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/arm64 stable main' \
                     > /etc/apt/sources.list.d/1password.list
                 apt update -qq
                 apt install -y 1password-cli
-            "
+                command -v op >/dev/null
+            " || { echo "[ERROR] 1Password CLI 설치 실패" >&2; return 1; }
             ;;
     esac
     echo "[INFO] 1Password GUI는 arm64 미지원 — CLI(op) 설치됨"

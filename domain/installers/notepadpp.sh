@@ -6,31 +6,36 @@
 
 _NOTEPADPP_DESKTOP="${PREFIX}/share/applications/notepadpp.desktop"
 
+# 버전 핀 + sha256 (GitHub API latest 조회 없음 — 재현 가능한 설치 + 무결성 검증)
+# 버전을 올릴 때: 새 zip을 받아 sha256sum으로 아래 상수를 갱신할 것.
+_NOTEPADPP_VER="8.9.8"
+_NOTEPADPP_SHA256="b269383239464a945d17cfabfccf53935b83d80d907922310fdfd50d80274c66"
+
 _notepadpp_portable_url() {
-    local tag ver
-    tag=$(curl -sf "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "v8.9.5")
-    ver="${tag#v}"
-    echo "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/${tag}/npp.${ver}.portable.x64.zip"
+    echo "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v${_NOTEPADPP_VER}/npp.${_NOTEPADPP_VER}.portable.x64.zip"
 }
 
 app_install_notepadpp() {
-    if ! app_is_installed_wine; then
+    if ! wine_backend_available; then
         echo "[Notepad++] Wine이 필요합니다. 먼저 설치합니다."
-        app_install_wine
+        app_install_wine || return 1
     fi
 
     local url
     url=$(_notepadpp_portable_url)
 
-    echo "[Notepad++] portable zip 다운로드 및 설치 중..."
-    proot_exec bash -c "
-        wget -q '${url}' -O /tmp/npp.zip || \
-            curl -fsSL '${url}' -o /tmp/npp.zip
-        mkdir -p \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
-        unzip -qo /tmp/npp.zip -d \"\$HOME/.wine/drive_c/Program Files/Notepad++\"
-        rm -f /tmp/npp.zip
-    "
+    echo "[Notepad++] portable zip 다운로드 및 설치 중... (백엔드: $(wine_backend))"
+    if ! wine_exec_shell "$(fetch_verified_src)"$'\n'"
+        set -e
+        fetch_verified '${url}' \${TMPDIR:-/tmp}/npp.zip '${_NOTEPADPP_SHA256}'
+        mkdir -p \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
+        unzip -qo \${TMPDIR:-/tmp}/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
+        rm -f \${TMPDIR:-/tmp}/npp.zip
+        [ -f \"\$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe\" ]
+    "; then
+        echo "[ERROR] Notepad++ 다운로드/설치 실패" >&2
+        return 1
+    fi
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_NOTEPADPP_DESKTOP" << 'EOF'
@@ -56,8 +61,8 @@ EOF
 }
 
 app_remove_notepadpp() {
-    proot_exec bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/Program Files/Notepad++\" 2>/dev/null
+    wine_exec_shell "
+        rm -rf \"\$WINEPREFIX/drive_c/Program Files/Notepad++\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_NOTEPADPP_DESKTOP" "${HOME}/Desktop/notepadpp.desktop"
 }

@@ -12,7 +12,7 @@
 ---
 
 A **GUI tool for installing and removing extra apps** in the [Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) environment.  
-Select an app from the zenity dialog and it installs automatically into proot (Ubuntu/Arch) or Termux native.
+Select an app from the yad notebook tabbed GUI (zenity fallback) and it installs automatically into proot (Ubuntu/Arch) or Termux native.
 
 **Tested devices**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
 
@@ -26,6 +26,27 @@ app-installer
 # Desktop icon → App Installer  or  Application menu → App Installer
 ```
 
+Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
+
+### Upgrade & rollback
+
+Picking an app that is **already installed** opens a second dialog. Apps that define an
+`app_upgrade_<id>` handler (currently **Claude Code**) offer *Upgrade* next to *Remove*;
+everything else goes straight to *Remove*.
+
+The Claude Code upgrade backs the current binary up as `claude.bak.v<version>`, downloads the
+new native build, runs a smoke check (`claude --version`) and **rolls back automatically** if
+that check fails. To roll back by hand later — e.g. after a `/login` regression:
+
+```bash
+source domain/installers/claude_code.sh
+app_rollback_claude_code            # newest available backup
+app_rollback_claude_code 2.1.132    # a specific version
+```
+
+See [`docs/claude-code-login-regression.md`](docs/claude-code-login-regression.md) for the
+pin-bump / rollback history.
+
 ## Supported Apps
 
 | App | Description | Install target | Notes |
@@ -34,10 +55,18 @@ app-installer
 | **LibreOffice** | Office suite | proot | bwrap stub installed |
 | **Thunderbird** | Email client | Termux native | |
 | **VLC** | Multimedia player | Termux native | |
+| **GIMP** | Image editor | Termux native | |
+| **Inkscape** | Vector graphics editor | Termux native | |
+| **Audacity** | Audio editor | Termux native | |
 | **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
 | **Notion** | Notes & productivity | proot | AppImage extracted |
 | **Teams** | Microsoft Teams for Linux | proot | community Electron client |
-| **Wine** | Run Windows apps (Box64 + Wine-Staging) | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Wine (Box64+Staging)** | Run Windows apps via Box64 | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| **Wine (Hangover)** | Run Windows apps via FEX/ARM64EC | Termux native | faster; separate WINEPREFIX |
+| **Notepad++** | Text editor | Wine | |
+| **7-Zip** | Archive tool | Wine | |
+| **Sumatra PDF** | PDF/EPUB/MOBI viewer | Wine | |
+| **WinMerge** | File/folder diff & merge | Wine | |
 | **Miniforge** | Conda package manager | proot | CLI only |
 | **DBeaver** | Universal database client | proot | |
 | **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
@@ -45,6 +74,48 @@ app-installer
 | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
 | **Burp Suite** | Web security testing tool | proot | arm64 installer |
 | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
+| **Claude Code** | AI coding assistant CLI | Termux native | pairs with glibc-runner |
+| **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
+| **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
+| **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
+| **Codex CLI** | OpenAI coding agent CLI | Termux native | needs `OPENAI_API_KEY` |
+| **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
+| **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
+| **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
+| **Jujutsu** | Git-compatible VCS + `lazyjj` | Termux native | |
+| **television** | Fuzzy finder (`tv`) | Termux native | |
+| **superfile** | Modern TUI file manager (`spf`) | Termux native | |
+| **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
+| **wayvnc** | VNC server for the desktop | Termux native | wayland sessions only (`wayvnc-start`) |
+| **Neovim / Helix** | Terminal modal editors | Termux native | |
+| **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
+| **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
+
+## System Apps (시스템 tab)
+
+| App | Description | Install target | Notes |
+|-----|-------------|----------------|-------|
+| **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | |
+| **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
+| **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI layer | proot | Snapdragon only |
+| **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | |
+| **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
+| **Korean Locale** | force_gettext.so-based UI localization | Termux native | |
+| **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
+
+## Termux API Apps (Termux API tab)
+
+| App | Description | Install target | Notes |
+|-----|-------------|----------------|-------|
+| **Brightness Control** | Screen brightness script for the XFCE panel | Termux native | |
+| **Volume Control** | Volume control script for the XFCE panel | Termux native | |
+| **Conky Battery** | Battery level/temperature widget for Conky | Termux native | |
+| **Notification Tool** | Send Android notifications from scripts | Termux native | |
+| **TTS Voice** | Text-to-speech (Android TTS) | Termux native | |
+| **Speech Recognition** | Speech-to-text (Android STT) | Termux native | |
+| **Wallpaper Sync** | Sync XFCE wallpaper to Android | Termux native | |
+
+Termux API apps require the `termux-api` package and the Termux:API APK.
 
 ## arm64 Compatibility Notes
 
@@ -60,22 +131,30 @@ Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds app
 | Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
 | 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
+| Arch's `~/.bash_profile` → `~/.bashrc` chain never sources `~/.profile` | `korean_proot` exports locale / IM vars from `/etc/profile.d/termux-xfce-locale.sh`, which every login shell reads |
 
-## Wine (Box64 + Wine-Staging)
+## Wine — two backends
 
-Automatically branches based on whether proot is installed.
+Two backends can be installed side by side. `wine` on your PATH is a dispatcher that
+forwards to the active one.
 
-| Environment | Setup |
-|-------------|-------|
-| proot Ubuntu/Arch | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot |
-| no proot | glibc-runner + box64-glibc + Wine-Staging tarball |
+| Backend | Setup | WINEPREFIX | Wrapper |
+|---------|-------|------------|---------|
+| `box64` (proot) | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot | `$HOME/.wine` | `wine-box64` |
+| `box64` (no proot) | glibc-runner + box64-glibc + Wine-Staging tarball | `$HOME/.wine` | `wine-box64` |
+| `hangover` | `hangover` package (Wine native arm64, apps via FEX/ARM64EC) | `$HOME/.wine-hangover` | `wine-hangover` |
 
 ```bash
-wine kakao.exe          # Run Windows app
+wine-backend            # show active backend + install status
+wine-backend hangover   # switch backends
+wine kakao.exe          # Run Windows app through the active backend
 wine winecfg            # Wine configuration
-winetricks vcrun2019    # Install DLL / runtime
+winetricks vcrun2019    # Install DLL / runtime (box64 backend, inside proot)
 winetricks dotnet48
 ```
+
+> The prefixes are separate on purpose — the two Wine builds (wow64 staging vs ARM64EC)
+> would fight over a shared prefix. Reinstall Wine apps after switching backends.
 
 > **Limitations**: Anti-cheat games, kernel-driver-dependent apps, and complex modern .NET apps will not work.
 
@@ -110,7 +189,7 @@ ubuntu <cmd>    # run single command in Ubuntu proot
 
 ```
 app-installer/
-├── install.sh                  ← zenity GUI main (install/remove loop)
+├── install.sh                  ← yad notebook tabbed GUI main (zenity fallback; install/remove loop)
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/
@@ -123,8 +202,36 @@ app-installer/
 │   ├── apps.sh                 ← app registry + install/remove dispatcher
 │   ├── desktop.sh              ← .desktop file creation helper
 │   └── installers/             ← one file per app
-└── tests/
+├── lib/
+│   ├── fetch.sh                ← fetch_verified — download + sha256 verification (snippet-injectable)
+│   └── common.sh, proot_path.sh, wine_backend.sh
+├── docs/
+│   └── claude-code-login-regression.md ← Claude Code pin bump / rollback record
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+                                   (test_nimf_*_real.sh: real device only)
 ```
+
+## Download Integrity
+
+Every externally downloaded file (.deb, tarball, zip, AppImage, installer exe) is **version
+pinned**, with its **sha256 constant** declared at the top of the installer (e.g.
+`_WINE_STAGING_VER` / `_WINE_STAGING_SHA256` in `domain/installers/wine.sh`).
+`fetch_verified` in `lib/fetch.sh` checks the hash after download and, **on mismatch, deletes
+the file and aborts the install** (rc != 0). No `releases/latest`-style "always newest" API
+lookups are used — an upstream change would otherwise silently install a different binary.
+(Exception: user-selected models in `llama_cpp.sh`.)
+
+To bump a version: download the new URL, run `sha256sum <file>`, and update that installer's
+`_*_VER` / `_*_SHA256` constants together.
+
+## Tests
+
+```bash
+for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+```
+
+**223** tests (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). On a PC these are
+mock / static checks only; `tests/test_nimf_*_real.sh` run inside the proot distro on a real device.
 
 ## Branch Strategy
 

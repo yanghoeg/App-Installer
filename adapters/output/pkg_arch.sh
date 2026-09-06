@@ -30,7 +30,14 @@ proot_pkg_install_aur() {
 proot_pkg_install_deb_or_aur() {
     local _deb_url="$1"  # Arch에서는 미사용
     local aur_pkg="$2"
+    local _sha="${3:-}"  # Arch는 AUR 경로라 .deb sha256 미사용
     proot_pkg_install_aur "$aur_pkg"
+}
+
+# Arch에는 .deb 개념 없음 — AUR(proot_pkg_install_aur)을 쓸 것
+proot_pkg_install_deb_url() {
+    echo "[ERROR] Arch: .deb 직접 설치 미지원 — AUR을 사용하세요" >&2
+    return 1
 }
 
 # Arch에는 APT 저장소 개념 없음 — no-op
@@ -47,6 +54,7 @@ proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 # Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
 proot_pkg_install_sasm() {
     proot_exec sudo bash -c "
+        set -e
         pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
         [ -f /usr/local/bin/sasm ] && exit 0
         git clone https://github.com/Dman95/SASM.git /tmp/sasm-src
@@ -72,8 +80,8 @@ proot_pkg_install_box64() {
             'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' 2>/dev/null || true
         grep -q '\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null || \
             printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
-        pacman -Sy --noconfirm box64 2>/dev/null || echo '[WARN] Box64 설치 실패'
-    " 2>/dev/null || true
+        pacman -Sy --noconfirm box64 2>/dev/null
+    " 2>/dev/null
 }
 
 proot_pkg_install_wine_mesa() {

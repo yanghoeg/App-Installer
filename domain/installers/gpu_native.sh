@@ -11,6 +11,7 @@ _PKGS_GPU_NATIVE=(
 )
 
 app_install_gpu_native() {
+    termux_pkg_enable_repo x11-repo || return 1
     local total=${#_PKGS_GPU_NATIVE[@]} i=0
     for p in "${_PKGS_GPU_NATIVE[@]}"; do
         ((++i))
@@ -18,7 +19,7 @@ app_install_gpu_native() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 
@@ -38,6 +39,7 @@ app_remove_gpu_native() {
     for p in mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev mesa-demos; do
         termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
     done
+    return 0
 }
 
 app_is_installed_gpu_native() {

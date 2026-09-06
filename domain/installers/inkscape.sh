@@ -2,7 +2,8 @@
 # DOMAIN: Inkscape — Termux native (x11-repo)
 
 app_install_inkscape() {
-    termux_pkg_install inkscape
+    termux_pkg_enable_repo x11-repo || return 1
+    termux_pkg_install inkscape || return 1
     desktop_register "inkscape" "Inkscape" "inkscape %U" "inkscape" \
         "Graphics;VectorGraphics;" \
         "MimeType=image/svg+xml;image/svg+xml-compressed;application/vnd.corel-draw;"

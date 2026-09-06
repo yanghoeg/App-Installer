@@ -10,24 +10,16 @@
 #   bash app-install.sh status <id>          — 설치 여부 확인
 # 환경변수: PROOT_DISTRO, PROOT_USER (없으면 config 파일에서 로드)
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/wine_backend.sh"
 
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_detect_proot_user() {
-    local home_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO:-}/home"
-    local d
-    for d in "$home_dir"/*/; do
-        [ -d "$d" ] || continue
-        basename "$d"
-        return
-    done
-    echo "user"
-}
-
 _load_config() {
     local config="$HOME/.config/termux-xfce/config"
     if [ -f "$config" ]; then

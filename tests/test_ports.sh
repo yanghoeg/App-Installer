@@ -19,6 +19,7 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_is_installed
     proot_pkg_install_aur
     proot_pkg_install_deb_or_aur
+    proot_pkg_install_deb_url
     proot_pkg_add_external_repo
     proot_pkg_install_libreoffice
     proot_pkg_remove_libreoffice
@@ -28,12 +29,14 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_install_sasm
     proot_pkg_install_box64
     proot_pkg_install_wine_mesa
+    proot_pkg_install_tor_deps
 )
 
 PKG_TERMUX_CONTRACTS=(
     termux_pkg_install
     termux_pkg_remove
     termux_pkg_is_installed
+    termux_pkg_enable_repo
 )
 
 _check_contracts() {
@@ -89,20 +92,22 @@ it "모든 proot_pkg_* 계약을 구현한다" _test_arch_contracts
 describe "포트 — 미구현 함수 오류 동작"
 
 _test_port_not_impl_returns_error() {
+    local rc=0
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         proot_exec echo "should not run" 2>/dev/null
-    )
-    assert_nonzero $? "미구현 proot_exec는 0이 아닌 코드를 반환해야 한다"
+    ) || rc=$?
+    assert_nonzero "$rc" "미구현 proot_exec는 0이 아닌 코드를 반환해야 한다"
 }
 it "어댑터 없이 proot_exec 호출 시 오류 반환" _test_port_not_impl_returns_error
 
 _test_termux_port_not_impl_returns_error() {
+    local rc=0
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         termux_pkg_install "somepackage" 2>/dev/null
-    )
-    assert_nonzero $? "미구현 termux_pkg_install는 0이 아닌 코드를 반환해야 한다"
+    ) || rc=$?
+    assert_nonzero "$rc" "미구현 termux_pkg_install는 0이 아닌 코드를 반환해야 한다"
 }
 it "어댑터 없이 termux_pkg_install 호출 시 오류 반환" _test_termux_port_not_impl_returns_error
 

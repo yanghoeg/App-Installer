@@ -7,10 +7,33 @@
 CLAUDE_CODE_PREFIX="${PREFIX}/share/claude-code"
 CLAUDE_CODE_BIN_PATH="${PREFIX}/bin/claude"
 CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
+# 설치된 버전 기록 — self-update를 끈 상태라 업그레이드 판단 근거로 사용
+CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
+# 핀 버전 — Termux /login 회귀 조사 이력은 docs/claude-code-login-regression.md 참조.
+# 2026-09-05: 2.1.132 → 2.1.261 상향. 근거는 GHSA-7835-87q9-rgvv(HIGH, <2.1.163) 해소 +
+# npm latest 대조. 실기기 /login 2026-09-06 검증 완료 — 회귀 시 롤백 절차는 위 문서 참조.
+# 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
+CLAUDE_CODE_PIN_VERSION="2.1.261"
+
+# 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
+# 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
+declare -gA CLAUDE_CODE_TARBALL_SHA256=(
+    ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
+)
 
 _claude_code_fetch_latest_version() {
-    curl -sL "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
+    if [ -n "${CLAUDE_CODE_PIN_VERSION}" ]; then
+        printf '%s\n' "${CLAUDE_CODE_PIN_VERSION}"
+        return 0
+    fi
+    curl -sSLf "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
         | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4
+}
+
+# 설치된 버전 조회 — 미설치/버전 파일 없으면 빈 문자열
+_claude_code_installed_version() {
+    [ -f "${CLAUDE_CODE_VERSION_FILE}" ] || return 0
+    cat "${CLAUDE_CODE_VERSION_FILE}"
 }
 
 _claude_code_download_native() {
@@ -18,10 +41,11 @@ _claude_code_download_native() {
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
     mkdir -p "${CLAUDE_CODE_PREFIX}"
     local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
-    curl -sL "$url" -o "$tarball" || return 1
-    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1
+    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" || return 1
+    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1 || return 1
     rm -f "$tarball"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
 }
 
 _claude_code_remove_npm_wrapper() {
@@ -47,6 +71,7 @@ _claude_code_configure_settings() {
     [ -f "${settings_file}" ] && return 0
     cat > "${settings_file}" << 'EOF'
 {
+  "model": "claude-opus-4-8",
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   }
@@ -55,20 +80,95 @@ EOF
 }
 
 app_install_claude_code() {
-    termux_pkg_install glibc-repo
-    termux_pkg_install glibc-runner
+    termux_pkg_enable_repo glibc-repo || return 1
+    termux_pkg_install glibc-runner || return 1
     _claude_code_remove_npm_wrapper
     local version
     version=$(_claude_code_fetch_latest_version)
     [ -z "$version" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
     _claude_code_download_native "$version" || return 1
+    _claude_code_install_wrapper || return 1
+    _claude_code_configure_settings || return 1
+}
+
+# 현재 native binary를 이전 버전 이름으로 백업 — 롤백 자료.
+# 이미 같은 이름의 백업이 있으면 유지(가장 오래된 알려진-정상 버전을 지키기 위해).
+_claude_code_backup_current() {
+    local ver="$1"
+    [ -n "$ver" ] || return 0
+    [ -f "${CLAUDE_CODE_PREFIX}/claude" ] || return 0
+    local bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${ver}"
+    [ -e "$bak_bin" ] && return 0
+    cp -f "${CLAUDE_CODE_PREFIX}/claude"       "$bak_bin"
+    [ -f "${CLAUDE_CODE_PREFIX}/package.json" ] && \
+        cp -f "${CLAUDE_CODE_PREFIX}/package.json" "${CLAUDE_CODE_PREFIX}/package.json.bak.v${ver}"
+    return 0
+}
+
+# 새 binary가 최소한 실행되는지만 확인 — 로그인/기능 회귀는 여기서 못 잡음.
+# 부팅 자체가 깨진 회귀(예: 잘못된 dynamic linker 요구)만 감지.
+_claude_code_smoke_check() {
+    grun "${CLAUDE_CODE_PREFIX}/claude" --version >/dev/null 2>&1
+}
+
+# 백업된 이전 버전으로 되돌림 — 로그인 회귀 등 수동 롤백에 사용.
+# 사용: app_rollback_claude_code            → 사용 가능한 최신 백업으로
+#      app_rollback_claude_code 2.1.132    → 특정 버전으로
+app_rollback_claude_code() {
+    local target="${1:-}" bak_bin bak_pkg
+    if [ -n "$target" ]; then
+        bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${target}"
+        [ -f "$bak_bin" ] || { echo "[ERROR] 백업 없음: v${target}" >&2; return 1; }
+    else
+        # pipefail 아래에서 매치 없을 때 ls 실패 → || true로 흡수하고 빈 문자열 판정으로 넘김
+        bak_bin=$(ls -1t "${CLAUDE_CODE_PREFIX}"/claude.bak.v* 2>/dev/null | head -1 || true)
+        [ -n "$bak_bin" ] || { echo "[ERROR] 사용 가능한 백업이 없습니다" >&2; return 1; }
+        target=${bak_bin##*/claude.bak.v}
+    fi
+    bak_pkg="${CLAUDE_CODE_PREFIX}/package.json.bak.v${target}"
+    cp -f "$bak_bin" "${CLAUDE_CODE_PREFIX}/claude"
+    chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    [ -f "$bak_pkg" ] && cp -f "$bak_pkg" "${CLAUDE_CODE_PREFIX}/package.json"
+    printf '%s\n' "$target" > "${CLAUDE_CODE_VERSION_FILE}"
     _claude_code_install_wrapper
-    _claude_code_configure_settings
+    echo "[INFO] v${target}으로 롤백 완료"
+}
+
+# 최신 native binary로 업그레이드.
+# self-update가 꺼져 있으므로 tarball을 다시 받아 교체 (settings.json은 건드리지 않음).
+# 백업 → 다운로드 → 스모크 → 실패 시 자동 롤백.
+#   반환값: 0=업그레이드 완료, 2=이미 최신, 1=오류(롤백됨)
+app_upgrade_claude_code() {
+    if ! app_is_installed_claude_code; then
+        echo "[ERROR] claude-code가 설치되어 있지 않습니다" >&2
+        return 1
+    fi
+    local latest current
+    latest=$(_claude_code_fetch_latest_version)
+    [ -z "$latest" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
+    current=$(_claude_code_installed_version)
+    if [ "$current" = "$latest" ]; then
+        echo "[INFO] 이미 최신 버전입니다 (${latest})"
+        return 2
+    fi
+    _claude_code_backup_current "$current"
+    _claude_code_download_native "$latest" || {
+        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        return 1
+    }
+    _claude_code_install_wrapper
+    if ! _claude_code_smoke_check; then
+        echo "[ERROR] v${latest} 스모크 실패 — v${current}으로 롤백" >&2
+        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        return 1
+    fi
 }
 
 app_remove_claude_code() {
     rm -f "${CLAUDE_CODE_BIN_PATH}"
     rm -rf "${CLAUDE_CODE_PREFIX}"
+    # npm 글로벌 패키지가 남아 있으면 bin/claude 심볼릭이 재생성돼 되살아남 → 함께 제거
+    _claude_code_remove_npm_wrapper
 }
 
 app_is_installed_claude_code() {

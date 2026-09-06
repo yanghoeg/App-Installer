@@ -3,6 +3,7 @@
 # deb 제공: 흡혈귀왕 @ 미코(미니기기코리아)
 
 _NIMF_DEB_URL="https://github.com/yanghoeg/Termux_XFCE/releases/download/nimf-termux-v1.4.19/nimf_1.4.19_aarch64.deb"
+_NIMF_DEB_SHA256="42e6f5a27ec99bc26b2492e08181d433caf26a3832867eef664bb935144c7fbe"
 
 _NIMF_DEPS=(
     glib
@@ -21,6 +22,7 @@ _NIMF_DEPS=(
 )
 
 app_install_nimf() {
+    termux_pkg_enable_repo x11-repo || return 1
     local total=${#_NIMF_DEPS[@]} i=0
     for p in "${_NIMF_DEPS[@]}"; do
         ((++i))
@@ -28,19 +30,22 @@ app_install_nimf() {
             echo "  (${i}/${total}) ${p} — 이미 설치됨"
         else
             echo "  (${i}/${total}) ${p} 설치 중..."
-            termux_pkg_install "$p"
+            termux_pkg_install "$p" || return 1
         fi
     done
 
     local deb_file="${TMPDIR:-/tmp}/nimf_1.4.19_aarch64.deb"
     echo "nimf deb 다운로드 중..."
-    wget -q "$_NIMF_DEB_URL" -O "$deb_file" || {
-        echo "[ERROR] nimf deb 다운로드 실패" >&2
+    fetch_verified "$_NIMF_DEB_URL" "$deb_file" "$_NIMF_DEB_SHA256" || {
+        echo "[ERROR] nimf deb 다운로드/검증 실패" >&2
         return 1
     }
 
     echo "nimf 설치 중..."
-    dpkg -i --force-overwrite "$deb_file"
+    if ! dpkg -i --force-overwrite "$deb_file"; then
+        rm -f "$deb_file"
+        return 1
+    fi
     rm -f "$deb_file"
 
     glib-compile-schemas "${PREFIX}/share/glib-2.0/schemas/" 2>/dev/null || true
@@ -82,7 +87,7 @@ _nimf_setup_autostart() {
 [Desktop Entry]
 Type=Application
 Name=Nimf
-Exec=nimf
+Exec=bash -c "pgrep -x nimf >/dev/null 2>&1 || exec nimf"
 Hidden=false
 X-GNOME-Autostart-enabled=true
 EOF
@@ -104,6 +109,7 @@ EOF
 
 app_remove_nimf() {
     rm -f "$HOME/.config/autostart/nimf.desktop"
+    rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
 
     local rc
     for rc in "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"; do

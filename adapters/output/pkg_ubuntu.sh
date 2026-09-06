@@ -16,19 +16,52 @@ proot_pkg_install_aur() {
     proot_pkg_install "$@"
 }
 
+# $3=sha256(선택) — 주어지면 apt install 전에 검증하고, 불일치 시 rc≠0 (포트 계약 참조).
 proot_pkg_install_deb_or_aur() {
     local deb_url="$1"
     local deb="${deb_url##*/}"
-    proot_exec bash -c '
-        curl -fsSL "$1" -o "/tmp/$2"
-        sudo apt install -y "/tmp/$2"
-        rm -f "/tmp/$2"
-    ' _ "$deb_url" "$deb"
+    local sha="${3:-}"
+    proot_exec bash -c "$(fetch_verified_src)"$'\n''
+        set -e
+        dst="${TMPDIR:-/tmp}/$2"
+        fetch_verified "$1" "$dst" "$3"
+        sudo apt install -y "$dst"
+        rm -f "$dst"
+    ' _ "$deb_url" "$deb" "$sha"
+}
+
+# 공식 apt repo에 없는 .deb를 URL로 직접 설치 (nimf 등).
+# 각 인자는 "URL" 또는 "URL|sha256" — sha256이 주어지면 dpkg -i 전에 무결성을 검증하고,
+# 불일치 시 받은 파일을 지운 뒤 그 항목을 설치하지 않으며 함수 전체가 rc≠0을 반환한다.
+# (GitHub Releases 변조/오다운로드를 조용히 통과시키지 않는다 — 포트 계약 참조.)
+# dpkg 자체의 의존성 미해결 실패는 뒤따르는 apt-get install -f -y가 보정하므로 관대 처리.
+proot_pkg_install_deb_url() {
+    local entry url sha rc=0
+    for entry in "$@"; do
+        url="${entry%%|*}"
+        if [ "$entry" = "$url" ]; then
+            sha=""
+        else
+            sha="${entry#*|}"
+        fi
+        proot_exec bash -c "$(fetch_verified_src)"$'\n''
+            url="$1"; sha="$2"
+            name="${url##*/}"
+            deb="${TMPDIR:-/tmp}/${name}"
+            fetch_verified "$url" "$deb" "$sha" || exit 1
+            sudo dpkg -i "$deb" || echo "[WARN] ${name} dpkg 의존성 미해결 — apt-get install -f로 보정" >&2
+            rm -f "$deb"
+            exit 0
+        ' _ "$url" "$sha" || rc=1
+    done
+    proot_exec sudo apt-get install -f -y 2>/dev/null || true
+    return "$rc"
 }
 
 proot_pkg_add_external_repo() {
     local name="$1" gpg_key_url="$2" sources_line="$3"
     proot_exec sudo bash -c '
+        set -eo pipefail
         apt install -y gpg software-properties-common apt-transport-https 2>/dev/null || true
         wget -qO- "$1" | gpg --dearmor > "/usr/share/keyrings/$2.gpg"
         echo "$3" > "/etc/apt/sources.list.d/$2.list"
@@ -58,7 +91,7 @@ proot_pkg_install_python_pip() { proot_pkg_install python3 python3-pip; }
 proot_pkg_install_zlib()       { proot_pkg_install zlib1g-dev; }
 
 proot_pkg_install_sasm() {
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
     local sources="${rootfs}/etc/apt/sources.list"
 
     # universe repo 활성화 후 현재 버전에서 먼저 시도
@@ -84,27 +117,14 @@ proot_pkg_install_sasm() {
 
     [ -f "${sources}.bak" ] && mv "${sources}.bak" "$sources"
     proot_exec sudo apt update
+
+    proot_exec dpkg -s sasm &>/dev/null || return 1
 }
 
+# GitHub 릴리스는 .deb 미제공(2026-09 확인 — v0.3.x~v0.4.4 어느 릴리스에도 Ubuntu .deb 에셋 없음)
+# → apt 경로만 남긴다. 실패는 그대로 rc≠0으로 전파.
 proot_pkg_install_box64() {
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
-    local codename
-    codename=$(grep "^VERSION_CODENAME=" "${rootfs}/etc/os-release" 2>/dev/null \
-        | cut -d= -f2 | tr -d '"' || echo "jammy")
-
-    local box64_tag
-    box64_tag=$(curl -sf "https://api.github.com/repos/ptitSeb/box64/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4 || echo "")
-
-    if [ -n "$box64_tag" ]; then
-        local box64_url="https://github.com/ptitSeb/box64/releases/download/${box64_tag}/box64_Ubuntu_${codename}_arm64.deb"
-        proot_exec sudo bash -c '
-            wget -q "$1" -O /tmp/box64.deb 2>/dev/null \
-            && dpkg -i /tmp/box64.deb && rm -f /tmp/box64.deb
-        ' _ "$box64_url" || proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
-    else
-        proot_pkg_install box64 2>/dev/null || echo "[WARN] Box64 설치 실패"
-    fi
+    proot_pkg_install box64 2>/dev/null
 }
 
 proot_pkg_install_wine_mesa() {

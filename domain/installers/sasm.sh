@@ -5,9 +5,9 @@
 
 app_install_sasm() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_install_sasm
+    proot_pkg_install_sasm || return 1
 
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
     local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
     grep -q "alias sasm=" "$bashrc" 2>/dev/null || \
         echo "alias sasm='QT_SCALE_FACTOR=2 sasm'" >> "$bashrc"
@@ -18,7 +18,7 @@ app_install_sasm() {
 }
 
 app_remove_sasm() {
-    local rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}"
+    local rootfs="$(_proot_rootfs)"
     local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
     [ -f "$bashrc" ] && sed -i '/alias sasm=/d' "$bashrc" 2>/dev/null || true
     # Arch: 소스 빌드 → 직접 삭제 / Ubuntu: apt purge

@@ -6,21 +6,23 @@
 
 _SEVENZIP_DESKTOP="${PREFIX}/share/applications/sevenzip.desktop"
 _SEVENZIP_URL="https://www.7-zip.org/a/7z2601-x64.exe"
+_SEVENZIP_SHA256="d64a0468f5b5b0b0fc5b2188450bcd655b70809d97b1c4535f2884635094377d"
 _SEVENZIP_WIN_PATH='C:\7-Zip\7zFM.exe'
 
 app_install_sevenzip() {
-    if ! app_is_installed_wine; then
+    if ! wine_backend_available; then
         echo "[7-Zip] Wine이 필요합니다. 먼저 설치합니다."
-        app_install_wine
+        app_install_wine || return 1
     fi
 
-    echo "[7-Zip] 다운로드 및 설치 중..."
-    proot_exec_wine bash -c "
-        wget -q '${_SEVENZIP_URL}' -O /tmp/7z_install.exe || \
-            curl -fsSL '${_SEVENZIP_URL}' -o /tmp/7z_install.exe
-        wine /tmp/7z_install.exe /S 2>/dev/null || true
-        rm -f /tmp/7z_install.exe
-    "
+    echo "[7-Zip] 다운로드 및 설치 중... (백엔드: $(wine_backend))"
+    wine_exec_shell "$(fetch_verified_src)"$'\n'"
+        set -e
+        fetch_verified '${_SEVENZIP_URL}' \${TMPDIR:-/tmp}/7z_install.exe '${_SEVENZIP_SHA256}'
+        wine \${TMPDIR:-/tmp}/7z_install.exe /S 2>/dev/null || true
+        rm -f \${TMPDIR:-/tmp}/7z_install.exe
+        test -f \"\$WINEPREFIX/drive_c/7-Zip/7zFM.exe\"
+    " || { echo "[ERROR] 7-Zip 설치 실패" >&2; return 1; }
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_SEVENZIP_DESKTOP" << 'EOF'
@@ -46,8 +48,8 @@ EOF
 }
 
 app_remove_sevenzip() {
-    proot_exec_wine bash -c "
-        rm -rf \"\$HOME/.wine/drive_c/7-Zip\" 2>/dev/null
+    wine_exec_shell "
+        rm -rf \"\$WINEPREFIX/drive_c/7-Zip\" 2>/dev/null
     " 2>/dev/null || true
     rm -f "$_SEVENZIP_DESKTOP" "${HOME}/Desktop/sevenzip.desktop"
 }

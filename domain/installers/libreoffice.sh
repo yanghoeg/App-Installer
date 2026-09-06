@@ -4,9 +4,9 @@
 
 app_install_libreoffice() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update
-    proot_pkg_install_libreoffice
-    proot_setup_bwrap
+    proot_pkg_update || return 1
+    proot_pkg_install_libreoffice || return 1
+    proot_setup_bwrap || return 1
     desktop_copy_from_proot "libreoffice"
 }
 

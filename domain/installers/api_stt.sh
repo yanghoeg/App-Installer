@@ -15,8 +15,8 @@ if [ "${1:-}" = "--raw" ]; then
     exit $?
 fi
 if [ "${1:-}" = "--debug" ]; then
-    termux-speech-to-text > /tmp/stt_debug.txt 2>&1
-    echo "=== raw output ===" && cat -A /tmp/stt_debug.txt
+    termux-speech-to-text > ${TMPDIR:-/tmp}/stt_debug.txt 2>&1
+    echo "=== raw output ===" && cat -A ${TMPDIR:-/tmp}/stt_debug.txt
     exit 0
 fi
 TMPF=$(mktemp)

@@ -4,16 +4,33 @@
 # =============================================================================
 # 형식: "id|이름|카테고리|설명"
 # id는 domain/installers/${id}.sh의 app_install_${id}/app_remove_${id}/app_is_installed_${id} 와 매핑
-# 카테고리: 시스템 | 그래픽 | 미디어 | 오피스 | 브라우저 | 개발 | 보안 | 유틸 | 소통
+# 카테고리: 시스템 | 그래픽 | 미디어 | 오피스 | 브라우저 | 개발 | 보안 | 유틸 | 소통 | Wine
 
 APP_REGISTRY=(
     "thunderbird|Thunderbird|소통|이메일 클라이언트 (Termux native)"
-    "vlc|VLC|미디어|미디어 플레이어 (proot)"
+    "vlc|VLC|미디어|미디어 플레이어 (Termux native)"
     "gimp|GIMP|그래픽|이미지 편집 (Termux native)"
     "inkscape|Inkscape|그래픽|벡터 그래픽 편집 (Termux native)"
     "audacity|Audacity|미디어|오디오 편집 (Termux native)"
-    "vscode|Visual Studio Code|개발|코드 에디터 (Termux native)"
+    "vscode|Visual Studio Code|개발|코드 에디터 (proot)"
     "claude_code|Claude Code|개발|AI 코딩 어시스턴트 CLI (Termux native + glibc-runner)"
+    "llama_cpp|llama.cpp|개발|GGUF 로컬 LLM 추론 (llama-gpu = 네이티브 OpenCL GPU 가속)"
+    "aichat|aichat|개발|터미널 AI 어시스턴트 CLI (Termux native, 로컬 llama-server/클라우드 연동)"
+    "crush|Crush|개발|터미널 AI 코딩 에이전트 (Termux native, API 키 필요)"
+    "codex|Codex CLI|개발|OpenAI 코딩 에이전트 CLI (Termux native, API 키 필요)"
+    "code_server|code-server|개발|브라우저에서 여는 VS Code 서버 (Termux native)"
+    "jujutsu|Jujutsu|개발|Git 호환 VCS + lazyjj TUI (Termux native)"
+    "television|television|개발|채널 기반 퍼지 파인더 tv (Termux native)"
+    "ml_python|PyTorch + ONNX Runtime|개발|온디바이스 ML 런타임 (Termux native, 약 280MB)"
+    "neovim|Neovim|개발|터미널 모달 에디터 (Termux native)"
+    "helix|Helix|개발|LSP 내장 모달 에디터 (Termux native, 무설정)"
+    "just|just|개발|make 대체 커맨드 러너 (Termux native)"
+    "mise|mise|개발|다국어 버전 매니저 nvm/pyenv 대체 (Termux native, 셸 activation 필요)"
+    "hyperfine|hyperfine|개발|통계 기반 CLI 벤치마킹 (Termux native)"
+    "tokei|tokei|개발|언어별 코드 라인 수 집계 (Termux native)"
+    "btop|btop|개발|시각적 리소스 모니터 (htop 후속, root-repo)"
+    "direnv|direnv|개발|디렉터리별 환경변수 자동 로드 (Termux native, 셸 hook 필요)"
+    "watchexec|watchexec|개발|파일 변경 시 명령 재실행 (Termux native)"
     "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
     "burpsuite|Burp Suite|보안|웹 보안 테스트 도구 (proot)"
     "tor_browser|Tor Browser|브라우저|익명 웹 브라우저 (proot)"
@@ -22,11 +39,16 @@ APP_REGISTRY=(
     "miniforge|Miniforge3|개발|Python conda 환경 (proot)"
     "sasm|SASM|개발|어셈블러 IDE (proot)"
     "nautilus|Nautilus|유틸|파일 관리자 (proot)"
-    "wine|Wine (Box64+Staging)|유틸|Windows 앱 실행"
-    "notepadpp|Notepad++|개발|텍스트 에디터 (Wine)"
-    "sevenzip|7-Zip|유틸|파일 압축/해제 (Wine)"
-    "sumatrapdf|Sumatra PDF|오피스|PDF/EPUB/MOBI 뷰어 (Wine)"
-    "winmerge|WinMerge|개발|파일/폴더 비교·병합 (Wine)"
+    "superfile|superfile|유틸|현대적 TUI 파일 매니저 spf (Termux native)"
+    "uutils|uutils-coreutils|유틸|Rust로 재구현한 coreutils (Termux native)"
+    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC로 데스크탑 원격 접속 (wayland 세션 전용)"
+    "ncnn_upscale|AI 업스케일 (ncnn)|미디어|Real-ESRGAN 확대 + RIFE 보간 (Vulkan 가속)"
+    "wine|Wine (Box64+Staging)|Wine|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
+    "hangover|Wine (Hangover)|Wine|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
+    "notepadpp|Notepad++|Wine|텍스트 에디터 (Wine)"
+    "sevenzip|7-Zip|Wine|파일 압축/해제 (Wine)"
+    "sumatrapdf|Sumatra PDF|Wine|PDF/EPUB/MOBI 뷰어 (Wine)"
+    "winmerge|WinMerge|Wine|파일/폴더 비교·병합 (Wine)"
     "teams|Microsoft Teams|소통|팀 협업 도구 (proot)"
     "thorium|Thorium|브라우저|고속 웹 브라우저 (proot)"
     "onepassword|1Password|보안|패스워드 관리자 (proot)"
@@ -35,6 +57,7 @@ APP_REGISTRY=(
     "gpu_dev|GPU 개발 도구|시스템|clvk, clinfo 등 (Termux native)"
     "gpu_proot|GPU 가속 (proot)|시스템|KGSL mesa + Vulkan WSI Layer (proot, Snapdragon 전용)"
     "korean_input|한글 입력기 (fcitx5)|시스템|fcitx5-hangul 한글 입력 (Termux native)"
+    "korean_proot|한글 입력기 (proot)|시스템|proot 내부 한글 로케일 + nimf/fcitx5 입력기 (Ubuntu/Arch)"
     "korean_locale|한글 로케일|시스템|force_gettext.so 기반 UI 한글화 (Termux native)"
     "api_conky_battery|Conky 배터리|Termux API|Conky 위젯에 배터리 잔량·온도 표시"
     "api_brightness|밝기 조절|Termux API|XFCE 패널용 화면 밝기 조절 스크립트"
@@ -50,12 +73,13 @@ TAB_GROUPS=(
     "앱|소통,미디어,그래픽,오피스,브라우저,개발,보안,유틸"
     "시스템|시스템"
     "Termux API|Termux API"
+    "Wine|Wine"
 )
 
 # proot 설치 여부 확인
 has_proot_distro() {
     [ -n "${PROOT_DISTRO:-}" ] && \
-    [ -d "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}" ]
+    [ -d "$(_proot_rootfs)" ]
 }
 
 # 앱 설치 상태 확인 — app_is_installed_<id> 호출
@@ -65,6 +89,8 @@ app_is_installed() {
 }
 
 # 앱 설치 — app_install_<id> 호출
+# 설치기 계약: app_install_<id>는 임계 명령(pkg install/curl/proot_exec 등) 실패 시
+# 반드시 non-zero를 반환해야 하며, 실패 시 .desktop 런처를 생성하지 말 것.
 app_install() {
     local id="$1"
     "app_install_${id}"
@@ -74,4 +100,18 @@ app_install() {
 app_remove() {
     local id="$1"
     "app_remove_${id}"
+}
+
+# 업그레이드 지원 여부 — app_upgrade_<id> 함수가 정의된 앱만 true
+app_can_upgrade() {
+    local id="$1"
+    declare -F "app_upgrade_${id}" >/dev/null 2>&1
+}
+
+# 앱 업그레이드 — app_upgrade_<id> 호출 (반환값 그대로 전달)
+# 설치기 계약: app_upgrade_<id>도 임계 명령 실패 시 반드시 non-zero를 반환해야 하며,
+# 실패 시 .desktop 런처를 재생성/변경하지 말 것.
+app_upgrade() {
+    local id="$1"
+    "app_upgrade_${id}"
 }
