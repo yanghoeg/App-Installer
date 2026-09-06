@@ -28,6 +28,25 @@ app-installer
 
 Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
 
+### Upgrade & rollback
+
+Picking an app that is **already installed** opens a second dialog. Apps that define an
+`app_upgrade_<id>` handler (currently **Claude Code**) offer *Upgrade* next to *Remove*;
+everything else goes straight to *Remove*.
+
+The Claude Code upgrade backs the current binary up as `claude.bak.v<version>`, downloads the
+new native build, runs a smoke check (`claude --version`) and **rolls back automatically** if
+that check fails. To roll back by hand later — e.g. after a `/login` regression:
+
+```bash
+source domain/installers/claude_code.sh
+app_rollback_claude_code            # newest available backup
+app_rollback_claude_code 2.1.132    # a specific version
+```
+
+See [`docs/claude-code-login-regression.md`](docs/claude-code-login-regression.md) for the
+pin-bump / rollback history.
+
 ## Supported Apps
 
 | App | Description | Install target | Notes |
@@ -112,6 +131,7 @@ Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds app
 | Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
 | 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
+| Arch's `~/.bash_profile` → `~/.bashrc` chain never sources `~/.profile` | `korean_proot` exports locale / IM vars from `/etc/profile.d/termux-xfce-locale.sh`, which every login shell reads |
 
 ## Wine — two backends
 

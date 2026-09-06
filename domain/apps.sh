@@ -12,7 +12,7 @@ APP_REGISTRY=(
     "gimp|GIMP|그래픽|이미지 편집 (Termux native)"
     "inkscape|Inkscape|그래픽|벡터 그래픽 편집 (Termux native)"
     "audacity|Audacity|미디어|오디오 편집 (Termux native)"
-    "vscode|Visual Studio Code|개발|코드 에디터 (Termux native)"
+    "vscode|Visual Studio Code|개발|코드 에디터 (proot)"
     "claude_code|Claude Code|개발|AI 코딩 어시스턴트 CLI (Termux native + glibc-runner)"
     "llama_cpp|llama.cpp|개발|GGUF 로컬 LLM 추론 (llama-gpu = 네이티브 OpenCL GPU 가속)"
     "aichat|aichat|개발|터미널 AI 어시스턴트 CLI (Termux native, 로컬 llama-server/클라우드 연동)"

@@ -28,6 +28,25 @@ app-installer
 
 헤드리스 CLI(GUI 없음): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
 
+### 업그레이드 · 롤백
+
+**이미 설치된** 앱을 고르면 두 번째 대화상자가 뜹니다. `app_upgrade_<id>` 핸들러가 정의된
+앱(현재 **Claude Code**)은 *제거* 옆에 *업그레이드*가 함께 표시되고, 그 외에는 바로 *제거*로
+넘어갑니다.
+
+Claude Code 업그레이드는 현재 바이너리를 `claude.bak.v<버전>`으로 백업 → 새 네이티브 빌드
+다운로드 → 스모크 체크(`claude --version`) 순으로 진행하며, 스모크가 실패하면 **자동으로
+롤백**합니다. `/login` 회귀처럼 나중에 수동으로 되돌려야 할 때는:
+
+```bash
+source domain/installers/claude_code.sh
+app_rollback_claude_code            # 사용 가능한 최신 백업으로
+app_rollback_claude_code 2.1.132    # 특정 버전으로
+```
+
+핀 상향·롤백 이력은 [`docs/claude-code-login-regression.md`](docs/claude-code-login-regression.md)
+에 정리되어 있습니다.
+
 ## 지원 앱 목록
 
 | 앱 | 설명 | 설치 위치 | 비고 |
@@ -112,6 +131,7 @@ Termux API 앱은 `termux-api` 패키지와 Termux:API APK가 필요합니다.
 | Thorium AUR은 x86 전용 | `ar`로 arm64 .deb 직접 추출 |
 | SASM `fasm` 의존성이 x86 전용 (Arch) | `qmake` + `nasm`으로 소스 빌드 |
 | 1Password GUI arm64 미지원 | `1password-cli`(`op`) 설치 |
+| Arch의 `~/.bash_profile` → `~/.bashrc` 체인이 `~/.profile`을 읽지 않음 | `korean_proot`이 로케일·IM 환경변수를 모든 로그인 셸이 읽는 `/etc/profile.d/termux-xfce-locale.sh`에 `export` |
 
 ## Wine — 두 가지 백엔드
 
