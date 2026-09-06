@@ -11,7 +11,7 @@ CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # 핀 버전 — Termux /login 회귀 조사 이력은 docs/claude-code-login-regression.md 참조.
 # 2026-09-05: 2.1.132 → 2.1.261 상향. 근거는 GHSA-7835-87q9-rgvv(HIGH, <2.1.163) 해소 +
-# npm latest 대조. 실기기 /login 은 아직 미검증 — 회귀 시 롤백 절차는 위 문서 참조.
+# npm latest 대조. 실기기 /login 2026-09-06 검증 완료 — 회귀 시 롤백 절차는 위 문서 참조.
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
 CLAUDE_CODE_PIN_VERSION="2.1.261"
 
