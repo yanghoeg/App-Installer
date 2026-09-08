@@ -31,7 +31,7 @@ app-installer
 ### 업그레이드 · 롤백
 
 **이미 설치된** 앱을 고르면 두 번째 대화상자가 뜹니다. `app_upgrade_<id>` 핸들러가 정의된
-앱(현재 **Claude Code**)은 *제거* 옆에 *업그레이드*가 함께 표시되고, 그 외에는 바로 *제거*로
+앱(현재 **Claude Code**, **Codex CLI**)은 *제거* 옆에 *업그레이드*가 함께 표시되고, 그 외에는 바로 *제거*로
 넘어갑니다.
 
 Claude Code 업그레이드는 현재 바이너리를 `claude.bak.v<버전>`으로 백업 → 새 네이티브 빌드
@@ -78,7 +78,7 @@ app_rollback_claude_code 2.1.132    # 특정 버전으로
 | **llama.cpp** | GGUF 추론 (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = 네이티브 OpenCL GPU 가속 (기본 컨텍스트 4096, `LLAMA_CTX`로 변경); `llama-model-get`로 Qwen2.5/Qwen3.5 GGUF 다운로드 (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | 로컬(`llama-server`)/클라우드 API 연동 |
 | **Crush** | 터미널 AI 코딩 에이전트 | Termux native | 제공자 API 키 필요 |
-| **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | `OPENAI_API_KEY` 필요 |
+| **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | 업스트림 정적 musl 바이너리(핀 버전), `OPENAI_API_KEY` 필요 |
 | **code-server** | 브라우저에서 여는 VS Code | Termux native | 127.0.0.1:8080 서빙 |
 | **PyTorch + ONNX Runtime** | 온디바이스 ML 런타임 | Termux native | 약 280MB |
 | **AI 업스케일 (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan 가속 |
