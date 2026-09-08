@@ -78,7 +78,7 @@ pin-bump / rollback history.
 | **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
-| **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary, needs `OPENAI_API_KEY` |
+| **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary + proot network shim (DNS/CA), needs `codex login` or `OPENAI_API_KEY` |
 | **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
 | **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
 | **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
