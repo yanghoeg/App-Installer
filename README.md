@@ -31,7 +31,7 @@ Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status
 ### Upgrade & rollback
 
 Picking an app that is **already installed** opens a second dialog. Apps that define an
-`app_upgrade_<id>` handler (currently **Claude Code**) offer *Upgrade* next to *Remove*;
+`app_upgrade_<id>` handler (currently **Claude Code**, **Codex CLI**) offer *Upgrade* next to *Remove*;
 everything else goes straight to *Remove*.
 
 The Claude Code upgrade backs the current binary up as `claude.bak.v<version>`, downloads the
@@ -78,7 +78,7 @@ pin-bump / rollback history.
 | **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
 | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
-| **Codex CLI** | OpenAI coding agent CLI | Termux native | needs `OPENAI_API_KEY` |
+| **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary, needs `OPENAI_API_KEY` |
 | **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
 | **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
 | **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
