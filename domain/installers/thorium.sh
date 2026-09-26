@@ -39,12 +39,12 @@ app_install_thorium() {
 app_remove_thorium() {
     # .deb 추출 방식으로 설치했으므로 파일 직접 삭제 (pacman/apt 미등록)
     proot_exec sudo bash -c "
+        set -e
         rm -rf /opt/chromium.org/thorium
         rm -f /usr/bin/thorium-browser /usr/sbin/thorium-browser
         rm -f /usr/share/applications/thorium-browser.desktop
-        rm -f /usr/share/icons/hicolor/*/apps/thorium-browser.png 2>/dev/null || true
-    " 2>/dev/null || \
-    proot_pkg_remove thorium-browser 2>/dev/null || true
+        rm -f /usr/share/icons/hicolor/*/apps/thorium-browser.png
+    " || return 1
     desktop_remove "thorium-browser"
 }
 

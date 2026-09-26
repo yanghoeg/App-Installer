@@ -86,7 +86,7 @@ pin-bump / rollback history.
 | **television** | Fuzzy finder (`tv`) | Termux native | |
 | **superfile** | Modern TUI file manager (`spf`) | Termux native | |
 | **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
-| **wayvnc** | VNC server for the desktop | Termux native | wayland sessions only (`wayvnc-start`) |
+| **wayvnc** | VNC server for the desktop | Termux native | wlroots only; Anland/KWin unsupported (`wayvnc-start`) |
 | **Neovim / Helix** | Terminal modal editors | Termux native | |
 | **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
 | **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
@@ -100,7 +100,7 @@ pin-bump / rollback history.
 | **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI layer | proot | Snapdragon only |
 | **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | |
 | **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
-| **Korean Locale** | force_gettext.so-based UI localization | Termux native | |
+| **Korean Locale** | force_gettext.so-based UI localization | Termux native | requires the parent Termux_XFCE checkout and a catalog ZIP |
 | **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
 
 ## Termux API Apps (Termux API tab)
@@ -160,7 +160,8 @@ winetricks dotnet48
 
 ## How It Works
 
-Reads `PROOT_DISTRO` and `PROOT_USER` from `~/.config/termux-xfce/config`.  
+Explicit `PROOT_DISTRO` and `PROOT_USER` environment variables take priority over
+`~/.config/termux-xfce/config` in both the CLI and GUI. Unset values come from the config.
 This file is created automatically by the Termux_XFCE installer.
 
 ```
@@ -168,7 +169,18 @@ PROOT_DISTRO=ubuntu
 PROOT_USER=yanghoeg
 ```
 
-Falls back to `ubuntu` if the config file is missing.
+Falls back to `ubuntu` if no distro is specified. `PROOT_DISTRO=""` selects native-only
+mode. When overriding only the distro, its user is detected instead of reusing a
+saved user from another distro.
+
+Korean Locale prompts for a translation catalog ZIP in the GUI. In the CLI, set
+`KOREAN_LOCALE_ZIP=/path/to/locale.zip` before running `bash app-install.sh install korean_locale`.
+The ZIP must contain `ko/LC_MESSAGES/*.mo`. Missing files and compilation failures
+are reported as installation errors.
+
+Korean Input (proot) writes `/etc/profile.d/termux-xfce-locale.sh` so login shells
+load the settings even when a user's `.bash_profile` bypasses `.profile`. Reinstalling
+migrates the managed block from older `.profile` installations.
 
 proot apps are launched via `prun`:
 
@@ -207,7 +219,7 @@ app-installer/
 │   └── common.sh, proot_path.sh, wine_backend.sh
 ├── docs/
 │   └── claude-code-login-regression.md ← Claude Code pin bump / rollback record
-└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path,cli}.sh
                                    (test_nimf_*_real.sh: real device only)
 ```
 
@@ -227,11 +239,13 @@ To bump a version: download the new URL, run `sha256sum <file>`, and update that
 ## Tests
 
 ```bash
-for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+for t in domain_apps adapters ports fetch proot_path cli; do bash tests/test_$t.sh || exit; done
 ```
 
-**223** tests (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). On a PC these are
-mock / static checks only; `tests/test_nimf_*_real.sh` run inside the proot distro on a real device.
+These suites cover the domain, adapters, ports, downloads, rootfs paths, and CLI.
+On a PC they use mocks and static checks; CLI tests run the real entry point with
+isolated package/download commands. Parent locale integration tests require the
+Termux_XFCE checkout. `tests/test_nimf_*_real.sh` run inside proot on a real device.
 
 ## Branch Strategy
 

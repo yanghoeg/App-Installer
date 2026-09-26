@@ -41,7 +41,7 @@ APP_REGISTRY=(
     "nautilus|Nautilus|유틸|파일 관리자 (proot)"
     "superfile|superfile|유틸|현대적 TUI 파일 매니저 spf (Termux native)"
     "uutils|uutils-coreutils|유틸|Rust로 재구현한 coreutils (Termux native)"
-    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC로 데스크탑 원격 접속 (wayland 세션 전용)"
+    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC 원격 접속 (wlroots 전용, Anland/KWin 미지원)"
     "ncnn_upscale|AI 업스케일 (ncnn)|미디어|Real-ESRGAN 확대 + RIFE 보간 (Vulkan 가속)"
     "wine|Wine (Box64+Staging)|Wine|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
     "hangover|Wine (Hangover)|Wine|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
@@ -97,6 +97,7 @@ app_install() {
 }
 
 # 앱 제거 — app_remove_<id> 호출
+# Removal must propagate errors and preserve launchers until the app is removed.
 app_remove() {
     local id="$1"
     "app_remove_${id}"

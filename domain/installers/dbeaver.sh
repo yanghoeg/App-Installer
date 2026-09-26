@@ -29,9 +29,9 @@ app_install_dbeaver() {
 }
 
 app_remove_dbeaver() {
-    proot_exec sudo rm -f /usr/bin/dbeaver 2>/dev/null || true
-    proot_exec sudo rm -rf /opt/dbeaver 2>/dev/null || true
-    proot_pkg_autoremove
+    proot_exec sudo rm -f /usr/bin/dbeaver || return 1
+    proot_exec sudo rm -rf /opt/dbeaver || return 1
+    proot_pkg_autoremove || return 1
     desktop_remove "dbeaver"
 }
 

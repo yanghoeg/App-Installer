@@ -67,7 +67,7 @@ PROFILE
 app_remove_gpu_proot() {
     local profile_path
     profile_path="$(_gpu_proot_profile_path)"
-    rm -f "$profile_path"
+    rm -f "$profile_path" || return 1
     echo "[OK] GPU proot 프로파일 제거 완료."
 }
 

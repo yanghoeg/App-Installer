@@ -67,13 +67,10 @@ EOF
 }
 
 app_remove_korean_input() {
-    # 사용자 autostart 제거
-    rm -f "$HOME/.config/autostart/fcitx5.desktop"
-
     for p in fcitx5-configtool fcitx5-hangul fcitx5 libhangul-static libhangul; do
-        termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
+        if termux_pkg_is_installed "$p"; then termux_pkg_remove "$p" || return 1; fi
     done
-    return 0
+    rm -f "$HOME/.config/autostart/fcitx5.desktop"
 }
 
 app_is_installed_korean_input() {

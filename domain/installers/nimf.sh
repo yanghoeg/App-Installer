@@ -108,16 +108,17 @@ EOF
 }
 
 app_remove_nimf() {
-    rm -f "$HOME/.config/autostart/nimf.desktop"
-    rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
+    dpkg -r nimf || return 1
+    rm -f "$HOME/.config/autostart/nimf.desktop" \
+        "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" || return 1
 
     local rc
     for rc in "${PREFIX}/etc/bash.bashrc" "$HOME/.zshrc"; do
         [ -f "$rc" ] || continue
-        sed -i '/# termux-xfce-nimf/,/# end-termux-xfce-nimf/d' "$rc" 2>/dev/null || true
+        sed -i '/# termux-xfce-nimf/,/# end-termux-xfce-nimf/d' "$rc" || return 1
     done
 
-    dpkg -r nimf 2>/dev/null || true
+    return 0
 }
 
 app_is_installed_nimf() {

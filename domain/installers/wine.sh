@@ -342,20 +342,21 @@ app_install_wine() {
 
 app_remove_wine() {
     if has_proot_distro; then
+        if proot_pkg_is_installed box64; then proot_pkg_remove box64 || return 1; fi
         proot_exec sudo bash -c "
+            set -e
             rm -rf /opt/wine-staging
             for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
                 rm -f /usr/local/bin/\$bin
             done
-        " 2>/dev/null || true
-        proot_pkg_remove box64 2>/dev/null || true
+        " || return 1
     else
-        rm -rf "$_WINE_NATIVE_DIR"
+        rm -rf "$_WINE_NATIVE_DIR" || return 1
     fi
 
-    rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP"
+    rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP" || return 1
     rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
-        "${HOME}/Desktop/wine-apps.desktop"
+        "${HOME}/Desktop/wine-apps.desktop" || return 1
 
     # 디스패처: 다른 백엔드가 남아 있으면 그쪽으로 넘기고, 없으면 함께 제거
     if [ -x "$_WINE_HANGOVER_BIN" ]; then

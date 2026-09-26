@@ -86,7 +86,7 @@ app_rollback_claude_code 2.1.132    # 특정 버전으로
 | **television** | 퍼지 파인더 (`tv`) | Termux native | |
 | **superfile** | 현대적 TUI 파일 매니저 (`spf`) | Termux native | |
 | **uutils-coreutils** | Rust 재구현 coreutils | Termux native | GNU coreutils와 병존 |
-| **wayvnc** | 데스크탑 VNC 서버 | Termux native | wayland 세션 전용 (`wayvnc-start`) |
+| **wayvnc** | 데스크탑 VNC 서버 | Termux native | wlroots 전용, Anland/KWin 미지원 (`wayvnc-start`) |
 | **Neovim / Helix** | 터미널 모달 에디터 | Termux native | |
 | **btop** | 시각적 리소스 모니터 (htop 후속) | Termux native | root-repo 활성화 필요 |
 | **개발 CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv는 셸 hook 직접 추가 필요 |
@@ -100,7 +100,7 @@ app_rollback_claude_code 2.1.132    # 특정 버전으로
 | **GPU 가속 (proot)** | KGSL mesa + Vulkan WSI Layer | proot | Snapdragon 전용 |
 | **한글 입력기 (fcitx5)** | fcitx5-hangul 한글 입력 | Termux native | |
 | **한글 입력기 (proot)** | proot 내부 한글 로케일 + nimf/fcitx5 입력기 | proot | Ubuntu=nimf .deb, Arch=nimf AUR→fcitx5 폴백 |
-| **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | |
+| **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | 부모 Termux_XFCE 저장소와 번역 카탈로그 ZIP 필요 |
 | **한글 입력기 (nimf)** | nimf 한글 입력 | Termux native | 흡혈귀왕 빌드 |
 
 ## Termux API 앱 (Termux API 탭)
@@ -159,7 +159,8 @@ winetricks dotnet48
 
 ## 동작 방식
 
-`~/.config/termux-xfce/config`에서 `PROOT_DISTRO`, `PROOT_USER`를 읽어 동작합니다.  
+CLI와 GUI 모두 명시한 `PROOT_DISTRO`, `PROOT_USER` 환경변수를 우선 사용하고,
+지정하지 않은 값은 `~/.config/termux-xfce/config`에서 읽습니다.
 Termux_XFCE 설치 시 자동 생성됩니다.
 
 ```
@@ -167,7 +168,18 @@ PROOT_DISTRO=ubuntu
 PROOT_USER=yanghoeg
 ```
 
-config가 없으면 `ubuntu`를 기본값으로 사용합니다.
+배포판을 지정하지 않으면 `ubuntu`를 기본값으로 사용합니다. `PROOT_DISTRO=""`는
+native 전용 모드입니다. 배포판만 바꾸면 이전 배포판의 사용자 대신 새 배포판의
+사용자를 자동으로 탐지합니다.
+
+한글 로케일 설치 시 GUI에서는 번역 카탈로그 ZIP을 선택합니다. CLI에서는
+`KOREAN_LOCALE_ZIP=/path/to/locale.zip bash app-install.sh install korean_locale`로
+실행합니다. ZIP 안에는 `ko/LC_MESSAGES/*.mo`가 있어야 합니다.
+필수 파일이 없거나 컴파일에 실패하면 설치 오류를 반환합니다.
+
+proot 한글 입력기는 `/etc/profile.d/termux-xfce-locale.sh`에 설정을 기록합니다.
+사용자의 `.bash_profile` 때문에 `.profile`을 읽지 않는 경우에도 로그인 시 적용됩니다.
+재설치하면 기존 `.profile`의 관리 블록을 새 경로로 옮깁니다.
 
 proot 앱은 `prun`을 통해 실행됩니다:
 
@@ -206,7 +218,7 @@ app-installer/
 │   └── common.sh, proot_path.sh, wine_backend.sh
 ├── docs/
 │   └── claude-code-login-regression.md ← Claude Code 핀 상향/롤백 기록
-└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path,cli}.sh
                                    (test_nimf_*_real.sh: 실기기 전용)
 ```
 
@@ -225,11 +237,13 @@ app-installer/
 ## 테스트
 
 ```bash
-for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+for t in domain_apps adapters ports fetch proot_path cli; do bash tests/test_$t.sh || exit; done
 ```
 
-**223**개 (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). PC에서는 mock / 정적
-검사만 가능하며, `tests/test_nimf_*_real.sh`는 실기기의 proot 안에서 실행합니다.
+도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI를 검사합니다. PC에서는 mock과 정적
+검사를 사용하며, CLI 테스트는 패키지·다운로드 명령을 격리한 상태에서 실제 진입점을
+실행합니다. 부모 로케일 통합 테스트에는 Termux_XFCE 저장소가 필요합니다.
+`tests/test_nimf_*_real.sh`는 실기기의 proot 안에서 실행합니다.
 
 ## 브랜치 전략
 

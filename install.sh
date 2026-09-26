@@ -21,19 +21,7 @@ esac
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_load_config() {
-    local config="$HOME/.config/termux-xfce/config"
-    if [ -f "$config" ]; then
-        source "$config"
-    else
-        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
-    fi
-    if [ -z "${PROOT_USER:-}" ]; then
-        PROOT_USER=$(_detect_proot_user)
-    fi
-}
-
-_load_config
+_load_app_config
 
 # -----------------------------------------------------------------------------
 # DI: 포트 + 어댑터 로드

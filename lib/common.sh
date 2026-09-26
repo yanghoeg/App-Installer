@@ -26,18 +26,27 @@ _detect_proot_user() {
     echo "user"
 }
 
-_load_config() {
+_load_app_config() {
     local config="$HOME/.config/termux-xfce/config"
+    local distro_set="${PROOT_DISTRO+x}" distro="${PROOT_DISTRO-}"
+    local user_set="${PROOT_USER+x}" user="${PROOT_USER-}"
     if [ -f "$config" ]; then
-        source "$config"
-    else
-        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+        source "$config" || return 1
     fi
-    if [ -z "${PROOT_USER:-}" ] && [ -n "${PROOT_DISTRO:-}" ]; then
-        PROOT_USER=$(ls "$(_proot_rootfs)/home/" 2>/dev/null \
-            | head -1 || echo "user")
+    if [ -n "$distro_set" ]; then
+        # A user recorded for another distro is not a default for this one.
+        if [ -z "$user_set" ] && [ "$distro" != "${PROOT_DISTRO-}" ]; then
+            unset PROOT_USER
+        fi
+        PROOT_DISTRO="$distro"
     fi
-    PROOT_USER="${PROOT_USER:-user}"
+    [ -z "$user_set" ] || PROOT_USER="$user"
+    PROOT_DISTRO="${PROOT_DISTRO-ubuntu}"
+    PROOT_USER="${PROOT_USER:-$(_detect_proot_user)}"
+}
+
+_load_config() {
+    _load_app_config || return 1
 
     # DI: 새 어댑터 로드
     source "${_COMMON_DIR}/ports/pkg_manager.sh"

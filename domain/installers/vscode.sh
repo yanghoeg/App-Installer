@@ -18,8 +18,8 @@ app_install_vscode() {
 }
 
 app_remove_vscode() {
-    proot_pkg_remove_vscode
-    proot_pkg_autoremove
+    proot_pkg_remove_vscode || return 1
+    proot_pkg_autoremove || return 1
     desktop_remove "code"
 }
 

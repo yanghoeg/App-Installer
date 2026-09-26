@@ -13,6 +13,7 @@ _setup() {
     local sb="$1"
     export PROOT_DISTRO="ubuntu"
     export PROOT_USER="testuser"
+    unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
     setup_fs_sandbox "$sb"
     source "${APP_DIR}/ports/pkg_manager.sh"
     source "${APP_DIR}/lib/fetch.sh"
@@ -1228,6 +1229,10 @@ it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_
 _test_korean_proot_remove_strips_block() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local lf; lf="$(_korean_proot_locale_file)"
+    local profile; profile="$(_korean_proot_profile)"
+    MOCK_PROOT_INSTALLED_PKGS="nimf nimf-i18n"
+    mkdir -p "$(dirname "$profile")"
+    printf 'BEFORE_LINE\n' > "$profile"
     app_install_korean_proot >/dev/null
     app_is_installed_korean_proot || { echo "[ASSERT] 설치 후 is_installed false" >&2; cleanup_sandbox "$sb"; return 1; }
     assert_file_exists "$lf" || { cleanup_sandbox "$sb"; return 1; }
@@ -1240,6 +1245,7 @@ _test_korean_proot_remove_strips_block() {
         echo "[ASSERT] remove 후에도 로케일 파일이 남아 있음" >&2
         cleanup_sandbox "$sb"; return 1
     fi
+    assert_file_contains "$profile" "BEFORE_LINE" || { cleanup_sandbox "$sb"; return 1; }
     if app_is_installed_korean_proot; then
         echo "[ASSERT] remove 후에도 is_installed true" >&2
         cleanup_sandbox "$sb"; return 1
@@ -1380,6 +1386,10 @@ _test_contract_install_success_for_all_ids() {
             nimf)
                 fetch_verified() { printf 'deb\n' > "$2"; }
                 dpkg() { return 0; }
+                ;;
+            codex)
+                fetch_verified() { printf 'tgz\n' > "$2"; }
+                tar() { printf 'native binary fixture\n'; }
                 ;;
         esac
 
@@ -1528,5 +1538,124 @@ _test_claude_download_unknown_version_skips_sha() {
     cleanup_sandbox "$sb"
 }
 it "미등록 버전 → 빈 sha256(검증 생략)" _test_claude_download_unknown_version_skips_sha
+
+describe "regression — GUI config priority"
+_test_gui_explicit_target() {
+    local sb; sb=$(make_sandbox)
+    export PROOT_DISTRO=archlinux PROOT_USER=chosen
+    _load_install_partial "$sb"
+    assert_eq archlinux "$PROOT_DISTRO"
+    assert_eq chosen "$PROOT_USER"
+    # Verify that DI selected the adapter for the explicit distro, too.
+    proot_exec() { _record_call "proot_exec $*"; }
+    proot_pkg_remove example
+    assert_was_called 'proot_exec sudo pacman -Rns --noconfirm example'
+    cleanup_sandbox "$sb"
+}
+it 'GUI preserves explicit distro/user and selects their adapter' _test_gui_explicit_target
+
+describe "regression — proot login locale"
+_test_korean_proot_migrates_legacy_profile() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO=archlinux
+    local userhome="$(_proot_rootfs)/home/$PROOT_USER"
+    mkdir -p "$userhome"
+    printf 'export KEEP_ME=yes\n%s\nexport GTK_IM_MODULE=old\n%s\n' \
+        "$_KOREAN_PROOT_MARK" "$_KOREAN_PROOT_END_MARK" > "$userhome/.profile"
+    printf 'export BASH_PROFILE_READ=yes\n' > "$userhome/.bash_profile"
+    app_install_korean_proot >/dev/null
+    assert_file_contains "$userhome/.profile" 'KEEP_ME=yes'
+    if grep -q termux-xfce-korean "$userhome/.profile"; then return 1; fi
+    assert_file_contains "$userhome/.bash_profile" 'BASH_PROFILE_READ=yes'
+    # Model /etc/profile.d followed by .bash_profile: .profile is never read.
+    unset GTK_IM_MODULE QT_IM_MODULE
+    source "$(_korean_proot_locale_file)" 2>/dev/null
+    source "$userhome/.bash_profile"
+    assert_eq nimf "$GTK_IM_MODULE"
+    assert_eq nimf "$QT_IM_MODULE"
+    cleanup_sandbox "$sb"
+}
+it 'Arch login gets its IME even when .bash_profile bypasses the legacy .profile' _test_korean_proot_migrates_legacy_profile
+
+_test_korean_proot_locale_gen_fails() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO=archlinux
+    proot_exec() { return 42; }
+    if app_install_korean_proot >/dev/null; then return 1; fi
+    if app_is_installed_korean_proot; then return 1; fi
+    cleanup_sandbox "$sb"
+}
+it 'locale-gen failure does not leave a completed installation marker' _test_korean_proot_locale_gen_fails
+
+describe 'regression — removal failures propagate before launcher cleanup'
+_test_failed_removal_for_current_id() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local cleanup_seen=0 rc=0
+    termux_pkg_is_installed() { return 0; }
+    proot_pkg_is_installed() { return 0; }
+    termux_pkg_remove() { return 42; }
+    proot_pkg_remove() { return 42; }
+    proot_pkg_remove_vscode() { return 42; }
+    proot_pkg_remove_libreoffice() { return 42; }
+    proot_pkg_purge() { return 42; }
+    proot_exec() { return 42; }
+    wine_exec_shell() { return 42; }
+    dpkg() { return 42; }
+    desktop_remove() { cleanup_seen=1; }
+    rm() { cleanup_seen=1; }
+    # The dispatchers call removers in a conditional, disabling implicit errexit.
+    if app_remove "$_remove_id" >/dev/null 2>&1; then rc=0; else rc=$?; fi
+    unset -f rm
+    assert_nonzero "$rc" "$_remove_id hid a removal failure"
+    assert_eq 0 "$cleanup_seen" "$_remove_id cleaned up before removal succeeded"
+    cleanup_sandbox "$sb"
+}
+for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev gpu_native hangover \
+    inkscape korean_input korean_proot libreoffice llama_cpp nautilus nimf notion \
+    notepadpp onepassword sasm sevenzip sumatrapdf teams thorium thunderbird \
+    tor_browser vlc vscode wayvnc wine winmerge; do
+    it "$_remove_id preserves failure and skips launcher cleanup" _test_failed_removal_for_current_id
+done
+
+describe 'regression — wayvnc compositor support'
+_test_wayvnc_rejects_kwin() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    export WAYLAND_DISPLAY=wayland-termux-xfce
+    if app_install_wayvnc >/dev/null 2>&1; then return 1; fi
+    assert_not_called termux_pkg_install
+    [ ! -e "$_WAYVNC_LAUNCHER" ]
+    cleanup_sandbox "$sb"
+}
+it 'KWin session is rejected before package installation' _test_wayvnc_rejects_kwin
+
+_test_wayvnc_rejects_kwin_config() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    printf 'DISPLAY_SERVER=wayland\n' > "$HOME/.config/termux-xfce/config"
+    if app_install_wayvnc >/dev/null 2>&1; then return 1; fi
+    assert_not_called termux_pkg_install
+    cleanup_sandbox "$sb"
+}
+it 'configured Anland backend is rejected even outside an active session' _test_wayvnc_rejects_kwin_config
+
+_test_wayvnc_launcher_support() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=sway
+    app_install_wayvnc >/dev/null
+    assert_was_called 'termux_pkg_install wayvnc'
+    mkdir -p "$sb/bin"
+    cat > "$sb/bin/wayvnc" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$HOME/wayvnc-invoked"
+EOF
+    chmod +x "$sb/bin/wayvnc"
+    PATH="$sb/bin:$PATH" bash "$_WAYVNC_LAUNCHER" 127.0.0.1 5901 >/dev/null
+    assert_file_contains "$HOME/wayvnc-invoked" '127.0.0.1 5901'
+    rm "$HOME/wayvnc-invoked"
+    if WAYLAND_DISPLAY=wayland-termux-xfce PATH="$sb/bin:$PATH" \
+        bash "$_WAYVNC_LAUNCHER" >/dev/null 2>&1; then return 1; fi
+    [ ! -e "$HOME/wayvnc-invoked" ]
+    cleanup_sandbox "$sb"
+}
+it 'launcher runs in wlroots but rejects switching to KWin later' _test_wayvnc_launcher_support
 
 print_results

@@ -215,6 +215,9 @@ STUB
 #!/data/data/com.termux/files/usr/bin/bash
 echo "apt $*" >> "${DEB_TEST_LOG}"
 STUB
+    # Use the current interpreter on both Linux hosts and Termux devices.
+    local stub
+    for stub in "${sb}/bin/"*; do sed -i "1c\\#!${BASH}" "$stub"; done
     chmod +x "${sb}/bin/"*
 }
 
@@ -428,5 +431,44 @@ _test_ubuntu_box64_has_no_github_api() {
     )
 }
 it "proot_pkg_install_box64 → GitHub 릴리스 경로 없이 apt만 사용" _test_ubuntu_box64_has_no_github_api
+
+describe 'Arch removal — propagate failures'
+_test_arch_vscode_remove_failure() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    local removed="" rc=0
+    proot_pkg_is_installed() { [ "$1" = visual-studio-code-bin ]; }
+    proot_pkg_remove() { removed="$1"; return 42; }
+    if proot_pkg_remove_vscode; then rc=0; else rc=$?; fi
+    assert_eq 42 "$rc"
+    assert_eq visual-studio-code-bin "$removed"
+}
+it 'VS Code removal failure is not hidden by trying a different package' _test_arch_vscode_remove_failure
+
+_test_arch_autoremove_failure() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    # Execute the actual container snippet with a fake pacman, without sudo/proot.
+    proot_exec() { shift; "$@"; }
+    pacman() {
+        if [ "$1" = -Qdtq ]; then echo unused-package; return 0; fi
+        return 42
+    }
+    export -f pacman
+    local rc=0
+    if proot_pkg_autoremove; then rc=0; else rc=$?; fi
+    assert_eq 42 "$rc"
+}
+it 'orphan package removal failure is returned from the container shell' _test_arch_autoremove_failure
+
+_test_arch_autoremove_empty() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    proot_exec() { shift; "$@"; }
+    pacman() {
+        if [ "$1" = -Qdtq ]; then return 1; fi
+        return 42
+    }
+    export -f pacman
+    proot_pkg_autoremove
+}
+it 'no orphan packages remains a successful no-op' _test_arch_autoremove_empty
 
 print_results

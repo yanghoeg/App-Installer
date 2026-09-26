@@ -108,9 +108,9 @@ app_install_llama_cpp() {
 }
 
 app_remove_llama_cpp() {
-    rm -f "$_LLAMA_GPU_BIN" "$_LLAMA_MODEL_GET_BIN"
     # 백엔드 패키지는 llama-cpp 에 의존하므로 함께 제거된다
-    termux_pkg_remove llama-cpp
+    termux_pkg_remove llama-cpp || return 1
+    rm -f "$_LLAMA_GPU_BIN" "$_LLAMA_MODEL_GET_BIN"
 }
 
 app_is_installed_llama_cpp() {

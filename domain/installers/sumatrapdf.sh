@@ -63,7 +63,7 @@ EOF
 app_remove_sumatrapdf() {
     wine_exec_shell "
         rm -rf \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\" 2>/dev/null
-    " 2>/dev/null || true
+    " || return 1
     rm -f "$_SUMATRA_DESKTOP" "${HOME}/Desktop/sumatrapdf.desktop"
 }
 

@@ -28,7 +28,7 @@ app_install_notion() {
 }
 
 app_remove_notion() {
-    proot_exec rm -rf notion 2>/dev/null || true
+    proot_exec rm -rf notion || return 1
     desktop_remove "notion"
 }
 

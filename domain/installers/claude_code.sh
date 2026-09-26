@@ -51,7 +51,7 @@ _claude_code_download_native() {
 _claude_code_remove_npm_wrapper() {
     command -v npm >/dev/null 2>&1 || return 0
     npm ls -g --depth=0 2>/dev/null | grep -q "@anthropic-ai/claude-code" || return 0
-    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+    npm uninstall -g @anthropic-ai/claude-code
 }
 
 _claude_code_install_wrapper() {
@@ -82,7 +82,7 @@ EOF
 app_install_claude_code() {
     termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner || return 1
-    _claude_code_remove_npm_wrapper
+    _claude_code_remove_npm_wrapper || return 1
     local version
     version=$(_claude_code_fetch_latest_version)
     [ -z "$version" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
@@ -165,10 +165,10 @@ app_upgrade_claude_code() {
 }
 
 app_remove_claude_code() {
-    rm -f "${CLAUDE_CODE_BIN_PATH}"
-    rm -rf "${CLAUDE_CODE_PREFIX}"
     # npm 글로벌 패키지가 남아 있으면 bin/claude 심볼릭이 재생성돼 되살아남 → 함께 제거
-    _claude_code_remove_npm_wrapper
+    _claude_code_remove_npm_wrapper || return 1
+    rm -f "${CLAUDE_CODE_BIN_PATH}" || return 1
+    rm -rf "${CLAUDE_CODE_PREFIX}"
 }
 
 app_is_installed_claude_code() {

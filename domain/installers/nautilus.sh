@@ -12,7 +12,7 @@ app_install_nautilus() {
 }
 
 app_remove_nautilus() {
-    proot_pkg_purge nautilus 2>/dev/null || true
+    proot_pkg_purge nautilus || return 1
     desktop_remove "nautilus"
 }
 

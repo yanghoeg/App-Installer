@@ -63,7 +63,7 @@ EOF
 app_remove_notepadpp() {
     wine_exec_shell "
         rm -rf \"\$WINEPREFIX/drive_c/Program Files/Notepad++\" 2>/dev/null
-    " 2>/dev/null || true
+    " || return 1
     rm -f "$_NOTEPADPP_DESKTOP" "${HOME}/Desktop/notepadpp.desktop"
 }
 

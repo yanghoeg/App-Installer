@@ -67,7 +67,7 @@ EOF
 app_remove_winmerge() {
     wine_exec_shell "
         rm -rf \"\$WINEPREFIX/drive_c/Program Files/WinMerge\" 2>/dev/null
-    " 2>/dev/null || true
+    " || return 1
     rm -f "$_WINMERGE_DESKTOP" "${HOME}/Desktop/winmerge.desktop"
 }
 
