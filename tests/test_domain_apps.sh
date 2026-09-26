@@ -252,10 +252,10 @@ describe "DBeaver — proot 설치"
 _test_dbeaver_install_uses_abstract_jdk() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_dbeaver
-    assert_was_called "proot_pkg_install_jdk"
+    assert_not_called "proot_pkg_install_jdk"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
+it "DBeaver uses the runtime bundled in its archive" _test_dbeaver_install_uses_abstract_jdk
 
 _test_dbeaver_failure_propagates_without_desktop() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -1184,7 +1184,7 @@ _test_korean_proot_arch_fcitx5_fallback() {
     app_install_korean_proot >/dev/null 2>&1
     assert_was_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "proot_pkg_install fcitx5-configtool" || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$(_korean_proot_locale_file)" "@im=fcitx5" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_locale_file)" "@im=fcitx" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
 it "archlinux → AUR nimf 실패 시 fcitx5 폴백" _test_korean_proot_arch_fcitx5_fallback
@@ -1351,8 +1351,14 @@ _test_contract_install_success_for_all_ids() {
         IFS='|' read -r id _ _ _ <<< "$entry"
 
         case "$id" in
+            tor_browser)
+                if app_install tor_browser >/dev/null 2>&1; then
+                    echo '[ASSERT] retired Tor installer unexpectedly succeeded' >&2
+                    failed=1
+                fi
+                continue ;;
             gpu_proot)
-                skip "app_install_gpu_proot — 실기기 /sys/class/kgsl/kgsl-3d0/gpu_model 필요, 유닛 테스트로 재현 불가"
+                skip "GPU activation is covered by the root project's modern_install suite"
                 continue ;;
             korean_locale)
                 skip "app_install_korean_locale — 메인 프로젝트(Termux_XFCE) domain/locale_ko.sh + ports/ui.sh(ui_warn 등) 의존, app-installer 단독 테스트 불가"
@@ -1416,8 +1422,8 @@ _test_sha256_constants_are_64hex() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local failed=0 v val
     for v in _SEVENZIP_SHA256 _SUMATRA_SHA256 _NOTEPADPP_SHA256 _WINMERGE_SHA256 \
-             _WINE_STAGING_SHA256 _WINETRICKS_SHA256 _NIMF_DEB_SHA256 _TOR_SHA256 \
-             _THORIUM_DEB_SHA256 _DBEAVER_SHA256 _NOTION_SHA256 _BURP_SHA256 \
+             _WINE_STAGING_SHA256 _WINETRICKS_SHA256 _NIMF_DEB_SHA256 \
+             _THORIUM_DEB_SHA256 _DBEAVER_SHA256 _BURP_SHA256 \
              _MINIFORGE_SHA256 _TEAMS_DEB_SHA256
     do
         val="${!v:-}"
@@ -1434,7 +1440,7 @@ _test_sha256_constants_are_64hex() {
     cleanup_sandbox "$sb"
     return "$failed"
 }
-it "설치기 sha256 상수 15종이 모두 64자 hex다" _test_sha256_constants_are_64hex
+it "설치기 sha256 상수이 모두 64자 hex다" _test_sha256_constants_are_64hex
 
 describe "다운로드 무결성 — 스니펫 주입"
 
@@ -1473,8 +1479,8 @@ it "sumatrapdf/notepadpp/winmerge 스니펫에도 fetch_verified + sha256이 주
 _test_proot_installers_pass_sha_to_snippet() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local failed=0 pair id sha_var
-    for pair in tor_browser:_TOR_SHA256 thorium:_THORIUM_DEB_SHA256 dbeaver:_DBEAVER_SHA256 \
-                notion:_NOTION_SHA256 burpsuite:_BURP_SHA256 miniforge:_MINIFORGE_SHA256
+    for pair in thorium:_THORIUM_DEB_SHA256 dbeaver:_DBEAVER_SHA256 \
+                burpsuite:_BURP_SHA256 miniforge:_MINIFORGE_SHA256
     do
         id="${pair%%:*}"; sha_var="${pair#*:}"
         reset_mock_calls
@@ -1487,7 +1493,7 @@ _test_proot_installers_pass_sha_to_snippet() {
     cleanup_sandbox "$sb"
     return "$failed"
 }
-it "tor/thorium/dbeaver/notion/burp/miniforge가 스니펫에 sha256을 넘긴다" \
+it "thorium/dbeaver/burp/miniforge가 스니펫에 sha256을 넘긴다" \
     _test_proot_installers_pass_sha_to_snippet
 
 describe "teams — GitHub API 제거 + 3인자 deb_or_aur"

@@ -148,6 +148,7 @@ _run_yad_notebook() {
             for _entry in "${APP_REGISTRY[@]}"; do
                 IFS='|' read -r _id _name _category _desc <<< "$_entry"
                 _category_in_tab "$_category" "$_tab_cats" || continue
+                app_is_visible "$_id" || continue
                 rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
             done
 
@@ -187,6 +188,7 @@ _run_yad_flat() {
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
         [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
+        app_is_visible "$_id" || continue
         rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 
@@ -217,6 +219,7 @@ _run_zenity() {
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
         [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
+        app_is_visible "$_id" || continue
         zenity_rows+=("FALSE" "$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 

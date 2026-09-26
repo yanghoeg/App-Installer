@@ -3,6 +3,7 @@
 # ADAPTER: pkg_ubuntu.sh — proot Ubuntu apt 구현체
 # =============================================================================
 source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
 
 proot_pkg_install()      { proot_exec sudo apt install -y "$@"; }
 proot_pkg_remove()       { proot_exec sudo apt remove -y "$@"; }
@@ -61,75 +62,49 @@ proot_pkg_install_deb_url() {
 proot_pkg_add_external_repo() {
     local name="$1" gpg_key_url="$2" sources_line="$3"
     proot_exec sudo bash -c '
-        set -eo pipefail
-        apt install -y gpg software-properties-common apt-transport-https 2>/dev/null || true
-        wget -qO- "$1" | gpg --dearmor > "/usr/share/keyrings/$2.gpg"
-        echo "$3" > "/etc/apt/sources.list.d/$2.list"
-        apt update
+        set -eu
+        apt-get install -y ca-certificates gpg wget
+        key_tmp=$(mktemp)
+        keyring_tmp=$(mktemp)
+        trap "rm -f \"$key_tmp\" \"$keyring_tmp\"" EXIT
+        wget -qO "$key_tmp" "$1"
+        gpg --dearmor --yes --output "$keyring_tmp" "$key_tmp"
+        install -Dm644 "$keyring_tmp" "/usr/share/keyrings/$2.gpg"
+        printf "%s\\n" "$3" > "/etc/apt/sources.list.d/$2.list"
+        apt-get update
     ' _ "$gpg_key_url" "$name" "$sources_line"
 }
 
 proot_pkg_install_libreoffice() { proot_pkg_install libreoffice; }
 proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice; }
 
-# Ubuntu: dbus-glib 패키지명이 Arch와 다름
-proot_pkg_install_tor_deps() { proot_pkg_install curl libdbus-glib-1-2; }
 
 proot_pkg_install_vscode() {
     proot_pkg_add_external_repo "vscode" \
         "https://packages.microsoft.com/keys/microsoft.asc" \
-        "deb [arch=arm64 signed-by=/usr/share/keyrings/vscode.gpg] https://packages.microsoft.com/repos/code stable main"
+        "deb [arch=arm64 signed-by=/usr/share/keyrings/vscode.gpg] https://packages.microsoft.com/repos/code stable main" || return 1
     proot_pkg_install code
 }
 proot_pkg_remove_vscode() { proot_pkg_remove code; }
-
-proot_pkg_install_jdk() {
-    proot_pkg_install openjdk-21-jdk 2>/dev/null || proot_pkg_install openjdk-11-jdk
-}
 
 proot_pkg_install_python_pip() { proot_pkg_install python3 python3-pip; }
 proot_pkg_install_zlib()       { proot_pkg_install zlib1g-dev; }
 
 proot_pkg_install_sasm() {
-    local rootfs="$(_proot_rootfs)"
-    local sources="${rootfs}/etc/apt/sources.list"
-
-    # universe repo 활성화 후 현재 버전에서 먼저 시도
-    proot_exec sudo bash -c "
-        apt-get install -y software-properties-common 2>/dev/null || true
-        add-apt-repository universe -y 2>/dev/null || true
-        apt-get update
-    "
-    if proot_exec sudo apt-get install -y sasm 2>/dev/null; then
-        return 0
-    fi
-
-    # 실패 시 jammy(22.04 LTS) 폴백 — mantic(23.10)은 EOL
-    echo "[WARN] 현재 버전에서 sasm 미지원, jammy(22.04) 폴백 시도" >&2
-    if [ -f "$sources" ]; then
-        cp "$sources" "${sources}.bak"
-        sed -i 's/noble/jammy/g; s/oracular/jammy/g; s/plucky/jammy/g; s/mantic/jammy/g' "$sources"
-    fi
-
-    proot_exec sudo apt update
-    proot_exec sudo apt-get install -y sasm || \
-        echo "[WARN] SASM 설치 실패 — arm64 바이너리 미지원 가능성 있음" >&2
-
-    [ -f "${sources}.bak" ] && mv "${sources}.bak" "$sources"
-    proot_exec sudo apt update
-
-    proot_exec dpkg -s sasm &>/dev/null || return 1
+    proot_exec sudo apt-get update || return 1
+    proot_exec sudo apt-get install -y sasm
 }
 
-# GitHub 릴리스는 .deb 미제공(2026-09 확인 — v0.3.x~v0.4.4 어느 릴리스에도 Ubuntu .deb 에셋 없음)
-# → apt 경로만 남긴다. 실패는 그대로 rc≠0으로 전파.
+# Build the pinned upstream ARM64 release; no third-party binary repository.
 proot_pkg_install_box64() {
-    proot_pkg_install box64 2>/dev/null
+    proot_pkg_install git cmake build-essential pkg-config || return 1
+    proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 
 proot_pkg_install_wine_mesa() {
     proot_pkg_install \
-        mesa-vulkan-drivers libgl1-mesa-dri libgles2-mesa \
-        libvulkan1 vulkan-tools 2>/dev/null || \
-        echo "[WARN] Mesa 일부 패키지 실패 — llvmpipe 폴백"
+        mesa-vulkan-drivers libgl1-mesa-dri libgles2 \
+        libvulkan1
 }
+
+proot_pkg_install_gpu_tools() { proot_pkg_install mesa-utils vulkan-tools; }

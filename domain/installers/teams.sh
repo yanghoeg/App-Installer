@@ -14,8 +14,8 @@ app_install_teams() {
     proot_pkg_install_deb_or_aur "$_TEAMS_DEB_URL" "teams-for-linux" "$_TEAMS_DEB_SHA256" \
         || { echo "[ERROR] Teams 설치 실패" >&2; return 1; }
 
-    desktop_register "teams" "Microsoft Teams" \
-        'bash -c "prun teams-for-linux --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+    desktop_register_proot "teams" "Microsoft Teams" \
+        'teams-for-linux --no-sandbox' \
         "teams-for-linux" "Network;InstantMessaging;"
 }
 

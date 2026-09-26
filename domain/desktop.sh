@@ -3,6 +3,42 @@
 # DOMAIN: desktop.sh — .desktop 파일 관리 유틸리티
 # =============================================================================
 
+# Quote one argument for Desktop Entry Exec (including its string escaping).
+_desktop_exec_quote() {
+    local arg="$1"
+    arg="${arg//\\/\\\\\\\\}"
+    arg="${arg//\"/\\\\\"}"
+    arg="${arg//\$/\\\\\$}"
+    arg="${arg//\`/\\\\\`}"
+    printf '"%s"' "$arg"
+}
+
+# The command is already in Desktop Entry Exec syntax. Avoid bash -c so field
+# codes and quoted arguments keep their meaning and no shell is involved.
+desktop_register_proot() {
+    local app_id="$1" name="$2" cmd="$3"
+    shift 3
+    desktop_register "$app_id" "$name" "prun-gui $(_desktop_exec_quote "${name//%/%%}") -- $cmd" "$@"
+}
+
+desktop_rewrite_for_proot() {
+    local file="$1" name=App line content='' quoted
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in Name=*) name="${line#Name=}"; break ;; esac
+    done < "$file"
+    # A literal percent in the display name must not become an Exec field code.
+    quoted=$(_desktop_exec_quote "${name//%/%%}")
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            Exec=*) line="Exec=prun-gui $quoted -- ${line#Exec=}" ;;
+            TryExec=*|Path=*) continue ;; # Container paths are not host paths.
+            DBusActivatable=*) line=DBusActivatable=false ;;
+        esac
+        content+="$line"$'\n'
+    done < "$file"
+    printf '%s' "$content" > "$file"
+}
+
 # .desktop 파일 등록 (Termux apps 메뉴 + Desktop)
 # $1=app_id  $2=name  $3=exec_cmd  $4=icon  $5=categories  [$6=extra_fields]
 desktop_register() {
@@ -42,9 +78,7 @@ desktop_copy_from_proot() {
         local fname
         fname=$(basename "$desktop")
         cp "$desktop" "${PREFIX}/share/applications/${fname}"
-        sed -i \
-            "s|^Exec=\(.*\)$|Exec=bash -c \"prun \1 </dev/null >/dev/null 2>\&1 \&\"|" \
-            "${PREFIX}/share/applications/${fname}"
+        desktop_rewrite_for_proot "${PREFIX}/share/applications/${fname}" || return 1
     done
 }
 

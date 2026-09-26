@@ -31,8 +31,8 @@ app_install_thorium() {
         command -v thorium-browser >/dev/null
     ' _ "$_THORIUM_DEB_URL" "$_THORIUM_DEB_SHA256" || { echo "[ERROR] Thorium 다운로드/설치 실패" >&2; return 1; }
 
-    desktop_register "thorium-browser" "Thorium" \
-        'bash -c "prun thorium-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
+    desktop_register_proot "thorium-browser" "Thorium" \
+        'thorium-browser --no-sandbox' \
         "thorium-browser" "Network;" || return 1
 }
 

@@ -50,7 +50,7 @@ _wine_install_tarball_proot() {
         # argv[0] 보존: box64가 wine 경로의 basename을 argv[0]으로 전달
         cd /opt/wine-staging/bin
         mkdir -p .elf
-        for f in wine wine64 wineserver wineboot winedbg; do
+        for f in wine wineserver wineboot winedbg; do
             if [ -f \"\$f\" ] && file \"\$f\" 2>/dev/null | grep -q 'x86-64'; then
                 mv \"\$f\" \".elf/\$f\"
                 printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/.elf/%s \"\$@\"\n' \"\$f\" > \"\$f\"
@@ -62,7 +62,7 @@ _wine_install_tarball_proot() {
         ln -sf ../share /opt/wine-staging/bin/share
 
         # /usr/local/bin 심링크 (symlink 방식 대신 직접 복사 — cat으로 덮어써지는 문제 방지)
-        for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
+        for bin in wine wineboot winecfg wineserver msiexec regedit winetricks; do
             [ -f /opt/wine-staging/bin/\$bin ] && \
                 ln -sf /opt/wine-staging/bin/\$bin /usr/local/bin/\$bin || true
         done
@@ -97,7 +97,7 @@ _wine_install_native() {
 
     # 래퍼가 아니라 wine 트리 자체로 판정한다.
     # (래퍼 경로가 wine → wine-box64로 바뀐 기존 설치도 재다운로드하지 않도록)
-    if [ -x "$_WINE_NATIVE_DIR/bin/wine64" ]; then
+    if [ -x "$_WINE_NATIVE_DIR/bin/wine" ]; then
         echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
         _wine_write_box64_native_wrapper
         return 0
@@ -131,14 +131,14 @@ _wine_install_native() {
         return 1
     fi
     rm -f "$_tmp_tar"
-    [ -x "$_WINE_NATIVE_DIR/bin/wine64" ] || {
+    [ -x "$_WINE_NATIVE_DIR/bin/wine" ] || {
         echo "[ERROR] Wine 실행 파일을 찾을 수 없습니다." >&2
         return 1
     }
 
     _wine_write_box64_native_wrapper
 
-    DISPLAY="${DISPLAY:-:0.0}" "$_WINE_BIN" wineboot --init 2>/dev/null || true
+    "$_WINE_BIN" wineboot --init 2>/dev/null || true
 }
 
 # $PREFIX/bin/wine-box64 — Termux native (glibc-runner) 래퍼
@@ -174,8 +174,10 @@ export BOX64_DYNAREC_SAFEFLAGS=2
 # DXVK
 export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
-grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
-exec grun "$HOME/.wine-staging/bin/wine64" "$@"
+if [ -x "$HOME/.wine-staging/bin/wineserver" ]; then
+    grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
+fi
+exec grun "$HOME/.wine-staging/bin/wine" "$@"
 WRAP_TAIL
     } > "$_WINE_BIN"
     chmod +x "$_WINE_BIN"
@@ -194,60 +196,28 @@ WINE_DPI="${WINE_DPI:-240}"
 # Android CPU 쓰로틀링 방지
 termux-wake-lock 2>/dev/null
 
-# prun 설정에서 rootfs 경로 계산
+# Load the configured proot distro; native-only configurations must not pick one.
 _conf="$HOME/.config/termux-xfce/config"
 [ -f "$_conf" ] && . "$_conf"
-_distro="${PROOT_DISTRO:-archlinux}"
-# rootfs 레이아웃 자동 판별 (신규 containers/<distro>/rootfs 우선, 레거시 폴백)
-_base="$PREFIX/var/lib/proot-distro"
-if [ -d "$_base/containers/$_distro/rootfs" ]; then
-    _rootfs="$_base/containers/$_distro/rootfs"
-else
-    _rootfs="$_base/installed-rootfs/$_distro"
+if [ -z "${PROOT_DISTRO:-}" ]; then
+    echo "[ERROR] Wine Box64 requires PROOT_DISTRO in ~/.config/termux-xfce/config." >&2
+    exit 1
 fi
-_user="${PROOT_USER:-$(ls -1 "$_rootfs/home/" 2>/dev/null | grep -v '^alarm$' | head -1)}"
-_reg="$_rootfs/home/$_user/.wine/user.reg"
-
-# Wine 레지스트리 DPI 동기화 (sed — wineserver 불필요, 즉시 반영)
-if [ -f "$_reg" ]; then
-    _hex=$(printf '%08x' "$WINE_DPI")
-    grep -q "\"LogPixels\"=dword:${_hex}" "$_reg" 2>/dev/null || \
+exec prun env WINE_DPI="$WINE_DPI" bash -c '
+    export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}" WINEESYNC=1 WINEDEBUG="${WINEDEBUG:--all}"
+    case "$WINE_DPI" in *[!0-9]*|"") echo "[ERROR] WINE_DPI must be a positive integer" >&2; exit 2 ;; esac
+    _reg="$WINEPREFIX/user.reg"
+    if [ -f "$_reg" ]; then
+        _hex=$(printf "%08x" "$((10#$WINE_DPI))")
         sed -i "s/\"LogPixels\"=dword:[0-9a-f]\{8\}/\"LogPixels\"=dword:${_hex}/" "$_reg"
-fi
-
-exec prun env DISPLAY="${DISPLAY:-:0}" \
-    WINEDATADIR=/opt/wine-staging/share/wine \
-    MESA_LOADER_DRIVER_OVERRIDE=zink \
-    TU_DEBUG=noconform \
-    ZINK_DESCRIPTORS=lazy \
-    MESA_NO_ERROR=1 \
-    MESA_GL_VERSION_OVERRIDE=4.6COMPAT \
-    MESA_GLSL_VERSION_OVERRIDE=460 \
-    MESA_GLES_VERSION_OVERRIDE=3.2 \
-    WINELOADERNOEXEC=1 \
-    WINEESYNC=1 \
-    WINEDEBUG=-all \
-    BOX64_MMAP32=1 \
-    BOX64_X11THREADS=1 \
-    BOX64_DYNAREC_SAFEFLAGS=2 \
-    DXVK_ASYNC=1 \
-    DXVK_STATE_CACHE=reset \
-    bash -c 'wineserver -p 2>/dev/null & wine "$@"' _ "$@"
+    fi
+    exec wine "$@"
+' wine-box64 "$@"
 WRAPEOF
         chmod +x "$_WINE_BIN"
     fi
 
     mkdir -p "${PREFIX}/share/applications"
-
-    # native는 prun-gui(proot 전용) 대신 wine 래퍼를 직접 호출
-    local _wine_exec_cmd _winecfg_exec_cmd
-    if has_proot_distro; then
-        _wine_exec_cmd="prun-gui Wine -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine explorer"
-        _winecfg_exec_cmd="prun-gui 'Wine 설정' -- env DISPLAY=:0 WINEDATADIR=/opt/wine-staging/share/wine MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform ZINK_DESCRIPTORS=lazy MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.6COMPAT MESA_GLSL_VERSION_OVERRIDE=460 MESA_GLES_VERSION_OVERRIDE=3.2 WINELOADERNOEXEC=1 WINEESYNC=1 WINEDEBUG=-all BOX64_MMAP32=1 BOX64_X11THREADS=1 BOX64_DYNAREC_SAFEFLAGS=2 DXVK_ASYNC=1 DXVK_STATE_CACHE=reset wine winecfg"
-    else
-        _wine_exec_cmd="wine-box64 explorer"
-        _winecfg_exec_cmd="wine-box64 winecfg"
-    fi
 
     cat > "$_WINE_DESKTOP" << EOF
 [Desktop Entry]
@@ -255,7 +225,7 @@ Version=1.0
 Type=Application
 Name=Wine (Box64)
 Comment=Windows 프로그램 실행 (Box64 + Wine-Staging)
-Exec=bash -c "${_wine_exec_cmd} </dev/null >/dev/null 2>&1 &"
+Exec=wine-box64 explorer
 Icon=wine
 Categories=System;Emulator;
 MimeType=application/x-ms-dos-executable;application/x-msi;
@@ -269,7 +239,7 @@ Version=1.0
 Type=Application
 Name=Wine 설정 (Box64)
 Comment=Wine 환경 구성 (winecfg)
-Exec=bash -c "${_winecfg_exec_cmd} </dev/null >/dev/null 2>&1 &"
+Exec=wine-box64 winecfg
 Icon=wine-winecfg
 Categories=Settings;System;
 Terminal=false
@@ -283,7 +253,7 @@ Version=1.0
 Type=Application
 Name=Wine 앱 설치
 Comment=Windows 프로그램 설치/제거
-Exec=bash ${SCRIPT_DIR}/install.sh wine
+Exec=bash $(_desktop_exec_quote "${SCRIPT_DIR}/install.sh") wine
 Icon=wine
 Categories=System;
 Terminal=false
@@ -346,7 +316,7 @@ app_remove_wine() {
         proot_exec sudo bash -c "
             set -e
             rm -rf /opt/wine-staging
-            for bin in wine wine64 wineboot winecfg wineserver msiexec regedit winetricks; do
+            for bin in wine wineboot winecfg wineserver msiexec regedit winetricks; do
                 rm -f /usr/local/bin/\$bin
             done
         " || return 1
