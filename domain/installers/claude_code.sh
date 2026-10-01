@@ -40,14 +40,28 @@ _claude_code_installed_version() {
     cat "${CLAUDE_CODE_VERSION_FILE}"
 }
 
+# 실행 중인 claude 위에 제자리 덮어쓰기를 하면 안 된다 — grun(ld.so)이 바이너리를 mmap으로
+# 올리므로 커널 deny-write가 걸리지 않아 ETXTBSY도 안 나고, 쓰는 순간 실행 중 세션이
+# SIGBUS로 조용히 죽는다. staging 에 풀고 rename 으로 바꿔 끼우면 옛 inode가 살아남아
+# 돌고 있는 claude 안에서 업그레이드를 돌려도 그 세션이 보존된다.
 _claude_code_download_native() {
     local version="$1"
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
     mkdir -p "${CLAUDE_CODE_PREFIX}"
-    local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
-    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" || return 1
-    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1 || return 1
+    # staging 은 반드시 PREFIX 안 — rename 하려면 같은 파일시스템이어야 한다
+    local stage="${CLAUDE_CODE_PREFIX}/.stage"
+    rm -rf "$stage" && mkdir -p "$stage" || return 1
+    local tarball="${stage}/native.tgz"
+    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" \
+        || { rm -rf "$stage"; return 1; }
+    tar xzf "$tarball" -C "$stage" --strip-components=1 || { rm -rf "$stage"; return 1; }
     rm -f "$tarball"
+    local f
+    for f in "$stage"/*; do
+        [ -e "$f" ] || continue
+        mv -f "$f" "${CLAUDE_CODE_PREFIX}/${f##*/}" || { rm -rf "$stage"; return 1; }
+    done
+    rm -rf "$stage"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"
     printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
 }
@@ -58,10 +72,12 @@ _claude_code_remove_npm_wrapper() {
     npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
 }
 
+# XFCE 세션 전역 LD_PRELOAD(부모 domain/locale_ko.sh 의 bionic force_gettext.so)는
+# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → grun 실행 전에 env -u 로 떼어낸다.
 _claude_code_install_wrapper() {
     cat > "${CLAUDE_CODE_BIN_PATH}" << EOF
 #!${PREFIX}/bin/bash
-exec grun "${CLAUDE_CODE_PREFIX}/claude" "\$@"
+exec env -u LD_PRELOAD grun "${CLAUDE_CODE_PREFIX}/claude" "\$@"
 EOF
     chmod +x "${CLAUDE_CODE_BIN_PATH}"
 }

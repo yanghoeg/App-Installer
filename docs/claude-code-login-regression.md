@@ -17,6 +17,20 @@
 - 직전 핀 **2.1.261 의 sha256 항목은 남겨 뒀다** — 롤백 재설치 시에도 검증이 유지된다.
 - **실기기 `/login`은 아직 검증하지 않았다.**
 
+### 같이 고친 설치기 버그 2건 (이번 상향과는 별개의 기존 버그)
+
+1. **`_claude_code_install_wrapper`가 `env -u LD_PRELOAD`를 빠뜨렸다.** 부모
+   `domain/locale_ko.sh`가 XFCE 세션 전역으로 bionic `force_gettext.so`를 `LD_PRELOAD` 하는데,
+   이게 glibc 바이너리의 `libdl.so` 로딩을 깨뜨린다. 기기에는 손으로 고친 래퍼가 있었지만
+   커밋된 적이 없어서 `app_install/upgrade/rollback_claude_code`가 돌 때마다 다시 덮어썼다.
+2. **`_claude_code_download_native`가 실행 중 바이너리 위에 제자리로 풀었다.** `grun`은
+   `ld.so`가 `claude`를 **mmap**으로 올리므로 커널 deny-write가 걸리지 않는다 — `ETXTBSY`도
+   안 나고, 쓰는 순간 매핑된 페이지가 어긋나 **실행 중 세션이 SIGBUS로 조용히 죽는다**.
+   `${CLAUDE_CODE_PREFIX}/.stage`에 풀고 `rename`으로 바꿔 끼우도록 고쳤다 — 옛 inode가
+   살아남아 돌고 있는 claude 안에서 업그레이드해도 그 세션이 보존된다.
+
+회귀 테스트: `tests/test_domain_apps.sh` → "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑".
+
 ### 회귀 시 롤백 절차
 
 1. 이전 버전 백업이 있는 경우(업그레이드로 올라온 설치):

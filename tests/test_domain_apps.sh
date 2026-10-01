@@ -1529,4 +1529,38 @@ _test_claude_download_unknown_version_skips_sha() {
 }
 it "미등록 버전 → 빈 sha256(검증 생략)" _test_claude_download_unknown_version_skips_sha
 
+describe "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑"
+
+_test_claude_wrapper_drops_ld_preload() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_install_wrapper
+    grep -q 'exec env -u LD_PRELOAD grun ' "${CLAUDE_CODE_BIN_PATH}" || {
+        echo "[ASSERT] 래퍼에 env -u LD_PRELOAD 없음 — XFCE force_gettext.so(bionic)가 glibc 로딩을 깨뜨린다" >&2
+        cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "래퍼는 grun 앞에서 LD_PRELOAD를 떼어낸다" _test_claude_wrapper_drops_ld_preload
+
+# 실행 중인 claude 는 ld.so 가 mmap 으로 올려 deny-write가 걸리지 않는다 → 제자리 덮어쓰기는
+# 실행 중 세션을 SIGBUS로 죽인다. inode가 바뀌었는지로 rename 스왑을 검증한다.
+_test_claude_download_swaps_by_rename() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    mkdir -p "${CLAUDE_CODE_PREFIX}"
+    printf 'old\n' > "${CLAUDE_CODE_PREFIX}/claude"
+    local old_ino; old_ino=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    fetch_verified() { printf 'tgz\n' > "$2"; }
+    tar() { printf 'new\n' > "${CLAUDE_CODE_PREFIX}/.stage/claude"; }   # 압축해제 흉내
+    _claude_code_download_native "9.9.9" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "new" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "새 바이너리로 교체됨" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    local new_ino; new_ino=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    [ "$old_ino" != "$new_ino" ] || {
+        echo "[ASSERT] inode가 그대로 — 제자리 덮어쓰기라 실행 중 세션이 깨진다" >&2
+        cleanup_sandbox "$sb"; return 1; }
+    [ ! -d "${CLAUDE_CODE_PREFIX}/.stage" ] || {
+        echo "[ASSERT] staging 디렉터리가 남았다" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "download는 제자리 덮어쓰기 대신 rename으로 바꿔 끼운다(inode 교체)" _test_claude_download_swaps_by_rename
+
 print_results
