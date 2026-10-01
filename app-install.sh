@@ -98,8 +98,11 @@ cmd_install() {
         return 1
     fi
     if app_is_installed "$id"; then
-        echo "[INFO] $id 는 이미 설치되어 있습니다."
-        return 0
+        if app_verify "$id"; then
+            echo "[INFO] $id 는 이미 설치되어 있습니다."
+            return 0
+        fi
+        echo "[WARN] $id 설치본이 손상됐습니다 — 재설치로 복구합니다." >&2
     fi
     echo "[INFO] $id 설치 시작..."
     if app_install "$id"; then

@@ -137,7 +137,7 @@ _claude_code_smoke_check() {
 # 사용: app_rollback_claude_code            → 사용 가능한 최신 백업으로
 #      app_rollback_claude_code 2.1.132    → 특정 버전으로
 app_rollback_claude_code() {
-    local target="${1:-}" bak_bin bak_pkg
+    local target="${1:-}" bak_bin bak_pkg stage
     if [ -n "$target" ]; then
         bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${target}"
         [ -f "$bak_bin" ] || { echo "[ERROR] 백업 없음: v${target}" >&2; return 1; }
@@ -148,8 +148,14 @@ app_rollback_claude_code() {
         target=${bak_bin##*/claude.bak.v}
     fi
     bak_pkg="${CLAUDE_CODE_PREFIX}/package.json.bak.v${target}"
-    cp -f "$bak_bin" "${CLAUDE_CODE_PREFIX}/claude"
-    chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    # 제자리 cp 금지 — download 와 같은 이유다. 실행 중 claude 의 mmap 페이지까지 덮여
+    # 그 세션이 SIGBUS 로 죽고(실측: 240MB 파일 제자리 덮어쓰기에 SIGBUS 111221회,
+    # rename 은 0회), 복사가 중간에 끊기면 짧은 파일이 남아 이후 실행이 ld.so 의
+    # "file too short" 로 깨진다. staging + rename 이면 옛 inode 가 살아남는다.
+    stage="${CLAUDE_CODE_PREFIX}/claude.restore"
+    cp -f "$bak_bin" "$stage" || { rm -f "$stage"; return 1; }
+    chmod +x "$stage"
+    mv -f "$stage" "${CLAUDE_CODE_PREFIX}/claude" || { rm -f "$stage"; return 1; }
     [ -f "$bak_pkg" ] && cp -f "$bak_pkg" "${CLAUDE_CODE_PREFIX}/package.json"
     printf '%s\n' "$target" > "${CLAUDE_CODE_VERSION_FILE}"
     _claude_code_install_wrapper
@@ -195,4 +201,11 @@ app_remove_claude_code() {
 
 app_is_installed_claude_code() {
     [ -x "${CLAUDE_CODE_BIN_PATH}" ] && [ -x "${CLAUDE_CODE_PREFIX}/claude" ]
+}
+
+# 설치본이 실제로 로드되는지 — 세션이 강제 종료되면 바이너리 내용만 깨질 수 있고,
+# 그러면 app_is_installed_claude_code 의 -x 검사는 통과하지만 ld.so 가
+# "file too short" 로 실행을 거부한다. app_verify 가 이걸 보고 재설치로 복구한다.
+app_verify_claude_code() {
+    _claude_code_smoke_check
 }

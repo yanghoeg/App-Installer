@@ -117,6 +117,15 @@ app_upgrade() {
     "app_upgrade_${id}"
 }
 
+# 설치본 동작 확인 — app_verify_<id>가 있으면 호출, 없으면 확인 생략(성공)
+# app_is_installed_<id>는 파일 존재/실행권한만 보므로 내용이 깨진 설치본도 통과한다.
+# cmd_install이 재설치로 복구할지 판단하는 근거.
+app_verify() {
+    local id="$1"
+    declare -F "app_verify_${id}" >/dev/null 2>&1 || return 0
+    "app_verify_${id}"
+}
+
 # Retired installers remain addressable so users can remove existing copies.
 app_can_install() {
     [ "$1" != tor_browser ]

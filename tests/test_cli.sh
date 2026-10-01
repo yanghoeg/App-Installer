@@ -19,7 +19,7 @@ _cli_setup() {
     export PATH="$sb/bin:/usr/bin:/bin"
     unset PROOT_DISTRO PROOT_USER PROOT_ROOTFS_BASE KOREAN_LOCALE_ZIP UI
     unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
-    unset TEST_SHA TEST_REMOVE_RC TEST_CLANG_RC TEST_NPM_INSTALLED
+    unset TEST_SHA TEST_REMOVE_RC TEST_CLANG_RC TEST_NPM_INSTALLED TEST_GRUN_RC
     mkdir -p "$HOME/.config/termux-xfce" "$HOME/Desktop" "$sb/bin" "$TMPDIR" \
         "$PREFIX/lib" "$PREFIX/etc" "$PREFIX/bin" "$PREFIX/share/applications"
     touch "$PREFIX/etc/bash.bashrc" "$HOME/.zshrc" "$TEST_TRACE"
@@ -74,6 +74,7 @@ case "$name" in
             exit 0
         fi
         exit "${TEST_REMOVE_RC:-0}" ;;
+    grun) exit "${TEST_GRUN_RC:-0}" ;;
     proot-distro|glib-compile-schemas|gio) exit 0 ;;
 esac
 echo "Unexpected fixture command: $name $*" >&2
@@ -81,7 +82,7 @@ exit 1
 STUB
     } > "$sb/bin/stub"
     chmod +x "$sb/bin/stub"
-    for name in pkg dpkg wget curl sha256sum tar clang npm proot-distro glib-compile-schemas gio; do
+    for name in pkg dpkg wget curl sha256sum tar clang npm grun proot-distro glib-compile-schemas gio; do
         ln -s stub "$sb/bin/$name"
     done
 }
@@ -117,6 +118,44 @@ _test_cli_native_claude() {
     cleanup_sandbox "$sb"
 }
 it 'native-only Claude Code verifies and extracts through the CLI' _test_cli_native_claude
+
+# 바이너리 내용만 깨진 설치본(세션 강제 종료 등)은 -x 검사를 통과하므로 install 이
+# "이미 설치되어 있습니다" 로 빠져 복구가 불가능했다 — 이제 스모크로 걸러 재설치한다.
+_test_cli_install_repairs_broken_claude() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export PROOT_DISTRO=""
+    source "$APP_DIR/domain/installers/claude_code.sh"
+    export TEST_SHA="${CLAUDE_CODE_TARBALL_SHA256[$CLAUDE_CODE_PIN_VERSION]}"
+    mkdir -p "$PREFIX/share/claude-code"
+    : > "$PREFIX/share/claude-code/claude"; chmod +x "$PREFIX/share/claude-code/claude"
+    printf '#!/bin/sh\n' > "$PREFIX/bin/claude"; chmod +x "$PREFIX/bin/claude"
+    export TEST_GRUN_RC=1   # ld.so 가 로드를 거부하는 상태
+    _cli install claude_code > "$sb/install.log" 2>&1
+    assert_file_contains "$sb/install.log" '손상'
+    assert_file_contains "$TEST_TRACE" 'sha256sum .*native.tgz'
+    assert_file_contains "$PREFIX/share/claude-code/claude" 'native binary fixture'
+    cleanup_sandbox "$sb"
+}
+it 'install on a corrupt Claude binary reinstalls instead of reporting success' _test_cli_install_repairs_broken_claude
+
+_test_cli_install_keeps_healthy_claude() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export PROOT_DISTRO=""
+    mkdir -p "$PREFIX/share/claude-code"
+    printf 'native binary fixture\n' > "$PREFIX/share/claude-code/claude"
+    chmod +x "$PREFIX/share/claude-code/claude"
+    printf '#!/bin/sh\n' > "$PREFIX/bin/claude"; chmod +x "$PREFIX/bin/claude"
+    export TEST_GRUN_RC=0   # 정상 로드
+    _cli install claude_code > "$sb/install.log" 2>&1
+    assert_file_contains "$sb/install.log" '이미 설치'
+    assert_file_contains "$PREFIX/share/claude-code/claude" 'native binary fixture'
+    if grep -q 'native.tgz' "$TEST_TRACE"; then
+        echo "[ASSERT] 정상 설치본인데 재다운로드가 일어났다" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it 'install on a healthy Claude binary stays a no-op' _test_cli_install_keeps_healthy_claude
 
 describe 'CLI — explicit environment takes priority over saved config'
 _test_cli_explicit_target() {

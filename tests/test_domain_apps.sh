@@ -875,6 +875,48 @@ _test_claude_rollback_no_backup() {
 }
 it "백업 없이 롤백 → return 1" _test_claude_rollback_no_backup
 
+# 롤백도 download 와 같은 staging + rename 이어야 한다 — 제자리 cp 는 실행 중 세션의
+# mmap 페이지를 덮어 SIGBUS 로 죽이고, 중단되면 짧은 파일을 남긴다.
+_test_claude_rollback_swaps_inode() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "3.0.0"
+    printf 'old\n' > "${CLAUDE_CODE_PREFIX}/claude.bak.v1.0.0"
+    _claude_code_install_wrapper() { :; }
+    local ino_before ino_after
+    ino_before=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    app_rollback_claude_code "1.0.0" >/dev/null
+    ino_after=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    assert_ne "$ino_before" "$ino_after" "롤백이 inode를 바꿔 끼워야 함(제자리 덮어쓰기 금지)" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "old" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "백업 내용으로 복원" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    [ -x "${CLAUDE_CODE_PREFIX}/claude" ] || {
+        echo "[ASSERT] 롤백된 바이너리에 실행 권한이 없음" >&2; cleanup_sandbox "$sb"; return 1; }
+    [ ! -e "${CLAUDE_CODE_PREFIX}/claude.restore" ] || {
+        echo "[ASSERT] staging 파일 claude.restore 가 남음" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "롤백 → 제자리 덮어쓰기 대신 rename 으로 교체 (실행 중 세션 보존)" _test_claude_rollback_swaps_inode
+
+describe "app_verify — 설치본 무결성 확인"
+
+_test_app_verify_without_hook() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_verify thunderbird || { echo "[ASSERT] verify 훅이 없으면 성공해야 함" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "verify 훅이 없는 앱 → app_verify 성공(확인 생략)" _test_app_verify_without_hook
+
+_test_app_verify_claude_uses_smoke_check() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_smoke_check() { _record_call "smoke"; return 1; }
+    local rc; app_verify claude_code && rc=0 || rc=$?
+    assert_eq "1" "$rc" "스모크 실패 → app_verify 실패" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "smoke"
+    cleanup_sandbox "$sb"
+}
+it "claude_code → app_verify 가 스모크 체크 결과를 그대로 돌려준다" _test_app_verify_claude_uses_smoke_check
+
 # =============================================================================
 # has_proot_distro — 유틸 함수
 # =============================================================================
@@ -1413,6 +1455,35 @@ _test_contract_install_success_for_all_ids() {
 it "APP_REGISTRY 전체 — 정상 mock에서는 app_install이 성공한다 (gpu_proot/korean_locale은 skip)" \
     _test_contract_install_success_for_all_ids
 
+# codex 단일 바이너리 설치의 두 전제: code-mode 헬퍼를 바이너리 옆에 깔고,
+# 래퍼가 백그라운드 서버를 끈다. 둘 중 하나라도 빠지면 실기기에서 각각
+# "Code Mode is unavailable" / "no complete local package"로 깨진다.
+_test_codex_installs_code_mode_host_and_disables_daemon() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    unset -f curl wget tar dpkg npm fetch_verified 2>/dev/null || true
+    source "${APP_DIR}/lib/fetch.sh"
+    fetch_verified() { printf 'tgz\n' > "$2"; }
+    tar() { printf 'native binary fixture\n'; }
+
+    if ! app_install codex >/dev/null 2>&1; then
+        echo '[ASSERT] app_install codex가 실패함' >&2
+        failed=1
+    fi
+    if [ ! -x "${CODEX_CMH_BIN}" ]; then
+        echo "[ASSERT] code-mode 헬퍼가 설치되지 않음: ${CODEX_CMH_BIN}" >&2
+        failed=1
+    fi
+    if ! command grep -q 'features.daemon_auto_start=false' "${CODEX_BIN_PATH}"; then
+        echo '[ASSERT] 래퍼가 daemon_auto_start를 끄지 않음' >&2
+        failed=1
+    fi
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "codex — code-mode 헬퍼를 함께 설치하고 래퍼가 데몬 자동시작을 끈다" \
+    _test_codex_installs_code_mode_host_and_disables_daemon
+
 # =============================================================================
 # M10: 다운로드 무결성 — 버전 핀 + sha256 상수 + 스니펫 주입
 # =============================================================================
@@ -1437,6 +1508,14 @@ _test_sha256_constants_are_64hex() {
         echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.286]가 64자 hex가 아님: '${val}'" >&2
         failed=1
     fi
+    # codex는 본체와 code-mode 헬퍼 둘 다 핀 버전 sha256이 있어야 한다.
+    for v in CODEX_TARBALL_SHA256 CODEX_CMH_SHA256; do
+        eval "val=\"\${${v}[${CODEX_PIN_VERSION}]:-}\""
+        if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "[ASSERT] ${v}[${CODEX_PIN_VERSION}]가 64자 hex가 아님: '${val}'" >&2
+            failed=1
+        fi
+    done
     cleanup_sandbox "$sb"
     return "$failed"
 }
