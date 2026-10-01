@@ -1,27 +1,42 @@
-# Claude Code 버전 핀 2.1.132 → **2.1.261 상향(2026-09-05)**, 실기기 미검증
+# Claude Code 버전 핀 이력 — 2.1.132 → 2.1.261(2026-09-05) → **2.1.286(2026-10-01)**
 
-최종 갱신: 2026-09-05
+최종 갱신: 2026-10-01
 
-## 요약
+## 2026-10-01: 2.1.261 → 2.1.286 (실기기 `/login` 미검증)
 
-- `domain/installers/claude_code.sh`의 `CLAUDE_CODE_PIN_VERSION`을 **2.1.132 → 2.1.261**로 올렸다.
+- `domain/installers/claude_code.sh`의 `CLAUDE_CODE_PIN_VERSION`을 npm latest인 **2.1.286**으로 올렸다.
 - 상향 근거:
-  - **GHSA-7835-87q9-rgvv (HIGH, `>=2.1.38 <2.1.163`) 해소** — 2.1.261은 수정 버전 2.1.163 위다.
-    같은 하한의 GHSA-fg94-h982-f3mm 도 함께 해소.
-  - npm `@anthropic-ai/claude-code-linux-arm64` **latest = 2.1.261** 대조.
-  - tarball **sha256 상수화**(`CLAUDE_CODE_TARBALL_SHA256["2.1.261"]`) — npm integrity(sha512)와 교차 대조.
-    `_claude_code_download_native`가 `fetch_verified`로 받으며 sha256 불일치면 설치를 중단한다.
-- **실기기 `/login`은 아직 검증하지 않았다.** 아래 "핀 유지의 대가" 이하 조사 기록은 2.1.132 시절
-  근거로 그대로 보존한다 — 업스트림이 Termux `/login` 회귀를 고쳤다는 확증은 여전히 없다.
+  - npm `@anthropic-ai/claude-code-linux-arm64` **latest = 2.1.286** 대조.
+  - **보안 상향은 아니다.** GitHub advisory DB를 전수 조회한 결과 `@anthropic-ai/claude-code`의
+    미해소 하한 최댓값은 여전히 **2.1.163**(GHSA-7835-87q9-rgvv / GHSA-fg94-h982-f3mm)이라
+    직전 핀 2.1.261 도 이미 깨끗했다. 이번 상향은 latest 추종이 유일한 근거다.
+  - 2.1.262~2.1.286 CHANGELOG 전수 확인 — 2.1.207 류의 **런처/심링크 덮어쓰기**
+    (= `grun` 래퍼 구조와 충돌할 수 있는 변경) 항목 없음. `/login` 관련 항목은 전부 수정·개선 쪽이다.
+  - tarball **sha256 등록**(`CLAUDE_CODE_TARBALL_SHA256["2.1.286"]` = `ab87947d…f397`) —
+    npm `integrity`(sha512) 및 `shasum`(sha1) 양쪽과 교차 대조해 일치 확인.
+- 직전 핀 **2.1.261 의 sha256 항목은 남겨 뒀다** — 롤백 재설치 시에도 검증이 유지된다.
+- **실기기 `/login`은 아직 검증하지 않았다.**
 
 ### 회귀 시 롤백 절차
 
 1. 이전 버전 백업이 있는 경우(업그레이드로 올라온 설치):
-   `app_rollback_claude_code 2.1.132` — `${PREFIX}/share/claude-code/claude.bak.v2.1.132`가 있어야 한다.
-2. **신규 설치는 백업이 없다.** `CLAUDE_CODE_PIN_VERSION`을 `2.1.132`로 되돌리고
-   `app_install_claude_code`를 다시 실행한다 (해당 버전 sha256은 미등록 → 검증 생략 경고만 뜬다).
+   `app_rollback_claude_code 2.1.261` — `${PREFIX}/share/claude-code/claude.bak.v2.1.261`이 있어야 한다.
+   (더 과거로 가려면 `app_rollback_claude_code 2.1.132`.)
+2. **신규 설치는 백업이 없다.** `CLAUDE_CODE_PIN_VERSION`을 `2.1.261`로 되돌리고
+   `app_install_claude_code`를 다시 실행한다 — 2.1.261 sha256은 등록돼 있어 검증도 그대로 걸린다.
+   (2.1.132 로 되돌릴 때는 sha256 미등록 → 검증 생략 경고만 뜬다.)
 3. 또는 브라우저 OAuth를 우회한다: PC에서 `claude setup-token` → Termux에서
    `CLAUDE_CODE_OAUTH_TOKEN` 환경변수로 사용 (아래 "핀 유지 중 우회" 절 참조).
+
+## 2026-09-05: 2.1.132 → 2.1.261 (실기기 `/login` 2026-09-06 검증 완료)
+
+- 상향 근거:
+  - **GHSA-7835-87q9-rgvv (HIGH, `>=2.1.38 <2.1.163`) 해소** — 2.1.261은 수정 버전 2.1.163 위다.
+    같은 하한의 GHSA-fg94-h982-f3mm 도 함께 해소.
+  - npm `@anthropic-ai/claude-code-linux-arm64` 당시 **latest = 2.1.261** 대조.
+  - tarball **sha256 상수화**(`CLAUDE_CODE_TARBALL_SHA256["2.1.261"]`) — npm integrity(sha512)와 교차 대조.
+    `_claude_code_download_native`가 `fetch_verified`로 받으며 sha256 불일치면 설치를 중단한다.
+- 아래 "핀 유지의 대가" 이하 조사 기록은 2.1.132 시절 근거로 그대로 보존한다.
 
 ## 핀 유지의 대가 (보안 advisory) — 2.1.132 시절 기록
 

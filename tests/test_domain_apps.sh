@@ -1416,9 +1416,9 @@ _test_sha256_constants_are_64hex() {
             failed=1
         fi
     done
-    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.261]:-}"
+    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.286]:-}"
     if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
-        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.261]가 64자 hex가 아님: '${val}'" >&2
+        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.286]가 64자 hex가 아님: '${val}'" >&2
         failed=1
     fi
     cleanup_sandbox "$sb"
@@ -1496,12 +1496,12 @@ describe "claude_code — M11 핀 상향"
 
 _test_claude_pin_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    assert_eq "2.1.261" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
-    assert_eq "2.1.261" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
+    assert_eq "2.1.286" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "2.1.286" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "CLAUDE_CODE_PIN_VERSION = 2.1.261 (M11)" _test_claude_pin_version
+it "CLAUDE_CODE_PIN_VERSION = 2.1.286 (M11)" _test_claude_pin_version
 
 _test_claude_download_uses_fetch_verified() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -1509,8 +1509,8 @@ _test_claude_download_uses_fetch_verified() {
     fetch_verified() { captured="$3"; printf 'tgz\n' > "$2"; }
     tar() { :; }
     mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
-    _claude_code_download_native "2.1.261"
-    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.261]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
+    _claude_code_download_native "2.1.286"
+    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.286]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
