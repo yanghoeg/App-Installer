@@ -3,6 +3,8 @@
 # ADAPTER: pkg_arch.sh — proot Arch pacman 구현체
 # =============================================================================
 source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_sasm.sh"
 
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
 proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
@@ -10,7 +12,8 @@ proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Sy --noconfirm; }
 proot_pkg_autoremove() {
     proot_exec sudo bash -c \
-        'orphans=$(pacman -Qdtq 2>/dev/null); [ -n "$orphans" ] && pacman -Rns --noconfirm $orphans || true'
+        'orphans=$(pacman -Qdtq 2>/dev/null) || true
+         if [ -n "$orphans" ]; then pacman -Rns --noconfirm $orphans; fi'
 }
 proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 
@@ -47,45 +50,32 @@ proot_pkg_add_external_repo() {
 
 proot_pkg_install_libreoffice() { proot_pkg_install libreoffice-fresh; }
 proot_pkg_remove_libreoffice()  { proot_pkg_remove libreoffice-fresh; }
-proot_pkg_install_jdk()         { proot_pkg_install jdk-openjdk; }
 proot_pkg_install_python_pip()  { proot_pkg_install python python-pip; }
 proot_pkg_install_zlib()        { proot_pkg_install zlib; }
 
-# Arch: fasm은 x86 전용 → nasm + sasm 소스 빌드 (qmake)
+# Arch ARM lacks a maintained SASM package; build the pinned upstream release.
 proot_pkg_install_sasm() {
-    proot_exec sudo bash -c "
-        set -e
-        pacman -S --noconfirm --needed nasm qt5-base qt5-tools make gcc git
-        [ -f /usr/local/bin/sasm ] && exit 0
-        git clone https://github.com/Dman95/SASM.git /tmp/sasm-src
-        cd /tmp/sasm-src && qmake SASM.pro && make -j4
-        cp sasm /usr/local/bin/sasm
-        rm -rf /tmp/sasm-src
-    "
+    proot_pkg_install nasm qt5-base qt5-tools make gcc git || return 1
+    proot_exec sudo bash -c "$(sasm_build_source_script)"
 }
 
 # Arch: code는 공식 repo 없음 → AUR visual-studio-code-bin
 proot_pkg_install_vscode() { proot_pkg_install_aur visual-studio-code-bin; }
-proot_pkg_remove_vscode()  { proot_pkg_remove visual-studio-code-bin 2>/dev/null || proot_pkg_remove code 2>/dev/null || true; }
+proot_pkg_remove_vscode() {
+    if proot_pkg_is_installed visual-studio-code-bin; then
+        proot_pkg_remove visual-studio-code-bin
+    elif proot_pkg_is_installed code; then
+        proot_pkg_remove code
+    fi
+}
 
 proot_pkg_install_box64() {
-    proot_exec sudo bash -c "
-        pacman -S --noconfirm box64 2>/dev/null && exit 0
-
-        # Chaotic-AUR 추가
-        pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com 2>/dev/null || true
-        pacman-key --lsign-key 3056513887B78AEB 2>/dev/null || true
-        pacman -U --noconfirm \
-            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
-            'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' 2>/dev/null || true
-        grep -q '\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null || \
-            printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf
-        pacman -Sy --noconfirm box64 2>/dev/null
-    " 2>/dev/null
+    proot_pkg_install git cmake base-devel || return 1
+    proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 
 proot_pkg_install_wine_mesa() {
-    proot_pkg_install \
-        mesa vulkan-freedreno lib32-mesa 2>/dev/null || \
-        echo "[WARN] Mesa 일부 패키지 실패"
+    proot_pkg_install mesa vulkan-freedreno
 }
+
+proot_pkg_install_gpu_tools() { proot_pkg_install mesa-demos vulkan-tools; }

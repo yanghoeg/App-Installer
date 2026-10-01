@@ -37,7 +37,7 @@ app_install_gpu_native() {
 app_remove_gpu_native() {
     # mesa 자체는 XFCE 의존성이라 유지, GPU 전용 패키지만 제거
     for p in mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev mesa-demos; do
-        termux_pkg_is_installed "$p" && termux_pkg_remove "$p"
+        if termux_pkg_is_installed "$p"; then termux_pkg_remove "$p" || return 1; fi
     done
     return 0
 }

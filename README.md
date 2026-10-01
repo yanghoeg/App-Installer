@@ -26,112 +26,133 @@ app-installer
 # Desktop icon → App Installer  or  Application menu → App Installer
 ```
 
-Headless CLI (no GUI): `bash app-install.sh list|install <id>|remove <id>|status <id>`.
+From the **App Installer checkout** (`app-installer/` inside the parent repository):
+
+```bash
+bash app-install.sh list
+bash app-install.sh list 개발
+bash app-install.sh install vlc
+bash app-install.sh status vlc
+bash app-install.sh remove vlc
+```
+
+The category filter uses registry labels such as `개발`, `시스템`, `Termux API`, and
+`Wine`. `install` skips entries already reported as installed. `status` prints the
+state; both installed and absent known IDs return success, so its exit code alone
+is not an installed-state test. Unknown IDs and failed operations return nonzero.
+The CLI has no `upgrade` or `rollback` subcommand.
 
 ### Upgrade & rollback
 
-Picking an app that is **already installed** opens a second dialog. Apps that define an
-`app_upgrade_<id>` handler (currently **Claude Code**, **Codex CLI**) offer *Upgrade* next to *Remove*;
-everything else goes straight to *Remove*.
+An installed app with an `app_upgrade_<id>` handler offers **Upgrade** alongside
+**Remove** in the GUI. The current handlers are:
 
-The Claude Code upgrade backs the current binary up as `claude.bak.v<version>`, downloads the
-new native build, runs a smoke check (`claude --version`) and **rolls back automatically** if
-that check fails. To roll back by hand later — e.g. after a `/login` regression:
+| App | Upgrade behavior |
+|-----|------------------|
+| Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. On download/smoke failure, attempt to restore that backup |
+| Codex CLI | Update to `CODEX_PIN_VERSION`; replace the binary and wrapper, without Claude Code's backup/smoke/rollback flow |
+| Notion | Replace the old AppImage launcher with a Termux Firefox web launcher; keep the old app directory until removal |
 
-```bash
-source domain/installers/claude_code.sh
-app_rollback_claude_code            # newest available backup
-app_rollback_claude_code 2.1.132    # a specific version
-```
-
-See [`docs/claude-code-login-regression.md`](docs/claude-code-login-regression.md) for the
-pin-bump / rollback history.
+Other installed entries offer removal. The Claude Code smoke check does not test
+`/login`. A fresh install has no previous-version backup. See the
+[Claude Code pin and recovery guide](docs/claude-code-login-regression.md) for manual
+rollback and device verification.
 
 ## Supported Apps
 
-| App | Description | Install target | Notes |
-|-----|-------------|----------------|-------|
-| **VS Code** | Visual Studio Code | proot | `--disable-gpu` applied |
-| **LibreOffice** | Office suite | proot | bwrap stub installed |
-| **Thunderbird** | Email client | Termux native | |
-| **VLC** | Multimedia player | Termux native | |
-| **GIMP** | Image editor | Termux native | |
-| **Inkscape** | Vector graphics editor | Termux native | |
-| **Audacity** | Audio editor | Termux native | |
-| **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
-| **Notion** | Notes & productivity | proot | AppImage extracted |
-| **Teams** | Microsoft Teams for Linux | proot | community Electron client |
-| **Wine (Box64+Staging)** | Run Windows apps via Box64 | proot / native | ELF→box64 wrapper (no binfmt_misc) |
-| **Wine (Hangover)** | Run Windows apps via FEX/ARM64EC | Termux native | faster; separate WINEPREFIX |
-| **Notepad++** | Text editor | Wine | |
-| **7-Zip** | Archive tool | Wine | |
-| **Sumatra PDF** | PDF/EPUB/MOBI viewer | Wine | |
-| **WinMerge** | File/folder diff & merge | Wine | |
-| **Miniforge** | Conda package manager | proot | CLI only |
-| **DBeaver** | Universal database client | proot | |
-| **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
-| **Tor Browser** | Anonymous browser | proot | arm64 port |
-| **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
-| **Burp Suite** | Web security testing tool | proot | arm64 installer |
-| **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
-| **Claude Code** | AI coding assistant CLI | Termux native | pairs with glibc-runner |
-| **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
-| **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
-| **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
-| **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary + proot network shim (DNS/CA), needs `codex login` or `OPENAI_API_KEY` |
-| **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
-| **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
-| **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
-| **Jujutsu** | Git-compatible VCS + `lazyjj` | Termux native | |
-| **television** | Fuzzy finder (`tv`) | Termux native | |
-| **superfile** | Modern TUI file manager (`spf`) | Termux native | |
-| **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
-| **wayvnc** | VNC server for the desktop | Termux native | wayland sessions only (`wayvnc-start`) |
-| **Neovim / Helix** | Terminal modal editors | Termux native | |
-| **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
-| **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
+IDs come from [domain/apps.sh](domain/apps.sh); use them with the CLI. Rows grouping
+several IDs still represent separate installable entries. `tor_browser` is retained
+only for status/removal and appears in the GUI only when an old installation is
+detected; the CLI list still includes it.
+
+| ID | App | Description | Install target | Notes |
+|----|-----|-------------|----------------|-------|
+| `vscode` | **VS Code** | Visual Studio Code | proot | `--disable-gpu` applied |
+| `libreoffice` | **LibreOffice** | Office suite | proot | bwrap stub installed |
+| `thunderbird` | **Thunderbird** | Email client | Termux native | |
+| `vlc` | **VLC** | Multimedia player | Termux native | |
+| `gimp` | **GIMP** | Image editor | Termux native | |
+| `inkscape` | **Inkscape** | Vector graphics editor | Termux native | |
+| `audacity` | **Audacity** | Audio editor | Termux native | |
+| `nautilus` | **Nautilus** | GNOME file manager | proot | software renderer (MIT-SHM workaround) |
+| `notion` | **Notion** | Notes & productivity | Termux native | Firefox web launcher |
+| `teams` | **Teams** | Microsoft Teams for Linux | proot | community Electron client |
+| `wine` | **Wine (Box64+Staging)** | Run Windows apps via Box64 | proot / native | ELF→box64 wrapper (no binfmt_misc) |
+| `hangover` | **Wine (Hangover)** | Run Windows apps via FEX/ARM64EC | Termux native | separate WINEPREFIX |
+| `notepadpp` | **Notepad++** | Text editor | Wine | |
+| `sevenzip` | **7-Zip** | Archive tool | Wine | |
+| `sumatrapdf` | **Sumatra PDF** | PDF/EPUB/MOBI viewer | Wine | |
+| `winmerge` | **WinMerge** | File/folder diff & merge | Wine | |
+| `miniforge` | **Miniforge** | Conda package manager | proot | CLI only |
+| `dbeaver` | **DBeaver** | Universal database client | proot | arm64 tarball with bundled Java |
+| `thorium` | **Thorium** | Chromium-based browser | proot | .deb extraction (AUR x86-only) |
+| `tor_browser` | **Tor Browser** | Remove an existing old ARM64 port | proot | New installs disabled by this installer |
+| `sasm` | **SASM** | Assembly IDE | proot | Arch: built from source (fasm x86-only) |
+| `burpsuite` | **Burp Suite** | Web security testing tool | proot | arm64 installer |
+| `onepassword` | **1Password** | Password manager CLI (`op`) | proot | GUI not available for arm64 |
+| `claude_code` | **Claude Code** | AI coding assistant CLI | Termux native | pairs with glibc-runner |
+| `llama_cpp` | **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
+| `aichat` | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
+| `crush` | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
+| `codex` | **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary + proot network shim (DNS/CA), needs `codex login` or `OPENAI_API_KEY` |
+| `code_server` | **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
+| `ml_python` | **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
+| `ncnn_upscale` | **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
+| `jujutsu` | **Jujutsu** | Git-compatible VCS + `lazyjj` | Termux native | |
+| `television` | **television** | Fuzzy finder (`tv`) | Termux native | |
+| `superfile` | **superfile** | Modern TUI file manager (`spf`) | Termux native | |
+| `uutils` | **uutils-coreutils** | Rust rewrite of coreutils | Termux native | installed alongside GNU coreutils |
+| `wayvnc` | **wayvnc** | VNC server for the desktop | Termux native | wlroots only; Anland/KWin unsupported (`wayvnc-start`) |
+| `neovim`, `helix` | **Neovim / Helix** | Terminal modal editors | Termux native | |
+| `btop` | **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
+| `just`, `mise`, `hyperfine`, `tokei`, `direnv`, `watchexec` | **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
 
 ## System Apps (시스템 tab)
 
-| App | Description | Install target | Notes |
-|-----|-------------|----------------|-------|
-| **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | |
-| **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
-| **GPU Acceleration (proot)** | KGSL mesa + Vulkan WSI layer | proot | Snapdragon only |
-| **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | |
-| **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
-| **Korean Locale** | force_gettext.so-based UI localization | Termux native | |
-| **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
+| ID | App | Description | Install target | Notes |
+|----|-----|-------------|----------------|-------|
+| `gpu_native` | **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | X11 launcher selects acceleration or software fallback |
+| `gpu_dev` | **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
+| `gpu_proot` | **GPU Acceleration (proot)** | Container Turnip + Zink | proot | Requires a passing KGSL driver probe |
+| `korean_input` | **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | selects fcitx5 for X11; restart XFCE |
+| `korean_proot` | **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
+| `korean_locale` | **Korean Locale** | force_gettext.so-based UI localization | Termux native | requires the parent Termux_XFCE checkout and a catalog ZIP |
+| `nimf` | **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
 
 ## Termux API Apps (Termux API tab)
 
-| App | Description | Install target | Notes |
-|-----|-------------|----------------|-------|
-| **Brightness Control** | Screen brightness script for the XFCE panel | Termux native | |
-| **Volume Control** | Volume control script for the XFCE panel | Termux native | |
-| **Conky Battery** | Battery level/temperature widget for Conky | Termux native | |
-| **Notification Tool** | Send Android notifications from scripts | Termux native | |
-| **TTS Voice** | Text-to-speech (Android TTS) | Termux native | |
-| **Speech Recognition** | Speech-to-text (Android STT) | Termux native | |
-| **Wallpaper Sync** | Sync XFCE wallpaper to Android | Termux native | |
+| ID | App | Description | Install target | Notes |
+|----|-----|-------------|----------------|-------|
+| `api_brightness` | **Brightness Control** | Screen brightness script for the XFCE panel | Termux native | |
+| `api_volume` | **Volume Control** | Volume control script for the XFCE panel | Termux native | |
+| `api_conky_battery` | **Panel Battery** | Battery level/temperature in XFCE genmon | Termux native | add Generic Monitor manually with `~/.local/bin/battery-genmon`; `battery-info` opens a popup |
+| `api_notification` | **Notification Tool** | Send Android notifications from scripts | Termux native | |
+| `api_tts` | **TTS Voice** | Text-to-speech (Android TTS) | Termux native | |
+| `api_stt` | **Speech Recognition** | Speech-to-text (Android STT) | Termux native | |
+| `api_wallpaper` | **Wallpaper Sync** | Sync XFCE wallpaper to Android | Termux native | |
 
 Termux API apps require the `termux-api` package and the Termux:API APK.
 
 ## arm64 Compatibility Notes
 
-Tested on real devices (Ubuntu 25.10 / Arch Linux ARM) — known workarounds applied automatically:
+The installers implement the following workarounds. Prior device checks used
+Ubuntu 25.10 / Arch Linux ARM; they do not establish that every current app/version
+works. Use the [device checklist](TEST_LOG.md) when validating a new setup.
 
 | Issue | Workaround |
 |-------|-----------|
-| GTK4 apps crash (glycin/bwrap) | `proot_setup_bwrap`: installs no-op bwrap stub in proot |
+| GTK4 apps crash (glycin/bwrap) | `proot_setup_bwrap`: installs a bwrap compatibility wrapper that runs the command without namespace isolation |
 | `sudo` resets PATH (sudo-rs) | `proot_setup_sudo_path`: symlinks Termux tools to `/usr/local/bin` |
 | Nautilus MIT-SHM BadAccess | `GSK_RENDERER=cairo GDK_RENDERING=image` forces software renderer |
 | VS Code GPU process crash | `--disable-gpu` + `dbus-run-session` |
-| Wine x86-64 ELF not auto-run (no binfmt_misc) | rename to `.elf`, create `box64` wrapper script |
+| Wine x86-64 ELF not auto-run (no binfmt_misc) | move ELF files into `bin/.elf/`, then create `box64` wrappers |
 | Thorium AUR is x86-only | extract arm64 .deb directly with `ar` |
 | SASM `fasm` dep is x86-only (Arch) | build SASM from source with `qmake` + `nasm` |
 | 1Password GUI not available for arm64 | install `1password-cli` (`op`) instead |
-| Arch's `~/.bash_profile` → `~/.bashrc` chain never sources `~/.profile` | `korean_proot` exports locale / IM vars from `/etc/profile.d/termux-xfce-locale.sh`, which every login shell reads |
+| A user's Bash login setup bypasses `~/.profile` | `korean_proot` writes `/etc/profile.d/termux-xfce-locale.sh`; `prun` command launches use Bash login shells |
+
+Proot desktop launchers use the shared `prun-gui` helper and inherit the active
+display. CLI-only tools do not necessarily create menu entries.
 
 ## Wine — two backends
 
@@ -140,56 +161,98 @@ forwards to the active one.
 
 | Backend | Setup | WINEPREFIX | Wrapper |
 |---------|-------|------------|---------|
-| `box64` (proot) | Box64 (ARM64) + Wine-Staging x86_64 tarball inside proot | `$HOME/.wine` | `wine-box64` |
-| `box64` (no proot) | glibc-runner + box64-glibc + Wine-Staging tarball | `$HOME/.wine` | `wine-box64` |
+| `box64` (proot) | Box64 source build at a pinned commit + Wine-Staging x86_64 tarball | Proot user’s `$HOME/.wine` | `wine-box64` |
+| `box64` (no proot) | glibc-runner + box64-glibc + Wine-Staging tarball | Termux `$HOME/.wine` | `wine-box64` |
 | `hangover` | `hangover` package (Wine native arm64, apps via FEX/ARM64EC) | `$HOME/.wine-hangover` | `wine-hangover` |
 
 ```bash
 wine-backend            # show active backend + install status
-wine-backend hangover   # switch backends
+wine-backend hangover   # switch to an installed backend
 wine kakao.exe          # Run Windows app through the active backend
 wine winecfg            # Wine configuration
-winetricks vcrun2019    # Install DLL / runtime (box64 backend, inside proot)
-winetricks dotnet48
+
+# With the box64 backend installed in the configured proot distro
+wine-backend box64
+prun winetricks vcrun2019
+prun winetricks dotnet48
 ```
 
-> The prefixes are separate on purpose — the two Wine builds (wow64 staging vs ARM64EC)
-> would fight over a shared prefix. Reinstall Wine apps after switching backends.
+The prefixes are separate, and switching backends does not migrate Windows apps.
+Their shared `.desktop` files can still make an app appear installed after a switch;
+the CLI will then skip `install`. To migrate an app through this installer, remove
+it while its original backend is active, switch backends, then install it again.
+To retain copies in both prefixes, install the second copy with that backend's Wine
+command and the application's own installer. The GUI has no dedicated
+reinstall command. Removal affects the currently active backend's prefix.
 
-> **Limitations**: Anti-cheat games, kernel-driver-dependent apps, and complex modern .NET apps will not work.
+Performance and compatibility depend on the device and app. Kernel-driver and
+anti-cheat requirements are common blockers; installing a runtime with winetricks
+is not a guarantee that an application will work.
 
 ## How It Works
 
-Reads `PROOT_DISTRO` and `PROOT_USER` from `~/.config/termux-xfce/config`.  
+Explicit `PROOT_DISTRO` and `PROOT_USER` environment variables take priority over
+`~/.config/termux-xfce/config` in both the CLI and GUI. Unset values come from the config.
 This file is created automatically by the Termux_XFCE installer.
 
 ```
 PROOT_DISTRO=ubuntu
-PROOT_USER=yanghoeg
+PROOT_USER=desktop
 ```
 
-Falls back to `ubuntu` if the config file is missing.
+Falls back to `ubuntu` if no distro is specified. `PROOT_DISTRO=""` selects native-only
+mode. When overriding only the distro, its user is detected instead of reusing a
+saved user from another distro.
 
-proot apps are launched via `prun`:
+Proot GUI launchers use `prun-gui`, which shows a loading notification and forwards
+the command to the parent installer's `prun`. Commands run through a Bash login shell
+with `LD_PRELOAD` cleared inside the container. `DISPLAY` is inherited, including
+KWin's dynamically assigned Xwayland display; outside a graphical session the
+parent wrapper defaults to `:0.0`.
 
 ```bash
-proot-distro login <distro> --user <user> --shared-tmp -- env DISPLAY=:0.0 <command>
+prun libreoffice
+prun                  # interactive shell selected by PROOT_SHELL
+ubuntu                # Ubuntu shell, if that distro was installed
+ubuntu uname -m        # single command in Ubuntu
 ```
 
-After installation, a `.desktop` file is written to `$PREFIX/share/applications/` so the app appears in the XFCE menu automatically.
+GUI entries are installed under `$PREFIX/share/applications/` and may also be copied
+to `~/Desktop`; CLI-only installers need not create `.desktop` files. Rootfs helpers
+recognize both `containers/<distro>/rootfs` and legacy `installed-rootfs/<distro>`
+beneath `$PREFIX/var/lib/proot-distro`.
 
-You can also enter the proot shell directly:
+### Korean input and localization
+
+Native `korean_input` (fcitx5) and `nimf` use
+`~/.config/termux-xfce/input-method` (`none`, `nimf`, or `fcitx5`). Their shared
+`$PREFIX/etc/profile.d/termux-xfce-input.sh` applies the selection to X11, and only
+the selected native IME is enabled for autostart. Installing another IME switches
+the selection; removing the selected IME resets it to `none`. Restart XFCE to apply.
+The Wayland path clears X11 IME module variables and excludes these autostart entries
+from KDE, leaving Android keyboard input to Anland.
+
+`korean_locale` is separate from input. It requires the parent Termux_XFCE checkout
+and a ZIP containing `ko/LC_MESSAGES/*.mo`. The GUI prompts for the file; the CLI uses:
 
 ```bash
-ubuntu          # enter Ubuntu proot interactive shell
-ubuntu <cmd>    # run single command in Ubuntu proot
+KOREAN_LOCALE_ZIP=/path/to/locale.zip bash app-install.sh install korean_locale
 ```
+
+Missing catalogs or compilation failures return an error. The locale hook is loaded
+only while `$PREFIX/lib/force_gettext.so` exists; native IME selection is independent.
+
+`korean_proot` installs the container locale and IME (Ubuntu: pinned nimf packages;
+Arch: nimf from AUR, with fcitx5 fallback). It writes
+`/etc/profile.d/termux-xfce-locale.sh` inside proot and removes the older managed
+`.profile` block. This configures container apps separately from the native selector.
 
 ## File Structure
 
 ```
 app-installer/
-├── install.sh                  ← yad notebook tabbed GUI main (zenity fallback; install/remove loop)
+├── install.sh                  ← yad notebook GUI (zenity fallback; install/remove/upgrade)
+├── app-install.sh              ← headless list/install/remove/status CLI
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)
 ├── adapters/
@@ -204,41 +267,59 @@ app-installer/
 │   └── installers/             ← one file per app
 ├── lib/
 │   ├── fetch.sh                ← fetch_verified — download + sha256 verification (snippet-injectable)
+│   ├── input_method.sh         ← shared native IME selection and autostart
+│   ├── build_box64.sh          ← pinned Box64 source-build helper
+│   ├── build_sasm.sh           ← pinned SASM source-build helper
 │   └── common.sh, proot_path.sh, wine_backend.sh
 ├── docs/
-│   └── claude-code-login-regression.md ← Claude Code pin bump / rollback record
-└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path}.sh
+│   └── claude-code-login-regression.md ← Claude Code pin, rollback and login validation
+└── tests/                      ← framework.sh, mocks.sh, test_{domain_apps,adapters,ports,fetch,proot_path,cli}.sh
                                    (test_nimf_*_real.sh: real device only)
 ```
 
 ## Download Integrity
 
-Every externally downloaded file (.deb, tarball, zip, AppImage, installer exe) is **version
-pinned**, with its **sha256 constant** declared at the top of the installer (e.g.
-`_WINE_STAGING_VER` / `_WINE_STAGING_SHA256` in `domain/installers/wine.sh`).
-`fetch_verified` in `lib/fetch.sh` checks the hash after download and, **on mismatch, deletes
-the file and aborts the install** (rc != 0). No `releases/latest`-style "always newest" API
-lookups are used — an upstream change would otherwise silently install a different binary.
-(Exception: user-selected models in `llama_cpp.sh`.)
+Direct release payloads such as Wine tarballs and pinned `.deb` files declare their
+versions and SHA-256 values in the installer. [lib/fetch.sh](lib/fetch.sh) provides
+`fetch_verified`: failed/empty downloads and hash mismatches delete the destination
+and return nonzero. **An empty hash only emits a warning and skips verification**;
+the helper does not enforce a hash for every caller.
 
-To bump a version: download the new URL, run `sha256sum <file>`, and update that installer's
-`_*_VER` / `_*_SHA256` constants together.
+Repository packages use their package manager's verification. Source builds have
+separate rules: Box64 and SASM check pinned Git commits, while AUR recipes are not
+pinned by this project's SHA-256 table. User-selected llama.cpp
+models are downloaded separately without that table. Clearing
+`CLAUDE_CODE_PIN_VERSION` enables npm `latest` lookup; its default is pinned.
+
+When changing a directly downloaded version, verify its source and update the URL,
+version and hash together. Changing only a version to one absent from its hash map
+can silently reduce verification to a warning. The parent installer has separate
+APK/asset download paths; this helper's guarantees do not cover every parent download.
 
 ## Tests
 
+From the App Installer checkout:
+
 ```bash
-for t in domain_apps adapters ports fetch proot_path; do bash tests/test_$t.sh; done
+for suite in domain_apps adapters ports fetch proot_path cli; do
+    bash "tests/test_${suite}.sh" || exit 1
+done
 ```
 
-**223** tests (domain_apps 173, adapters 26, ports 11, fetch 7, proot_path 6). On a PC these are
-mock / static checks only; `tests/test_nimf_*_real.sh` run inside the proot distro on a real device.
+These suites cover the domain, adapters, ports, downloads, rootfs paths, and CLI.
+On a PC they use mocks and static checks; CLI tests run the real entry point with
+isolated package/download commands. Parent locale integration tests require the
+Termux_XFCE checkout. `tests/test_nimf_*_real.sh` are run from Termux on a real device and enter proot
+themselves; they install packages. Keep them outside host test loops. The parent
+`modern_install` suite also covers shared IME/GPU/launcher behavior. Use
+[TEST_LOG.md](TEST_LOG.md) as the device checklist, not as proof of a passing run.
 
 ## Branch Strategy
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Stable — real-device tested |
-| `dev` | Development — merged to main after tests pass |
+| `main` | End-user integration branch |
+| `dev` | Development and validation before promotion to `main` |
 
 ---
 

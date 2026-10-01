@@ -65,14 +65,14 @@ EOF
 # TUR dpkg 패키지가 남아 있으면 $PREFIX/bin/codex 소유권이 겹친다 → 먼저 제거
 _codex_remove_tur_pkg() {
     if termux_pkg_is_installed codex; then
-        termux_pkg_remove codex
+        termux_pkg_remove codex || return 1
     fi
     return 0
 }
 
 app_install_codex() {
     termux_pkg_install proot || return 1
-    _codex_remove_tur_pkg
+    _codex_remove_tur_pkg || return 1
     if [ "$(_codex_installed_version)" != "${CODEX_PIN_VERSION}" ]; then
         _codex_download "${CODEX_PIN_VERSION}" || return 1
     fi
@@ -95,9 +95,9 @@ app_upgrade_codex() {
 }
 
 app_remove_codex() {
-    rm -f "${CODEX_BIN_PATH}"
+    _codex_remove_tur_pkg || return 1
+    rm -f "${CODEX_BIN_PATH}" || return 1
     rm -rf "${CODEX_PREFIX}"
-    _codex_remove_tur_pkg
 }
 
 app_is_installed_codex() {

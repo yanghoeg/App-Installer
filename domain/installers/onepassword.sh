@@ -31,12 +31,12 @@ app_install_onepassword() {
 app_remove_onepassword() {
     case "${PROOT_DISTRO:-}" in
         archlinux)
-            proot_pkg_remove 1password-cli 2>/dev/null || true
+            proot_pkg_remove 1password-cli || return 1
             ;;
         *)
-            proot_pkg_remove 1password-cli 2>/dev/null || true
+            proot_pkg_remove 1password-cli || return 1
             proot_exec sudo rm -f /etc/apt/sources.list.d/1password.list \
-                /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
+                /usr/share/keyrings/1password-archive-keyring.gpg || return 1
             ;;
     esac
 }

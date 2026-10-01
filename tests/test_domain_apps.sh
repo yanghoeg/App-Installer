@@ -13,6 +13,7 @@ _setup() {
     local sb="$1"
     export PROOT_DISTRO="ubuntu"
     export PROOT_USER="testuser"
+    unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
     setup_fs_sandbox "$sb"
     source "${APP_DIR}/ports/pkg_manager.sh"
     source "${APP_DIR}/lib/fetch.sh"
@@ -251,10 +252,10 @@ describe "DBeaver — proot 설치"
 _test_dbeaver_install_uses_abstract_jdk() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_dbeaver
-    assert_was_called "proot_pkg_install_jdk"
+    assert_not_called "proot_pkg_install_jdk"
     cleanup_sandbox "$sb"
 }
-it "install → proot_pkg_install_jdk 호출 (JDK 패키지명 추상화)" _test_dbeaver_install_uses_abstract_jdk
+it "DBeaver uses the runtime bundled in its archive" _test_dbeaver_install_uses_abstract_jdk
 
 _test_dbeaver_failure_propagates_without_desktop() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -1183,7 +1184,7 @@ _test_korean_proot_arch_fcitx5_fallback() {
     app_install_korean_proot >/dev/null 2>&1
     assert_was_called "proot_pkg_install fcitx5-hangul" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "proot_pkg_install fcitx5-configtool" || { cleanup_sandbox "$sb"; return 1; }
-    assert_file_contains "$(_korean_proot_locale_file)" "@im=fcitx5" || { cleanup_sandbox "$sb"; return 1; }
+    assert_file_contains "$(_korean_proot_locale_file)" "@im=fcitx" || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
 it "archlinux → AUR nimf 실패 시 fcitx5 폴백" _test_korean_proot_arch_fcitx5_fallback
@@ -1228,6 +1229,10 @@ it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_
 _test_korean_proot_remove_strips_block() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local lf; lf="$(_korean_proot_locale_file)"
+    local profile; profile="$(_korean_proot_profile)"
+    MOCK_PROOT_INSTALLED_PKGS="nimf nimf-i18n"
+    mkdir -p "$(dirname "$profile")"
+    printf 'BEFORE_LINE\n' > "$profile"
     app_install_korean_proot >/dev/null
     app_is_installed_korean_proot || { echo "[ASSERT] 설치 후 is_installed false" >&2; cleanup_sandbox "$sb"; return 1; }
     assert_file_exists "$lf" || { cleanup_sandbox "$sb"; return 1; }
@@ -1240,6 +1245,7 @@ _test_korean_proot_remove_strips_block() {
         echo "[ASSERT] remove 후에도 로케일 파일이 남아 있음" >&2
         cleanup_sandbox "$sb"; return 1
     fi
+    assert_file_contains "$profile" "BEFORE_LINE" || { cleanup_sandbox "$sb"; return 1; }
     if app_is_installed_korean_proot; then
         echo "[ASSERT] remove 후에도 is_installed true" >&2
         cleanup_sandbox "$sb"; return 1
@@ -1345,8 +1351,14 @@ _test_contract_install_success_for_all_ids() {
         IFS='|' read -r id _ _ _ <<< "$entry"
 
         case "$id" in
+            tor_browser)
+                if app_install tor_browser >/dev/null 2>&1; then
+                    echo '[ASSERT] retired Tor installer unexpectedly succeeded' >&2
+                    failed=1
+                fi
+                continue ;;
             gpu_proot)
-                skip "app_install_gpu_proot — 실기기 /sys/class/kgsl/kgsl-3d0/gpu_model 필요, 유닛 테스트로 재현 불가"
+                skip "GPU activation is covered by the root project's modern_install suite"
                 continue ;;
             korean_locale)
                 skip "app_install_korean_locale — 메인 프로젝트(Termux_XFCE) domain/locale_ko.sh + ports/ui.sh(ui_warn 등) 의존, app-installer 단독 테스트 불가"
@@ -1381,6 +1393,10 @@ _test_contract_install_success_for_all_ids() {
                 fetch_verified() { printf 'deb\n' > "$2"; }
                 dpkg() { return 0; }
                 ;;
+            codex)
+                fetch_verified() { printf 'tgz\n' > "$2"; }
+                tar() { printf 'native binary fixture\n'; }
+                ;;
         esac
 
         local rc=0
@@ -1406,8 +1422,8 @@ _test_sha256_constants_are_64hex() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local failed=0 v val
     for v in _SEVENZIP_SHA256 _SUMATRA_SHA256 _NOTEPADPP_SHA256 _WINMERGE_SHA256 \
-             _WINE_STAGING_SHA256 _WINETRICKS_SHA256 _NIMF_DEB_SHA256 _TOR_SHA256 \
-             _THORIUM_DEB_SHA256 _DBEAVER_SHA256 _NOTION_SHA256 _BURP_SHA256 \
+             _WINE_STAGING_SHA256 _WINETRICKS_SHA256 _NIMF_DEB_SHA256 \
+             _THORIUM_DEB_SHA256 _DBEAVER_SHA256 _BURP_SHA256 \
              _MINIFORGE_SHA256 _TEAMS_DEB_SHA256
     do
         val="${!v:-}"
@@ -1424,7 +1440,7 @@ _test_sha256_constants_are_64hex() {
     cleanup_sandbox "$sb"
     return "$failed"
 }
-it "설치기 sha256 상수 15종이 모두 64자 hex다" _test_sha256_constants_are_64hex
+it "설치기 sha256 상수이 모두 64자 hex다" _test_sha256_constants_are_64hex
 
 describe "다운로드 무결성 — 스니펫 주입"
 
@@ -1463,8 +1479,8 @@ it "sumatrapdf/notepadpp/winmerge 스니펫에도 fetch_verified + sha256이 주
 _test_proot_installers_pass_sha_to_snippet() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local failed=0 pair id sha_var
-    for pair in tor_browser:_TOR_SHA256 thorium:_THORIUM_DEB_SHA256 dbeaver:_DBEAVER_SHA256 \
-                notion:_NOTION_SHA256 burpsuite:_BURP_SHA256 miniforge:_MINIFORGE_SHA256
+    for pair in thorium:_THORIUM_DEB_SHA256 dbeaver:_DBEAVER_SHA256 \
+                burpsuite:_BURP_SHA256 miniforge:_MINIFORGE_SHA256
     do
         id="${pair%%:*}"; sha_var="${pair#*:}"
         reset_mock_calls
@@ -1477,7 +1493,7 @@ _test_proot_installers_pass_sha_to_snippet() {
     cleanup_sandbox "$sb"
     return "$failed"
 }
-it "tor/thorium/dbeaver/notion/burp/miniforge가 스니펫에 sha256을 넘긴다" \
+it "thorium/dbeaver/burp/miniforge가 스니펫에 sha256을 넘긴다" \
     _test_proot_installers_pass_sha_to_snippet
 
 describe "teams — GitHub API 제거 + 3인자 deb_or_aur"
@@ -1535,7 +1551,7 @@ _test_claude_wrapper_drops_ld_preload() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     _claude_code_install_wrapper
     grep -q 'exec env -u LD_PRELOAD grun ' "${CLAUDE_CODE_BIN_PATH}" || {
-        echo "[ASSERT] 래퍼에 env -u LD_PRELOAD 없음 — XFCE force_gettext.so(bionic)가 glibc 로딩을 깨뜨린다" >&2
+        echo "[ASSERT] 래퍼에 env -u LD_PRELOAD 없음 — bionic force_gettext.so가 glibc 로딩을 깨뜨린다" >&2
         cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
@@ -1562,5 +1578,123 @@ _test_claude_download_swaps_by_rename() {
     cleanup_sandbox "$sb"
 }
 it "download는 제자리 덮어쓰기 대신 rename으로 바꿔 끼운다(inode 교체)" _test_claude_download_swaps_by_rename
+describe "regression — GUI config priority"
+_test_gui_explicit_target() {
+    local sb; sb=$(make_sandbox)
+    export PROOT_DISTRO=archlinux PROOT_USER=chosen
+    _load_install_partial "$sb"
+    assert_eq archlinux "$PROOT_DISTRO"
+    assert_eq chosen "$PROOT_USER"
+    # Verify that DI selected the adapter for the explicit distro, too.
+    proot_exec() { _record_call "proot_exec $*"; }
+    proot_pkg_remove example
+    assert_was_called 'proot_exec sudo pacman -Rns --noconfirm example'
+    cleanup_sandbox "$sb"
+}
+it 'GUI preserves explicit distro/user and selects their adapter' _test_gui_explicit_target
+
+describe "regression — proot login locale"
+_test_korean_proot_migrates_legacy_profile() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO=archlinux
+    local userhome="$(_proot_rootfs)/home/$PROOT_USER"
+    mkdir -p "$userhome"
+    printf 'export KEEP_ME=yes\n%s\nexport GTK_IM_MODULE=old\n%s\n' \
+        "$_KOREAN_PROOT_MARK" "$_KOREAN_PROOT_END_MARK" > "$userhome/.profile"
+    printf 'export BASH_PROFILE_READ=yes\n' > "$userhome/.bash_profile"
+    app_install_korean_proot >/dev/null
+    assert_file_contains "$userhome/.profile" 'KEEP_ME=yes'
+    if grep -q termux-xfce-korean "$userhome/.profile"; then return 1; fi
+    assert_file_contains "$userhome/.bash_profile" 'BASH_PROFILE_READ=yes'
+    # Model /etc/profile.d followed by .bash_profile: .profile is never read.
+    unset GTK_IM_MODULE QT_IM_MODULE
+    source "$(_korean_proot_locale_file)" 2>/dev/null
+    source "$userhome/.bash_profile"
+    assert_eq nimf "$GTK_IM_MODULE"
+    assert_eq nimf "$QT_IM_MODULE"
+    cleanup_sandbox "$sb"
+}
+it 'Arch login gets its IME even when .bash_profile bypasses the legacy .profile' _test_korean_proot_migrates_legacy_profile
+
+_test_korean_proot_locale_gen_fails() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO=archlinux
+    proot_exec() { return 42; }
+    if app_install_korean_proot >/dev/null; then return 1; fi
+    if app_is_installed_korean_proot; then return 1; fi
+    cleanup_sandbox "$sb"
+}
+it 'locale-gen failure does not leave a completed installation marker' _test_korean_proot_locale_gen_fails
+
+describe 'regression — removal failures propagate before launcher cleanup'
+_test_failed_removal_for_current_id() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local cleanup_seen=0 rc=0
+    termux_pkg_is_installed() { return 0; }
+    proot_pkg_is_installed() { return 0; }
+    termux_pkg_remove() { return 42; }
+    proot_pkg_remove() { return 42; }
+    proot_pkg_remove_vscode() { return 42; }
+    proot_pkg_remove_libreoffice() { return 42; }
+    proot_pkg_purge() { return 42; }
+    proot_exec() { return 42; }
+    wine_exec_shell() { return 42; }
+    dpkg() { return 42; }
+    desktop_remove() { cleanup_seen=1; }
+    rm() { cleanup_seen=1; }
+    # The dispatchers call removers in a conditional, disabling implicit errexit.
+    if app_remove "$_remove_id" >/dev/null 2>&1; then rc=0; else rc=$?; fi
+    unset -f rm
+    assert_nonzero "$rc" "$_remove_id hid a removal failure"
+    assert_eq 0 "$cleanup_seen" "$_remove_id cleaned up before removal succeeded"
+    cleanup_sandbox "$sb"
+}
+for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev gpu_native hangover \
+    inkscape korean_input korean_proot libreoffice llama_cpp nautilus nimf notion \
+    notepadpp onepassword sasm sevenzip sumatrapdf teams thorium thunderbird \
+    tor_browser vlc vscode wayvnc wine winmerge; do
+    it "$_remove_id preserves failure and skips launcher cleanup" _test_failed_removal_for_current_id
+done
+
+describe 'regression — wayvnc compositor support'
+_test_wayvnc_rejects_kwin() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    export WAYLAND_DISPLAY=wayland-termux-xfce
+    if app_install_wayvnc >/dev/null 2>&1; then return 1; fi
+    assert_not_called termux_pkg_install
+    [ ! -e "$_WAYVNC_LAUNCHER" ]
+    cleanup_sandbox "$sb"
+}
+it 'KWin session is rejected before package installation' _test_wayvnc_rejects_kwin
+
+_test_wayvnc_rejects_kwin_config() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    printf 'DISPLAY_SERVER=wayland\n' > "$HOME/.config/termux-xfce/config"
+    if app_install_wayvnc >/dev/null 2>&1; then return 1; fi
+    assert_not_called termux_pkg_install
+    cleanup_sandbox "$sb"
+}
+it 'configured Anland backend is rejected even outside an active session' _test_wayvnc_rejects_kwin_config
+
+_test_wayvnc_launcher_support() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=sway
+    app_install_wayvnc >/dev/null
+    assert_was_called 'termux_pkg_install wayvnc'
+    mkdir -p "$sb/bin"
+    cat > "$sb/bin/wayvnc" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$HOME/wayvnc-invoked"
+EOF
+    chmod +x "$sb/bin/wayvnc"
+    PATH="$sb/bin:$PATH" bash "$_WAYVNC_LAUNCHER" 127.0.0.1 5901 >/dev/null
+    assert_file_contains "$HOME/wayvnc-invoked" '127.0.0.1 5901'
+    rm "$HOME/wayvnc-invoked"
+    if WAYLAND_DISPLAY=wayland-termux-xfce PATH="$sb/bin:$PATH" \
+        bash "$_WAYVNC_LAUNCHER" >/dev/null 2>&1; then return 1; fi
+    [ ! -e "$HOME/wayvnc-invoked" ]
+    cleanup_sandbox "$sb"
+}
+it 'launcher runs in wlroots but rejects switching to KWin later' _test_wayvnc_launcher_support
 
 print_results

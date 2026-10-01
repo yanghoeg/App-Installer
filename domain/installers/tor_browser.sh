@@ -1,30 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# DOMAIN: Tor Browser — proot 내부 설치 (arm64 포트)
-
-_TOR_VER="13.0.9"
-_TOR_URL="https://sourceforge.net/projects/tor-browser-ports/files/${_TOR_VER}/tor-browser-linux-arm64-${_TOR_VER}.tar.xz/download"
-_TOR_SHA256="73c200a0d9b7ea7e2b9676d81c8dc8052d8168901eb0ea5135ad861b1c166f35"
+# DOMAIN: Tor Browser — 공식 Linux ARM64 빌드 없음
 
 app_install_tor_browser() {
-    has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    proot_pkg_update || return 1
-    proot_pkg_install_tor_deps || return 1
-
-    proot_exec bash -c "$(fetch_verified_src)"$'\n''
-        set -e
-        fetch_verified "$1" tor.tar.xz "$2"
-        tar -xJf tor.tar.xz
-        sudo mv tor-browser /opt/tor-browser
-        rm -f tor.tar.xz
-    ' _ "$_TOR_URL" "$_TOR_SHA256" || { echo "[ERROR] Tor Browser 설치 실패" >&2; return 1; }
-
-    desktop_register "tor" "Tor Browser" \
-        'bash -c "prun /opt/tor-browser/Browser/start-tor-browser --no-sandbox </dev/null >/dev/null 2>&1 &"' \
-        "tor" "Network;WebBrowser;Security;"
+    echo "[ERROR] 유지보수 중인 공식 Linux ARM64 빌드를 확인할 수 없어 신규 설치를 중단했습니다. Android 버전: https://www.torproject.org/download/#android" >&2
+    return 1
 }
 
 app_remove_tor_browser() {
-    proot_exec sudo rm -rf /opt/tor-browser
+    proot_exec sudo rm -rf /opt/tor-browser || return 1
     desktop_remove "tor"
 }
 

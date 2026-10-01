@@ -14,23 +14,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/proot_path.sh"
+source "${SCRIPT_DIR}/lib/fetch.sh"
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/wine_backend.sh"
 
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_load_config() {
-    local config="$HOME/.config/termux-xfce/config"
-    if [ -f "$config" ]; then
-        source "$config"
-    else
-        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
-    fi
-    PROOT_USER="${PROOT_USER:-$(_detect_proot_user)}"
-}
-
-_load_config
+_load_app_config
 
 # -----------------------------------------------------------------------------
 # DI: 포트 + 어댑터 로드
