@@ -14,6 +14,8 @@ CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # npm latest 대조. 실기기 /login 2026-09-06 검증 완료.
 # 2026-10-01: 2.1.261 → 2.1.286 상향. 신규 advisory는 없다(미해소 최상 하한은 여전히 2.1.163) —
 # npm latest 추종이 근거. 2.1.262~2.1.286 CHANGELOG에 런처/네이티브 바이너리 회귀 항목 없음.
+# 실기기 /login 2026-10-01 검증 완료 (사인인 URL → 브라우저 인증 → 터미널 복귀 →
+# 인증 후 실제 요청까지. 환경 토큰 미설정 상태라 결과가 가려지지 않았다).
 # 회귀 시 롤백 절차는 위 문서 참조.
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
 CLAUDE_CODE_PIN_VERSION="2.1.286"
