@@ -7,8 +7,22 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_sasm.sh"
 
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
-proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
-proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
+proot_pkg_remove() {
+    # Query once; a missing target is already removed, but database/removal errors
+    # must still reach the caller so it can retain the launchers.
+    proot_exec sudo bash -c '
+        set -eu
+        installed=$(pacman -Qq) || exit $?
+        targets=()
+        for pkg in "$@"; do
+            case $'"'"'\n'"'"'"$installed"$'"'"'\n'"'"' in
+                *$'"'"'\n'"'"'"$pkg"$'"'"'\n'"'"'*) targets+=("$pkg") ;;
+            esac
+        done
+        [ "${#targets[@]}" -eq 0 ] || exec pacman -Rns --noconfirm -- "${targets[@]}"
+    ' _ "$@"
+}
+proot_pkg_purge()        { proot_pkg_remove "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Sy --noconfirm; }
 proot_pkg_autoremove() {
     proot_exec sudo bash -c \
@@ -70,7 +84,7 @@ proot_pkg_remove_vscode() {
 }
 
 proot_pkg_install_box64() {
-    proot_pkg_install git cmake base-devel || return 1
+    proot_pkg_install git cmake base-devel python || return 1
     proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 

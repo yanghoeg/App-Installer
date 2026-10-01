@@ -94,7 +94,7 @@ wine_exec_shell() {
     local snippet="$1"
 
     if [ "$(wine_backend)" = "box64" ] && has_proot_distro; then
-        # proot_exec_wine preserves DISPLAY and reads the container login profile.
+        # Preserve DISPLAY and load the optional GPU profile without login hooks.
         proot_exec_wine bash -c 'export WINEPREFIX="$HOME/.wine"
 '"$snippet"
     else

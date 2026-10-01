@@ -7,7 +7,9 @@ app_install_tor_browser() {
 }
 
 app_remove_tor_browser() {
-    proot_exec sudo rm -rf /opt/tor-browser || return 1
+    if has_proot_distro; then
+        proot_exec sudo rm -rf /opt/tor-browser || return 1
+    fi
     desktop_remove "tor"
 }
 

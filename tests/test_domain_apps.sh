@@ -7,6 +7,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${SCRIPT_DIR}/.."
 source "${SCRIPT_DIR}/framework.sh"
 source "${SCRIPT_DIR}/mocks.sh"
+_DOMAIN_BASH="${BASH:-$(command -v bash)}"
+
+_guard_domain_commands() {
+    local sb="$1" tool
+    mkdir -p "$sb/mock-bin"
+    for tool in pkg apt apt-get pacman dpkg sudo proot-distro curl wget git npm \
+        cargo pip pip3 wine wineboot wineserver grun prun termux-wake-lock gio; do
+        {
+            printf '#!%s\n' "$_DOMAIN_BASH"
+            printf 'echo "[MOCK] unexpected external command: ${0##*/} $*" >&2\nexit 99\n'
+        } > "$sb/mock-bin/$tool"
+    done
+    chmod +x "$sb/mock-bin/"*
+    export PATH="$sb/mock-bin:$PATH"
+}
+
+_guard_domain_downloads() {
+    fetch_verified() { echo "[MOCK] download needs an explicit fixture: $1" >&2; return 1; }
+}
+
+_fixture_libreoffice_desktop() {
+    local apps="$(_proot_rootfs)/usr/share/applications"
+    mkdir -p "$apps"
+    printf '[Desktop Entry]\nName=LibreOffice Writer\nExec=libreoffice --writer %%U\n' > "$apps/libreoffice-writer.desktop"
+}
 
 # 공통 설정: sandbox + mock 어댑터 + 도메인 로드
 _setup() {
@@ -15,8 +40,11 @@ _setup() {
     export PROOT_USER="testuser"
     unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
     setup_fs_sandbox "$sb"
+    _guard_domain_commands "$sb"
+    source "${APP_DIR}/lib/proot_path.sh"
     source "${APP_DIR}/ports/pkg_manager.sh"
     source "${APP_DIR}/lib/fetch.sh"
+    _guard_domain_downloads
     unset _WINE_BACKEND_SH   # 샌드박스마다 HOME/PREFIX가 바뀌므로 재소싱 강제
     source "${APP_DIR}/lib/wine_backend.sh"
     source "${APP_DIR}/domain/desktop.sh"
@@ -231,6 +259,7 @@ describe "LibreOffice — proot 설치"
 
 _test_libreoffice_install_uses_abstract_pkg_fn() {
     local sb; sb=$(make_sandbox); _setup "$sb"
+    _fixture_libreoffice_desktop
     app_install_libreoffice
     assert_was_called "proot_pkg_install_libreoffice"
     cleanup_sandbox "$sb"
@@ -1411,15 +1440,19 @@ _test_contract_install_success_for_all_ids() {
         setup_fs_sandbox "$sb"
         MOCK_INSTALLED_PKGS=""
         MOCK_PROOT_INSTALLED_PKGS=""
+        MOCK_PROOT_WINE_TREE=false
         MOCK_HAS_PROOT=true
         reset_mock_calls
         unset -f curl wget tar dpkg npm fetch_verified 2>/dev/null || true
         source "${APP_DIR}/lib/fetch.sh"
+        _guard_domain_downloads
 
         # mock만으로는 만들 수 없는 "실제 업스트림 산출물"이 필요한 소수의 설치기만
         # 최소한으로 보강한다 (다운로드 파이프라인 자체를 검증하는 게 아니라, 그 이후의
         # 계약 로직 — 실패 전파/= desktop 등록 — 이 성공 경로에서 깨지지 않았는지만 본다).
         case "$id" in
+            libreoffice) _fixture_libreoffice_desktop ;;
+            wayvnc) export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=sway ;;
             hangover)
                 : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
                 ;;
@@ -1629,9 +1662,16 @@ describe "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑"
 _test_claude_wrapper_drops_ld_preload() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     _claude_code_install_wrapper
-    grep -q 'exec env -u LD_PRELOAD grun ' "${CLAUDE_CODE_BIN_PATH}" || {
-        echo "[ASSERT] 래퍼에 env -u LD_PRELOAD 없음 — bionic force_gettext.so가 glibc 로딩을 깨뜨린다" >&2
-        cleanup_sandbox "$sb"; return 1; }
+    {
+        printf '#!%s\n' "$_DOMAIN_BASH"
+        printf '[ -z "${LD_PRELOAD+x}" ] || exit 42\nprintf "%%s\\n" "$@"\n'
+    } > "$PREFIX/bin/grun"
+    chmod +x "$PREFIX/bin/grun"
+    local out
+    # Set the preload only inside an existing shell, so no host binary ever
+    # starts with it. The generated wrapper then execs this sandbox grun.
+    out=$(export LD_PRELOAD=mock-only; source "$CLAUDE_CODE_BIN_PATH" 'space value' '%literal')
+    assert_eq "$CLAUDE_CODE_PREFIX/claude"$'\nspace value\n%literal' "$out"
     cleanup_sandbox "$sb"
 }
 it "래퍼는 grun 앞에서 LD_PRELOAD를 떼어낸다" _test_claude_wrapper_drops_ld_preload
@@ -1667,7 +1707,8 @@ _test_gui_explicit_target() {
     # Verify that DI selected the adapter for the explicit distro, too.
     proot_exec() { _record_call "proot_exec $*"; }
     proot_pkg_remove example
-    assert_was_called 'proot_exec sudo pacman -Rns --noconfirm example'
+    assert_was_called 'pacman -Qq'
+    assert_was_called 'exec pacman -Rns --noconfirm'
     cleanup_sandbox "$sb"
 }
 it 'GUI preserves explicit distro/user and selects their adapter' _test_gui_explicit_target
@@ -1770,7 +1811,7 @@ EOF
     PATH="$sb/bin:$PATH" bash "$_WAYVNC_LAUNCHER" 127.0.0.1 5901 >/dev/null
     assert_file_contains "$HOME/wayvnc-invoked" '127.0.0.1 5901'
     rm "$HOME/wayvnc-invoked"
-    if WAYLAND_DISPLAY=wayland-termux-xfce PATH="$sb/bin:$PATH" \
+    if WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=KDE PATH="$sb/bin:$PATH" \
         bash "$_WAYVNC_LAUNCHER" >/dev/null 2>&1; then return 1; fi
     [ ! -e "$HOME/wayvnc-invoked" ]
     cleanup_sandbox "$sb"

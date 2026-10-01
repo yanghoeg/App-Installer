@@ -37,14 +37,17 @@ input_method_setup() {
         # Import the previous choice once, before removing its managed RC block.
         # Fcitx takes precedence when switching left a Nimf package installed.
         for rc in "$PREFIX/etc/bash.bashrc" "$HOME/.zshrc"; do
-            if grep -Eq '^[[:space:]]*export GTK_IM_MODULE=fcitx5?$' "$rc" 2>/dev/null; then
+            if command -v fcitx5 >/dev/null 2>&1 &&
+               grep -Eq '^[[:space:]]*export GTK_IM_MODULE=fcitx5?$' "$rc" 2>/dev/null; then
                 selected=fcitx5
                 break
-            elif grep -Eq '^[[:space:]]*export GTK_IM_MODULE=nimf$' "$rc" 2>/dev/null; then
+            elif command -v nimf >/dev/null 2>&1 &&
+                 grep -Eq '^[[:space:]]*export GTK_IM_MODULE=nimf$' "$rc" 2>/dev/null; then
                 selected=nimf
             fi
         done
-        if [ "$selected" = none ] && [ -f "$HOME/.config/autostart/nimf.desktop" ] &&
+        if [ "$selected" = none ] && command -v nimf >/dev/null 2>&1 &&
+           [ -f "$HOME/.config/autostart/nimf.desktop" ] &&
            ! grep -q '^Hidden=true$' "$HOME/.config/autostart/nimf.desktop"; then
             selected=nimf
         fi
@@ -69,7 +72,7 @@ fi
 unset _termux_im
 ENV
     _input_method_migrate_rc || return 1
-    _input_method_autostart
+    _input_method_autostart "${1:-preserve}"
 }
 
 _input_method_autostart() {
@@ -82,9 +85,15 @@ _input_method_autostart() {
     for id in nimf org.fcitx.Fcitx5; do
         hidden=true
         case "$id" in
-            nimf) name=Nimf; cmd=nimf; [ "$selected" != nimf ] || hidden=false ;;
+            nimf) name=Nimf; cmd='bash -c "pgrep -x nimf >/dev/null || exec nimf"'; [ "$selected" != nimf ] || hidden=false ;;
             *) name=Fcitx5; cmd='fcitx5 -d'; [ "$selected" != fcitx5 ] || hidden=false ;;
         esac
+        # Ordinary setup keeps an autostart disabled by the user. An explicit
+        # selection enables the chosen method again.
+        if [ "${1:-preserve}" = preserve ] &&
+           grep -q '^Hidden=true$' "$dir/$id.desktop" 2>/dev/null; then
+            hidden=true
+        fi
         cat > "$dir/$id.desktop" << EOF || return 1
 [Desktop Entry]
 Type=Application
@@ -100,7 +109,7 @@ input_method_select() {
     case "$1" in none|nimf|fcitx5) ;; *) return 1 ;; esac
     mkdir -p "$HOME/.config/termux-xfce" || return 1
     printf '%s\n' "$1" > "$HOME/.config/termux-xfce/input-method" || return 1
-    input_method_setup
+    input_method_setup select
 }
 
 input_method_remove() {

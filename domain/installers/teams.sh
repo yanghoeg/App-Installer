@@ -20,8 +20,10 @@ app_install_teams() {
 }
 
 app_remove_teams() {
-    proot_pkg_remove teams-for-linux || return 1
-    proot_pkg_autoremove || return 1
+    if has_proot_distro; then
+        proot_pkg_remove teams-for-linux || return 1
+        proot_pkg_autoremove || return 1
+    fi
     desktop_remove "teams"
 }
 

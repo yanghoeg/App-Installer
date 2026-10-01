@@ -24,14 +24,16 @@ app_install_burpsuite() {
 
 app_remove_burpsuite() {
     # installer puts it in user's home dir, uninstall script there
-    proot_exec bash -c '
+    if has_proot_distro; then
+        proot_exec bash -c '
         set -e
         for dir in ~/BurpSuite ~/BurpSuiteCommunity; do
             [ -f "$dir/uninstall" ] && "$dir/uninstall" -q
             rm -rf "$dir"
         done
         sudo rm -f /usr/local/bin/BurpSuite /usr/local/bin/BurpSuiteCommunity
-    ' || return 1
+        ' || return 1
+    fi
     desktop_remove "burpsuite"
 }
 

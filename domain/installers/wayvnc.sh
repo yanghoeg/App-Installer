@@ -6,20 +6,23 @@
 _WAYVNC_LAUNCHER="${PREFIX}/bin/wayvnc-start"
 
 _wayvnc_check_compositor() {
-    local display_server="${DISPLAY_SERVER:-}"
-    if [ -z "$display_server" ] && [ -f "$HOME/.config/termux-xfce/config" ]; then
-        display_server=$(. "$HOME/.config/termux-xfce/config"; printf '%s' "${DISPLAY_SERVER:-}") || return 1
-    fi
-    case "${XFCE4_SESSION_COMPOSITOR:-}:${XDG_CURRENT_DESKTOP:-}:${WAYLAND_DISPLAY:-}:${ANLAND:-}" in
-        *kwin*|*KDE*|*wayland-termux-xfce*|*:1)
+    case "${XFCE4_SESSION_COMPOSITOR:-}:${XDG_CURRENT_DESKTOP:-}:${ANLAND:-}" in
+        *kwin*|*KDE*|*:1)
             echo "[ERROR] wayvnc는 Anland/KWin을 지원하지 않습니다. wlroots 세션이 필요합니다." >&2
             return 1 ;;
     esac
-    # With no active session, --display wayland selects this project's KWin backend.
-    if [ -z "${WAYLAND_DISPLAY:-}" ] && [ "$display_server" = wayland ]; then
-        echo "[ERROR] 현재 Wayland 설정은 Anland/KWin입니다. wayvnc는 wlroots 전용입니다." >&2
+    if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+        echo "[ERROR] wayvnc는 실행 중인 wlroots Wayland 세션이 필요합니다. X11은 지원하지 않습니다." >&2
         return 1
     fi
+    # A socket name such as wayland-0 identifies no compositor. Only the known
+    # supported external Sway session is accepted; this project's KWin is not.
+    local desktop="${XDG_CURRENT_DESKTOP:-}"
+    case ":${desktop,,}:" in
+        *:sway:*) return 0 ;;
+    esac
+    echo "[ERROR] 지원되는 Sway 세션을 확인할 수 없습니다. wayvnc는 wlroots 전용입니다." >&2
+    return 1
 }
 
 _wayvnc_write_launcher() {
@@ -41,24 +44,7 @@ _port="${2:-5900}"
 : "${XDG_RUNTIME_DIR:=${PREFIX:-/data/data/com.termux/files/usr}/var/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
 
-if [ -z "${WAYLAND_DISPLAY:-}" ]; then
-    for _sock in "$XDG_RUNTIME_DIR"/wayland-*; do
-        case "$_sock" in
-            *.lock|*'wayland-*') continue ;;
-        esac
-        [ -S "$_sock" ] || continue
-        WAYLAND_DISPLAY="$(basename "$_sock")"
-        break
-    done
-fi
-
-if [ -z "${WAYLAND_DISPLAY:-}" ]; then
-    echo "[ERROR] wayland 소켓을 찾을 수 없습니다: $XDG_RUNTIME_DIR" >&2
-    echo "        wayland 세션(startXFCE)이 실행 중인지 확인하세요." >&2
-    exit 1
-fi
 export WAYLAND_DISPLAY
-_wayvnc_check_compositor || exit 1
 
 echo "wayvnc: WAYLAND_DISPLAY=$WAYLAND_DISPLAY → ${_addr}:${_port}"
 exec wayvnc "$_addr" "$_port"
@@ -74,7 +60,7 @@ app_install_wayvnc() {
     _wayvnc_write_launcher || return 1
 
     echo "[wayvnc] 'wayvnc-start' 로 실행합니다 (기본 127.0.0.1:5900)."
-    echo "[wayvnc] wlroots 세션 전용 — Anland/KWin 및 X11은 지원하지 않습니다."
+    echo "[wayvnc] 외부 Sway 세션 전용 — Anland/KWin 및 X11은 지원하지 않습니다."
 }
 
 app_remove_wayvnc() {

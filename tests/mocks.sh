@@ -35,6 +35,7 @@ assert_not_called() {
 
 MOCK_INSTALLED_PKGS=""          # 설치된 것으로 취급할 패키지 (공백 구분)
 MOCK_PROOT_INSTALLED_PKGS=""    # proot 내 설치 패키지
+MOCK_PROOT_WINE_TREE=false      # /opt/wine-staging/bin/wine 실행 파일 존재
 MOCK_HAS_PROOT=true             # has_proot_distro() 반환값
 
 mock_pkg_adapter() {
@@ -42,6 +43,12 @@ mock_pkg_adapter() {
         _record_call "proot_exec $*"
         if [ "${1:-}" = "which" ]; then
             grep -qw "${2:-}" <<< "$MOCK_PROOT_INSTALLED_PKGS"
+        elif [ "${1:-}" = env ] && [ "${2:-}" = PATH=/usr/local/bin:/usr/bin:/bin ]; then
+            case "${5:-}" in
+                *'test -x /opt/wine-staging/bin/wine'*)
+                    [ "$MOCK_PROOT_WINE_TREE" = true ] && grep -qw box64 <<< "$MOCK_PROOT_INSTALLED_PKGS" ;;
+                'command -v box64') grep -qw box64 <<< "$MOCK_PROOT_INSTALLED_PKGS" ;;
+            esac
         fi
     }
     proot_exec_wine()             { _record_call "proot_exec_wine $*"; }

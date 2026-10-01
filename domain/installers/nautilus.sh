@@ -12,7 +12,9 @@ app_install_nautilus() {
 }
 
 app_remove_nautilus() {
-    proot_pkg_purge nautilus || return 1
+    if has_proot_distro; then
+        proot_pkg_purge nautilus || return 1
+    fi
     desktop_remove "nautilus"
 }
 

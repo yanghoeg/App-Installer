@@ -57,6 +57,12 @@ chmod +x /usr/local/bin/bwrap'
 }
 
 proot_exec_wine() {
-    # Read the optional container GPU profile rather than forcing host settings.
-    proot_exec bash --login -c 'exec "$@"' wine-exec "$@"
+    # Keep the display fallback and GPU configuration without login IME hooks.
+    proot_exec bash --noprofile --norc -c '
+        export DISPLAY="${DISPLAY:-:0.0}"
+        if [ -r /etc/profile.d/gpu-accel.sh ]; then
+            . /etc/profile.d/gpu-accel.sh || exit $?
+        fi
+        exec "$@"
+    ' wine-exec "$@"
 }

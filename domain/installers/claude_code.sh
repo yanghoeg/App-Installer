@@ -75,11 +75,12 @@ _claude_code_remove_npm_wrapper() {
 }
 
 # RC 전역 LD_PRELOAD(부모 domain/termux_env.sh 가 넣는 bionic force_gettext.so)는
-# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → grun 실행 전에 env -u 로 떼어낸다.
+# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → grun 실행 전에 셸 내장 unset으로 떼어낸다.
 _claude_code_install_wrapper() {
     cat > "${CLAUDE_CODE_BIN_PATH}" << EOF
 #!${PREFIX}/bin/bash
-exec env -u LD_PRELOAD grun "${CLAUDE_CODE_PREFIX}/claude" "\$@"
+unset LD_PRELOAD
+exec "${PREFIX}/bin/grun" "${CLAUDE_CODE_PREFIX}/claude" "\$@"
 EOF
     chmod +x "${CLAUDE_CODE_BIN_PATH}"
 }
@@ -130,6 +131,8 @@ _claude_code_backup_current() {
 # 새 binary가 최소한 실행되는지만 확인 — 로그인/기능 회귀는 여기서 못 잡음.
 # 부팅 자체가 깨진 회귀(예: 잘못된 dynamic linker 요구)만 감지.
 _claude_code_smoke_check() {
+    local LD_PRELOAD
+    unset LD_PRELOAD
     grun "${CLAUDE_CODE_PREFIX}/claude" --version >/dev/null 2>&1
 }
 

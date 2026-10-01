@@ -3,7 +3,7 @@
 # App Installer — CLI 인터페이스
 # =============================================================================
 # 사용법:
-#   bash app-install.sh list                 — 전체 앱 목록 + 설치 상태
+#   bash app-install.sh list                 — 설치 가능한 앱 + 기존 은퇴 앱 설치 상태
 #   bash app-install.sh list <카테고리>      — 카테고리별 필터
 #   bash app-install.sh install <id>         — 앱 설치
 #   bash app-install.sh remove <id>          — 앱 제거
@@ -54,7 +54,7 @@ _usage() {
 사용법: app-install.sh <명령> [인자]
 
 명령:
-  list [카테고리]    전체 앱 목록 (카테고리 필터 가능)
+  list [카테고리]    설치 가능한 앱 + 기존 은퇴 앱 (카테고리 필터 가능)
   install <id>       앱 설치
   remove <id>        앱 제거
   status <id>        설치 여부 확인
@@ -84,6 +84,7 @@ cmd_list() {
     for entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$entry"
         [ -n "$filter" ] && [ "$_category" != "$filter" ] && continue
+        app_is_visible "$_id" || continue
         local mark="  "
         app_is_installed "$_id" && mark="✓ "
         printf "%-20s %-4s %-10s %s\n" "$_id" "$mark" "$_category" "$_name"
@@ -95,6 +96,10 @@ cmd_install() {
     if ! _find_app "$id"; then
         echo "[ERROR] 알 수 없는 앱: $id" >&2
         echo "  app-install.sh list 로 ID를 확인하세요." >&2
+        return 1
+    fi
+    if ! app_can_install "$id"; then
+        echo "[ERROR] $id 는 신규 설치가 중단됐습니다. 기존 설치의 status/remove만 지원합니다." >&2
         return 1
     fi
     if app_is_installed "$id"; then

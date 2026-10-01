@@ -52,7 +52,8 @@ it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distr
 _test_ubuntu_exec_wine_has_mesa_env() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        grep -q -- '--login' <<< "$(declare -f proot_exec_wine)"
+        grep -q -- '--noprofile --norc' <<< "$(declare -f proot_exec_wine)"
+        grep -q -- 'gpu-accel.sh' <<< "$(declare -f proot_exec_wine)"
         ! grep -q 'MESA_LOADER_DRIVER_OVERRIDE=zink' <<< "$(declare -f proot_exec_wine)"
     )
 }

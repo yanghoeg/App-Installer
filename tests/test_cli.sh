@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Exercise the real CLI and adapters; isolate package/download commands in PATH.
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$TEST_DIR/.." && pwd)"
@@ -11,11 +11,13 @@ _CLI_BASH="${BASH:-$(command -v bash)}"
 # 픽스처 ZIP 생성용 하네스 도구 — 피시험 대상이 아니므로 PATH 에 넣지 않고
 # 절대경로로 부른다(Termux 의 python3 도 $PREFIX/bin 에 있다).
 _CLI_PYTHON="$(command -v python3)"
+_CLI_SHA256="$(command -v sha256sum)"
 
 _cli_setup() {
     local sb="$1" name
     export HOME="$sb/home" PREFIX="$sb/usr" TMPDIR="$sb/tmp"
     export TEST_TRACE="$sb/commands.log"
+    export CLI_SOURCE_SHA256_BIN="$_CLI_SHA256"
     export PATH="$sb/bin:/usr/bin:/bin"
     unset PROOT_DISTRO PROOT_USER PROOT_ROOTFS_BASE KOREAN_LOCALE_ZIP UI
     unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
@@ -48,7 +50,10 @@ case "$name" in
             esac
             shift
         done ;;
-    sha256sum) printf '%s  %s\n' "$TEST_SHA" "$1"; exit 0 ;;
+    sha256sum)
+        # Download payloads are fixtures; the repository C source is real.
+        if [ "${1##*/}" = force_gettext.c ]; then exec "$CLI_SOURCE_SHA256_BIN" "$@"; fi
+        printf '%s  %s\n' "${TEST_SHA:-}" "$1"; exit 0 ;;
     tar)
         while [ "$#" -gt 0 ]; do
             if [ "$1" = -C ]; then
@@ -192,6 +197,39 @@ _test_cli_native_override() {
 it 'explicit empty distro preserves native-only mode' _test_cli_native_override
 
 describe 'CLI — removal failures'
+_test_cli_retired_app_is_hidden_and_install_rejected() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export PROOT_DISTRO=""
+    _cli list > "$sb/list.log"
+    if command grep -q '^tor_browser[[:space:]]' "$sb/list.log"; then return 1; fi
+    if _cli install tor_browser > "$sb/install.log" 2>&1; then return 1; fi
+    assert_file_contains "$sb/install.log" '신규 설치가 중단'
+    [ ! -e "$PREFIX/share/applications/tor.desktop" ]
+    cleanup_sandbox "$sb"
+}
+it 'retired Tor is hidden when absent and CLI rejects new installation' _test_cli_retired_app_is_hidden_and_install_rejected
+
+_test_cli_existing_retired_app_can_be_removed() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export PROOT_DISTRO=""
+    touch "$PREFIX/share/applications/tor.desktop" "$HOME/Desktop/tor.desktop"
+    _cli list 브라우저 > "$sb/list.log"
+    assert_file_contains "$sb/list.log" '^tor_browser[[:space:]]'
+    _cli status tor_browser > "$sb/status.log"
+    assert_file_contains "$sb/status.log" 'tor_browser: 설치됨'
+    if _cli install tor_browser > "$sb/install.log" 2>&1; then return 1; fi
+    assert_file_contains "$sb/install.log" '신규 설치가 중단'
+    _cli remove tor_browser
+    _cli remove tor_browser
+    [ ! -e "$PREFIX/share/applications/tor.desktop" ]
+    [ ! -e "$HOME/Desktop/tor.desktop" ]
+    _cli list > "$sb/list-after.log"
+    if command grep -q '^tor_browser[[:space:]]' "$sb/list-after.log"; then return 1; fi
+    if command grep -q '^proot-distro ' "$TEST_TRACE"; then return 1; fi
+    cleanup_sandbox "$sb"
+}
+it 'existing retired Tor remains visible and native-only CLI removes its leftovers' _test_cli_existing_retired_app_can_be_removed
+
 _test_cli_failed_remove_keeps_launchers() {
     local sb; sb=$(make_sandbox); _cli_setup "$sb"
     touch "$PREFIX/share/applications/vlc.desktop" "$HOME/Desktop/vlc.desktop"
@@ -249,6 +287,7 @@ _test_cli_locale_builds() {
     touch "$PREFIX/lib/force_gettext.so"
     _cli install korean_locale
     [ -s "$PREFIX/lib/force_gettext.so" ]
+    assert_file_exists "$PREFIX/lib/force_gettext.so.sha256"
     [ -x "$HOME/bin/startxfce4-ko" ]
     assert_file_exists "$PREFIX/share/locale/ko/LC_MESSAGES/gtk30.mo"
     assert_file_contains "$PREFIX/etc/bash.bashrc" 'force_gettext.so'
@@ -264,10 +303,41 @@ _test_cli_locale_build_fails() {
     assert_file_contains "$sb/output" '\[ERROR\]'
     cleanup_sandbox "$sb"
 }
+_test_locale_upgrade_rebuilds_and_remove_cleans_stamp() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export PROOT_DISTRO=""
+    printf 'legacy shared library\n' > "$PREFIX/lib/force_gettext.so"
+    source "$APP_DIR/domain/installers/korean_locale.sh"
+    app_upgrade_korean_locale
+    assert_file_contains "$PREFIX/lib/force_gettext.so" 'shared library fixture'
+    local source_hash
+    source_hash=$("$_CLI_SHA256" "$APP_DIR/../assets/force_gettext.c")
+    assert_eq "${source_hash%% *}" "$(cat "$PREFIX/lib/force_gettext.so.sha256")"
+    # A matching marker should skip compilation even if the compiler would fail.
+    export TEST_CLANG_RC=42
+    app_upgrade_korean_locale
+    _cli remove korean_locale
+    [ ! -e "$PREFIX/lib/force_gettext.so" ]
+    [ ! -e "$PREFIX/lib/force_gettext.so.sha256" ]
+    cleanup_sandbox "$sb"
+}
+_test_locale_upgrade_failure_preserves_old_library() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    printf 'legacy shared library\n' > "$PREFIX/lib/force_gettext.so"
+    printf 'old source hash\n' > "$PREFIX/lib/force_gettext.so.sha256"
+    export TEST_CLANG_RC=42
+    source "$APP_DIR/domain/installers/korean_locale.sh"
+    if app_upgrade_korean_locale > "$sb/output" 2>&1; then return 1; fi
+    assert_eq 'legacy shared library' "$(cat "$PREFIX/lib/force_gettext.so")"
+    assert_eq 'old source hash' "$(cat "$PREFIX/lib/force_gettext.so.sha256")"
+    cleanup_sandbox "$sb"
+}
 if [ -f "$APP_DIR/../domain/locale_ko.sh" ]; then
     it 'missing catalog ZIP makes locale installation fail' _test_cli_locale_requires_zip
     it 'valid ZIP loads parent adapters and builds from parent assets' _test_cli_locale_builds
     it 'compiler failure propagates without leaving a library or launcher' _test_cli_locale_build_fails
+    it 'locale upgrade rebuilds once without a ZIP and removal deletes its hash marker' _test_locale_upgrade_rebuilds_and_remove_cleans_stamp
+    it 'failed locale upgrade preserves the existing library and source hash' _test_locale_upgrade_failure_preserves_old_library
 else
     skip 'parent locale integration requires the Termux_XFCE checkout'
 fi

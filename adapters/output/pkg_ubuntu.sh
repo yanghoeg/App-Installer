@@ -6,8 +6,28 @@ source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
 
 proot_pkg_install()      { proot_exec sudo apt install -y "$@"; }
-proot_pkg_remove()       { proot_exec sudo apt remove -y "$@"; }
-proot_pkg_purge()        { proot_exec sudo apt purge -y "$@"; }
+_proot_ubuntu_remove() {
+    proot_exec sudo bash -c '
+        set -eu
+        mode=$1; shift
+        packages=$(dpkg-query -W -f='"'"'${binary:Package}\t${db:Status-Status}\n'"'"') || exit $?
+        targets=()
+        for pkg in "$@"; do
+            while IFS=$'"'"'\t'"'"' read -r name state; do
+                [ "$name" = "$pkg" ] || [ "${name%%:*}" = "$pkg" ] || continue
+                case "$state" in
+                    ""|not-installed) continue ;;
+                    config-files) [ "$mode" = purge ] || continue ;;
+                esac
+                targets+=("$pkg")
+                break
+            done <<< "$packages"
+        done
+        [ "${#targets[@]}" -eq 0 ] || exec apt "$mode" -y -- "${targets[@]}"
+    ' _ "$@"
+}
+proot_pkg_remove()       { _proot_ubuntu_remove remove "$@"; }
+proot_pkg_purge()        { _proot_ubuntu_remove purge "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo apt update; }
 proot_pkg_autoremove()   { proot_exec sudo apt autoremove -y; }
 proot_pkg_is_installed() { proot_exec dpkg -s "$1" &>/dev/null; }
@@ -97,7 +117,7 @@ proot_pkg_install_sasm() {
 
 # Build the pinned upstream ARM64 release; no third-party binary repository.
 proot_pkg_install_box64() {
-    proot_pkg_install git cmake build-essential pkg-config || return 1
+    proot_pkg_install git cmake build-essential pkg-config python3 || return 1
     proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 

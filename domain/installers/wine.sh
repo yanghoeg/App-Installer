@@ -87,8 +87,6 @@ _wine_init_prefix_proot() {
     echo "[Wine] WINEPREFIX 초기화 중..."
     proot_exec_wine bash -c \
         "WINEPREFIX=\$HOME/.wine WINEDEBUG=-all wine wineboot --init 2>/dev/null || true" || true
-    # wineserver persistent: 후속 실행 속도 향상 (prefix 초기화 상태 유지)
-    proot_exec_wine bash -c "wineserver -p 2>/dev/null &" || true
 }
 
 # Termux native: glibc-runner + box64-glibc + Wine-Staging tarball
@@ -211,7 +209,7 @@ exec prun env WINE_DPI="$WINE_DPI" bash -c '
         _hex=$(printf "%08x" "$((10#$WINE_DPI))")
         sed -i "s/\"LogPixels\"=dword:[0-9a-f]\{8\}/\"LogPixels\"=dword:${_hex}/" "$_reg"
     fi
-    exec wine "$@"
+    exec /opt/wine-staging/bin/wine "$@"
 ' wine-box64 "$@"
 WRAPEOF
         chmod +x "$_WINE_BIN"
@@ -279,12 +277,13 @@ app_install_wine() {
         echo "[Wine] proot 감지: ${PROOT_DISTRO} (user: ${PROOT_USER})"
 
         # 이미 설치된 경우 건너뜀
-        if proot_exec which wine &>/dev/null 2>&1; then
+        if proot_exec env PATH=/usr/local/bin:/usr/bin:/bin bash -c \
+            'test -x /opt/wine-staging/bin/wine && command -v box64 >/dev/null' &>/dev/null; then
             echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
         else
             proot_pkg_update || return 1
             proot_pkg_install_box64 || return 1
-            if ! proot_exec which box64 &>/dev/null; then
+            if ! proot_exec env PATH=/usr/local/bin:/usr/bin:/bin bash -c 'command -v box64' &>/dev/null; then
                 echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
                 return 1
             fi
@@ -315,6 +314,8 @@ app_remove_wine() {
         if proot_pkg_is_installed box64; then proot_pkg_remove box64 || return 1; fi
         proot_exec sudo bash -c "
             set -e
+            # Source builds are not registered in the package database.
+            rm -f /usr/local/bin/box64
             rm -rf /opt/wine-staging
             for bin in wine wineboot winecfg wineserver msiexec regedit winetricks; do
                 rm -f /usr/local/bin/\$bin
