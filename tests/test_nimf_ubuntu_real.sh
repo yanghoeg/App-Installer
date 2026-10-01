@@ -76,7 +76,7 @@ else
     _fail "nimf 바이너리 없음"
 fi
 
-if _proot "nimf --version 2>&1" | grep -q "1\.4"; then
+if grep -q "1\.4" <<< "$(_proot "nimf --version 2>&1")"; then
     _ok "nimf 버전: $(_proot 'nimf --version 2>&1')"
 else
     _fail "nimf --version 실패"
@@ -94,13 +94,13 @@ fi
 echo ""
 echo "[36m▶ 한글 폰트 확인[0m"
 
-if _proot "fc-list :lang=ko 2>/dev/null | head -3" | grep -q "\."; then
+if grep -q "\." <<< "$(_proot "fc-list :lang=ko 2>/dev/null | head -3")"; then
     _ok "한글 폰트 설치됨:"
     _proot "fc-list :lang=ko 2>/dev/null | head -3" | while read -r l; do _info "$l"; done
 else
     _info "한글 폰트 미설치 — fonts-nanum 설치 시도"
     _proot_root "apt-get install -y fonts-nanum 2>/dev/null" || true
-    if _proot "fc-list :lang=ko 2>/dev/null | head -1" | grep -q "\."; then
+    if grep -q "\." <<< "$(_proot "fc-list :lang=ko 2>/dev/null | head -1")"; then
         _ok "fonts-nanum 설치 후 한글 폰트 확인됨"
     else
         _fail "한글 폰트 없음"
@@ -138,7 +138,7 @@ else
     _fail "im-config -n nimf 실패"
 fi
 
-if _proot "cat /etc/X11/xinit/xinput.d/nimf 2>/dev/null || cat ~/.xinputrc 2>/dev/null" | grep -qi "nimf"; then
+if grep -qi "nimf" <<< "$(_proot "cat /etc/X11/xinit/xinput.d/nimf 2>/dev/null || cat ~/.xinputrc 2>/dev/null")"; then
     _ok "im-config nimf 설정 파일 존재"
 else
     _info "im-config 설정 파일 확인 불가 (X11 없는 환경 — 정상)"

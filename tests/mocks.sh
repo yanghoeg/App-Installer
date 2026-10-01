@@ -41,7 +41,7 @@ mock_pkg_adapter() {
     proot_exec()                  {
         _record_call "proot_exec $*"
         if [ "${1:-}" = "which" ]; then
-            echo "$MOCK_PROOT_INSTALLED_PKGS" | grep -qw "${2:-}"
+            grep -qw "${2:-}" <<< "$MOCK_PROOT_INSTALLED_PKGS"
         fi
     }
     proot_exec_wine()             { _record_call "proot_exec_wine $*"; }
@@ -50,7 +50,7 @@ mock_pkg_adapter() {
     proot_pkg_purge()             { _record_call "proot_pkg_purge $*"; }
     proot_pkg_update()            { _record_call "proot_pkg_update"; }
     proot_pkg_autoremove()        { _record_call "proot_pkg_autoremove"; }
-    proot_pkg_is_installed()      { echo "$MOCK_PROOT_INSTALLED_PKGS" | grep -qw "$1"; }
+    proot_pkg_is_installed()      { grep -qw "$1" <<< "$MOCK_PROOT_INSTALLED_PKGS"; }
     proot_pkg_install_aur()       { _record_call "proot_pkg_install_aur $*"; }
     proot_pkg_install_deb_or_aur(){ _record_call "proot_pkg_install_deb_or_aur $*"; }
     proot_pkg_install_deb_url()   { _record_call "proot_pkg_install_deb_url $*"; }
@@ -73,10 +73,10 @@ mock_pkg_adapter() {
     proot_setup_bwrap()           { _record_call "proot_setup_bwrap"; }
     termux_pkg_install()          { _record_call "termux_pkg_install $*"; }
     termux_pkg_remove()           { _record_call "termux_pkg_remove $*"; }
-    termux_pkg_is_installed()     { echo "$MOCK_INSTALLED_PKGS" | grep -qw "$1"; }
+    termux_pkg_is_installed()     { grep -qw "$1" <<< "$MOCK_INSTALLED_PKGS"; }
     termux_pkg_enable_repo()      {
         _record_call "termux_pkg_enable_repo $*"
-        echo "$MOCK_INSTALLED_PKGS" | grep -qw "$1" && return 0
+        grep -qw "$1" <<< "$MOCK_INSTALLED_PKGS" && return 0
         MOCK_INSTALLED_PKGS="${MOCK_INSTALLED_PKGS} $1"
     }
 

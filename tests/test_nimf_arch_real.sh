@@ -48,7 +48,7 @@ PKG_LIST=$(curl -sL --max-time 30 \
     "https://github.com/hamonikr/nimf/releases/download/v1.4.17/nimf-1.4.17-1-any-arch.pkg.tar.zst" \
     | tar -tf - 2>/dev/null | grep "lib/" | head -5 || true)
 
-if echo "$PKG_LIST" | grep -q "x86_64"; then
+if grep -q "x86_64" <<< "$PKG_LIST"; then
     _ok "확인: 릴리즈 패키지가 x86_64 전용 (ARM64 사용 불가)"
 elif [ -z "$PKG_LIST" ]; then
     # 네트워크 실패 시 파일명 패턴으로 대체 판단
@@ -61,7 +61,7 @@ fi
 _info "AUR PKGBUILD arch 필드 확인..."
 AUR_ARCH=$(curl -s "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=nimf" \
     | grep "^arch=")
-if echo "$AUR_ARCH" | grep -q "x86_64"; then
+if grep -q "x86_64" <<< "$AUR_ARCH"; then
     _ok "확인: AUR PKGBUILD arch=(x86_64) — ARM64 미지원"
     _info "AUR: $AUR_ARCH"
 else
@@ -69,7 +69,7 @@ else
 fi
 
 # makepkg fakeroot 상태
-if _proot "fakeroot echo ok" | grep -q "ok"; then
+if grep -q "ok" <<< "$(_proot "fakeroot echo ok")"; then
     _info "fakeroot 자체는 작동함 — nimf 소스가 ARM64 빌드를 지원하지 않음"
 fi
 
@@ -78,27 +78,27 @@ fi
 echo ""
 echo "[36m▶ fcitx5 폴백 설치 확인[0m"
 
-if _proot "pacman -Q fcitx5 2>/dev/null" | grep -q "fcitx5"; then
+if grep -q "fcitx5" <<< "$(_proot "pacman -Q fcitx5 2>/dev/null")"; then
     VER=$(_proot "pacman -Q fcitx5 2>/dev/null | awk '{print \$2}'")
     _ok "fcitx5 설치됨: $VER"
 else
     _info "fcitx5 설치 중..."
     _proot_root "pacman -S --noconfirm --needed fcitx5 fcitx5-hangul fcitx5-configtool libhangul 2>/dev/null" || true
-    if _proot "pacman -Q fcitx5 2>/dev/null" | grep -q "fcitx5"; then
+    if grep -q "fcitx5" <<< "$(_proot "pacman -Q fcitx5 2>/dev/null")"; then
         _ok "fcitx5 설치 완료"
     else
         _fail "fcitx5 설치 실패"
     fi
 fi
 
-if _proot "pacman -Q fcitx5-hangul 2>/dev/null" | grep -q "fcitx5-hangul"; then
+if grep -q "fcitx5-hangul" <<< "$(_proot "pacman -Q fcitx5-hangul 2>/dev/null")"; then
     VER=$(_proot "pacman -Q fcitx5-hangul 2>/dev/null | awk '{print \$2}'")
     _ok "fcitx5-hangul 설치됨: $VER"
 else
     _fail "fcitx5-hangul 없음"
 fi
 
-if _proot "pacman -Q libhangul 2>/dev/null" | grep -q "libhangul"; then
+if grep -q "libhangul" <<< "$(_proot "pacman -Q libhangul 2>/dev/null")"; then
     _ok "libhangul 설치됨"
 else
     _fail "libhangul 없음"
@@ -128,13 +128,13 @@ fi
 echo ""
 echo "[36m▶ 한글 폰트 확인[0m"
 
-if _proot "fc-list :lang=ko 2>/dev/null | head -1" | grep -q "\."; then
+if grep -q "\." <<< "$(_proot "fc-list :lang=ko 2>/dev/null | head -1")"; then
     _ok "한글 폰트 설치됨:"
     _proot "fc-list :lang=ko 2>/dev/null | head -3" | while read -r l; do _info "$l"; done
 else
     _info "한글 폰트 없음 — noto-fonts-cjk 설치 시도"
     _proot_root "pacman -S --noconfirm --needed noto-fonts-cjk 2>/dev/null" || true
-    if _proot "fc-list :lang=ko 2>/dev/null | head -1" | grep -q "\."; then
+    if grep -q "\." <<< "$(_proot "fc-list :lang=ko 2>/dev/null | head -1")"; then
         _ok "noto-fonts-cjk 설치 후 한글 폰트 확인됨"
     else
         _fail "한글 폰트 없음"

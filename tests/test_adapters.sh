@@ -15,7 +15,7 @@ describe "pkg_termux.sh — 구현 검증"
 _test_termux_install_uses_pkg() {
     (
         source "${APP_DIR}/adapters/output/pkg_termux.sh"
-        declare -f termux_pkg_install | grep -q "pkg install"
+        grep -q "pkg install" <<< "$(declare -f termux_pkg_install)"
     )
 }
 it "termux_pkg_install → 'pkg install -y' 사용" _test_termux_install_uses_pkg
@@ -23,7 +23,7 @@ it "termux_pkg_install → 'pkg install -y' 사용" _test_termux_install_uses_pk
 _test_termux_remove_uses_uninstall() {
     (
         source "${APP_DIR}/adapters/output/pkg_termux.sh"
-        declare -f termux_pkg_remove | grep -q "pkg uninstall"
+        grep -q "pkg uninstall" <<< "$(declare -f termux_pkg_remove)"
     )
 }
 it "termux_pkg_remove → 'pkg uninstall -y' 사용" _test_termux_remove_uses_uninstall
@@ -31,7 +31,7 @@ it "termux_pkg_remove → 'pkg uninstall -y' 사용" _test_termux_remove_uses_un
 _test_termux_is_installed_checks_list() {
     (
         source "${APP_DIR}/adapters/output/pkg_termux.sh"
-        declare -f termux_pkg_is_installed | grep -q "list-installed"
+        grep -q "list-installed" <<< "$(declare -f termux_pkg_is_installed)"
     )
 }
 it "termux_pkg_is_installed → 'pkg list-installed' 사용" _test_termux_is_installed_checks_list
@@ -44,7 +44,7 @@ describe "pkg_ubuntu.sh — 구현 검증"
 _test_ubuntu_exec_uses_proot_distro_login() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_exec | grep -q "proot-distro login"
+        grep -q "proot-distro login" <<< "$(declare -f proot_exec)"
     )
 }
 it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distro_login
@@ -52,8 +52,8 @@ it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distr
 _test_ubuntu_exec_wine_has_mesa_env() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_exec_wine | grep -q -- '--login'
-        ! declare -f proot_exec_wine | grep -q 'MESA_LOADER_DRIVER_OVERRIDE=zink'
+        grep -q -- '--login' <<< "$(declare -f proot_exec_wine)"
+        ! grep -q 'MESA_LOADER_DRIVER_OVERRIDE=zink' <<< "$(declare -f proot_exec_wine)"
     )
 }
 it "proot_exec_wine loads the optional container profile" _test_ubuntu_exec_wine_has_mesa_env
@@ -88,7 +88,7 @@ it "proot_pkg_install_sasm → active distro APT without suite rewrite" _test_ub
 _test_ubuntu_add_repo_uses_gpg() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_pkg_add_external_repo | grep -q "gpg"
+        grep -q "gpg" <<< "$(declare -f proot_pkg_add_external_repo)"
     )
 }
 it "proot_pkg_add_external_repo → GPG 키 처리 포함" _test_ubuntu_add_repo_uses_gpg
@@ -101,7 +101,7 @@ describe "pkg_arch.sh — 구현 검증"
 _test_arch_exec_uses_proot_distro_login() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_exec | grep -q "proot-distro login"
+        grep -q "proot-distro login" <<< "$(declare -f proot_exec)"
     )
 }
 it "proot_exec → proot-distro login 사용" _test_arch_exec_uses_proot_distro_login
@@ -109,7 +109,7 @@ it "proot_exec → proot-distro login 사용" _test_arch_exec_uses_proot_distro_
 _test_arch_autoremove_handles_orphans() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_autoremove | grep -q "orphans"
+        grep -q "orphans" <<< "$(declare -f proot_pkg_autoremove)"
     )
 }
 it "proot_pkg_autoremove → pacman orphan 처리" _test_arch_autoremove_handles_orphans
@@ -117,7 +117,7 @@ it "proot_pkg_autoremove → pacman orphan 처리" _test_arch_autoremove_handles
 _test_arch_aur_installs_yay_if_missing() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_aur | grep -q "yay"
+        grep -q "yay" <<< "$(declare -f proot_pkg_install_aur)"
     )
 }
 it "proot_pkg_install_aur → yay 없으면 자동 설치" _test_arch_aur_installs_yay_if_missing
@@ -137,7 +137,7 @@ it "proot_pkg_install_box64 → pinned upstream source, no Chaotic-AUR" _test_ar
 _test_arch_deb_or_aur_delegates_to_aur() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_deb_or_aur | grep -q "proot_pkg_install_aur"
+        grep -q "proot_pkg_install_aur" <<< "$(declare -f proot_pkg_install_deb_or_aur)"
     )
 }
 it "proot_pkg_install_deb_or_aur → Arch는 AUR에 위임" _test_arch_deb_or_aur_delegates_to_aur
@@ -446,8 +446,8 @@ describe "pkg_ubuntu.sh — box64 GitHub 경로 제거"
 _test_ubuntu_box64_uses_pinned_upstream_source() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_pkg_install_box64 | grep -q 'box64_build_source_script'
-        declare -f box64_build_source_script | grep -q '2f130fab1d6e1a4ee8a71dc60cfdfcc839ad192a'
+        grep -q 'box64_build_source_script' <<< "$(declare -f proot_pkg_install_box64)"
+        grep -q '2f130fab1d6e1a4ee8a71dc60cfdfcc839ad192a' <<< "$(declare -f box64_build_source_script)"
     )
 }
 it "proot_pkg_install_box64 → verified upstream source revision" _test_ubuntu_box64_uses_pinned_upstream_source
@@ -455,7 +455,7 @@ it "proot_pkg_install_box64 → verified upstream source revision" _test_ubuntu_
 _test_arch_wine_mesa_has_no_32bit_package() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        ! declare -f proot_pkg_install_wine_mesa | grep -q 'lib32-'
+        ! grep -q 'lib32-' <<< "$(declare -f proot_pkg_install_wine_mesa)"
     )
 }
 it "Arch Wine Mesa dependencies stay 64-bit" _test_arch_wine_mesa_has_no_32bit_package
@@ -463,10 +463,10 @@ it "Arch Wine Mesa dependencies stay 64-bit" _test_arch_wine_mesa_has_no_32bit_p
 _test_gpu_tools_are_distro_specific() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_pkg_install_gpu_tools | grep -q 'mesa-utils vulkan-tools'
+        grep -q 'mesa-utils vulkan-tools' <<< "$(declare -f proot_pkg_install_gpu_tools)"
     ) && (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_gpu_tools | grep -q 'mesa-demos vulkan-tools'
+        grep -q 'mesa-demos vulkan-tools' <<< "$(declare -f proot_pkg_install_gpu_tools)"
     )
 }
 it "GPU diagnostic tools use distro-specific packages" _test_gpu_tools_are_distro_specific
