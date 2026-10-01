@@ -51,7 +51,7 @@ An installed app with an `app_upgrade_<id>` handler offers **Upgrade** alongside
 
 | App | Upgrade behavior |
 |-----|------------------|
-| Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. On download/smoke failure, attempt to restore that backup |
+| Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. Abort before replacing the binary if backup fails. On download/smoke failure, attempt to restore that backup |
 | Codex CLI | Update to `CODEX_PIN_VERSION`; replace the binary, the `codex-code-mode-host` helper and the wrapper, without Claude Code's backup/smoke/rollback flow |
 | Notion | Replace the old AppImage launcher with a Termux Firefox web launcher; keep the old app directory until removal |
 
@@ -303,12 +303,14 @@ APK/asset download paths; this helper's guarantees do not cover every parent dow
 From the App Installer checkout:
 
 ```bash
-for suite in domain_apps adapters ports fetch proot_path cli; do
+for suite in domain_apps adapters ports fetch proot_path cli \
+    review_claude_code review_input_gpu review_removal_wine review_app_core; do
     bash "tests/test_${suite}.sh" || exit 1
 done
 ```
 
-These suites cover the domain, adapters, ports, downloads, rootfs paths, and CLI.
+These suites cover the domain, adapters, ports, downloads, rootfs paths, CLI,
+Wine execution, input method dependencies, removal, and upgrade failure handling.
 On a PC they use mocks and static checks; CLI tests run the real entry point with
 isolated package/download commands. Parent locale integration tests require the
 Termux_XFCE checkout. `tests/test_nimf_*_real.sh` are run from Termux on a real device and enter proot

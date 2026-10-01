@@ -41,6 +41,7 @@ _wine_install_tarball_proot() {
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     proot_exec_wine sudo bash -c "$(fetch_verified_src)"$'\n'"
         set -e
+        command -v file >/dev/null 2>&1 || { echo '[ERROR] Wine ELF 판별에 file 명령이 필요합니다.' >&2; exit 1; }
         mkdir -p /opt/wine-staging
         fetch_verified '${wine_url}' /tmp/wine-staging.tar.xz '${_WINE_STAGING_SHA256}'
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
@@ -50,13 +51,18 @@ _wine_install_tarball_proot() {
         # argv[0] 보존: box64가 wine 경로의 basename을 argv[0]으로 전달
         cd /opt/wine-staging/bin
         mkdir -p .elf
+        wrapped_required=0
         for f in wine wineserver wineboot winedbg; do
             if [ -f \"\$f\" ] && file \"\$f\" 2>/dev/null | grep -q 'x86-64'; then
                 mv \"\$f\" \".elf/\$f\"
                 printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/.elf/%s \"\$@\"\n' \"\$f\" > \"\$f\"
                 chmod +x \"\$f\"
+                case \"\$f\" in wine|wineserver) wrapped_required=\$((wrapped_required + 1)) ;; esac
             fi
         done
+        [ \"\$wrapped_required\" -eq 2 ] && test -x .elf/wine && test -x .elf/wineserver || {
+            echo '[ERROR] Wine x86-64 ELF 래퍼 생성 실패' >&2; exit 1;
+        }
         # ELF의 상대경로 ../lib, ../share 가 올바른 위치를 가리키도록 symlink
         ln -sf ../lib /opt/wine-staging/bin/lib
         ln -sf ../share /opt/wine-staging/bin/share
@@ -93,16 +99,16 @@ _wine_init_prefix_proot() {
 _wine_install_native() {
     echo "[Wine] Termux native: glibc-runner + box64-glibc + Wine-Staging"
 
+    termux_pkg_enable_repo glibc-repo || return 1
+    termux_pkg_install glibc-runner box64-glibc || return 1
+
     # 래퍼가 아니라 wine 트리 자체로 판정한다.
     # (래퍼 경로가 wine → wine-box64로 바뀐 기존 설치도 재다운로드하지 않도록)
     if [ -x "$_WINE_NATIVE_DIR/bin/wine" ]; then
         echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
         _wine_write_box64_native_wrapper
-        return 0
+        return $?
     fi
-
-    termux_pkg_enable_repo glibc-repo || return 1
-    termux_pkg_install glibc-runner box64-glibc || return 1
 
     for p in \
         mesa-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
@@ -134,7 +140,7 @@ _wine_install_native() {
         return 1
     }
 
-    _wine_write_box64_native_wrapper
+    _wine_write_box64_native_wrapper || return 1
 
     "$_WINE_BIN" wineboot --init 2>/dev/null || true
 }
@@ -172,10 +178,20 @@ export BOX64_DYNAREC_SAFEFLAGS=2
 # DXVK
 export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
-if [ -x "$HOME/.wine-staging/bin/wineserver" ]; then
-    grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
+# grun's unquoted argv handling loses Windows paths containing spaces. Invoke
+# its ARM64 glibc loader directly, with Box64 handling the x86-64 Wine programs.
+unset LD_PRELOAD
+export PATH="$PREFIX/glibc/bin:$PATH"
+_loader="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
+_box64="$PREFIX/glibc/bin/box64"
+if [ ! -x "$_loader" ] || [ ! -x "$_box64" ]; then
+    echo "[ERROR] glibc 또는 Box64가 없습니다. Wine을 다시 설치하세요." >&2
+    exit 1
 fi
-exec grun "$HOME/.wine-staging/bin/wine" "$@"
+if [ -x "$HOME/.wine-staging/bin/wineserver" ]; then
+    "$_loader" --library-path "$PREFIX/glibc/lib" "$_box64" "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
+fi
+exec "$_loader" --library-path "$PREFIX/glibc/lib" "$_box64" "$HOME/.wine-staging/bin/wine" "$@"
 WRAP_TAIL
     } > "$_WINE_BIN"
     chmod +x "$_WINE_BIN"
@@ -278,7 +294,11 @@ app_install_wine() {
 
         # 이미 설치된 경우 건너뜀
         if proot_exec env PATH=/usr/local/bin:/usr/bin:/bin bash -c \
-            'test -x /opt/wine-staging/bin/wine && command -v box64 >/dev/null' &>/dev/null; then
+            'test -x /opt/wine-staging/bin/wine && test -x /opt/wine-staging/bin/wineserver &&
+             test -x /opt/wine-staging/bin/.elf/wine && test -x /opt/wine-staging/bin/.elf/wineserver &&
+             grep -Fqx "exec box64 /opt/wine-staging/bin/.elf/wine \"\$@\"" /opt/wine-staging/bin/wine &&
+             grep -Fqx "exec box64 /opt/wine-staging/bin/.elf/wineserver \"\$@\"" /opt/wine-staging/bin/wineserver &&
+             command -v box64 >/dev/null' &>/dev/null; then
             echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
         else
             proot_pkg_update || return 1

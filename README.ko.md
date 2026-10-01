@@ -51,7 +51,7 @@ CLI에는 `upgrade`나 `rollback` 하위 명령이 없습니다.
 
 | 앱 | 업그레이드 동작 |
 |----|-----------------|
-| Claude Code | `CLAUDE_CODE_PIN_VERSION`으로 갱신. 기록된 기존 버전을 백업하고 다운로드 후 `--version` 실행. 다운로드·스모크 실패 시 해당 백업 복원 시도 |
+| Claude Code | `CLAUDE_CODE_PIN_VERSION`으로 갱신. 기록된 기존 버전을 백업하고 다운로드 후 `--version` 실행. 백업 실패 시 바이너리 교체 전에 중단. 다운로드·스모크 실패 시 해당 백업 복원 시도 |
 | Codex CLI | `CODEX_PIN_VERSION`으로 바이너리·`codex-code-mode-host` 헬퍼·래퍼 갱신. Claude Code의 백업·스모크·롤백 절차는 없음 |
 | Notion | 기존 AppImage 런처를 Termux Firefox 웹 런처로 교체. 이전 앱 디렉터리는 제거할 때까지 보존 |
 
@@ -297,12 +297,14 @@ APK·자산 다운로드는 별도 경로이므로 이 헬퍼의 검증 범위�
 App Installer 저장소 폴더에서 실행합니다.
 
 ```bash
-for suite in domain_apps adapters ports fetch proot_path cli; do
+for suite in domain_apps adapters ports fetch proot_path cli \
+    review_claude_code review_input_gpu review_removal_wine review_app_core; do
     bash "tests/test_${suite}.sh" || exit 1
 done
 ```
 
-도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI를 검사합니다. PC에서는 mock과 정적
+도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI, Wine 실행, 입력기 의존성,
+제거 및 업그레이드 실패 처리를 검사합니다. PC에서는 mock과 정적
 검사를 사용하며, CLI 테스트는 패키지·다운로드 명령을 격리한 상태에서 실제 진입점을
 실행합니다. 부모 로케일 통합 테스트에는 Termux_XFCE 저장소가 필요합니다.
 `tests/test_nimf_*_real.sh`는 실기기의 Termux에서 실행하며 스크립트가 직접 proot에

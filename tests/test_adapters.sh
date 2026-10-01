@@ -238,6 +238,19 @@ STUB
 #!/data/data/com.termux/files/usr/bin/bash
 echo "dpkg $*" >> "${DEB_TEST_LOG}"
 STUB
+    cat > "${sb}/bin/dpkg-deb" << 'STUB'
+#!/data/data/com.termux/files/usr/bin/bash
+case "$3" in
+    Package) name="${2##*/}"; printf '%s\n' "${name%.deb}" ;;
+    Version) printf '1.0\n' ;;
+    Architecture) printf 'arm64\n' ;;
+    *) exit 99 ;;
+esac
+STUB
+    cat > "${sb}/bin/dpkg-query" << 'STUB'
+#!/data/data/com.termux/files/usr/bin/bash
+printf 'install ok installed|1.0|arm64'
+STUB
     printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 0\n' > "${sb}/bin/apt-get"
     cat > "${sb}/bin/apt" << 'STUB'
 #!/data/data/com.termux/files/usr/bin/bash

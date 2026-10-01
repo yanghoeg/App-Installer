@@ -40,7 +40,7 @@ proot_pkg_install_deb_or_aur() { _port_not_impl "proot_pkg_install_deb_or_aur"; 
 #   계약: sha256이 주어지면 dpkg 전에 검증하고, 불일치 시 받은 파일을 삭제하고
 #         그 항목을 설치하지 않으며 함수는 rc≠0을 반환한다(무결성 위반은 관대 처리 금지).
 #         다운로드 실패도 rc≠0. Arch 어댑터는 에러 메시지 + rc 1.
-#   반환: 0=모든 항목 설치 시도 성공, 1=하나 이상 다운로드/sha256 실패
+#   반환: 0=모든 항목의 다운로드 버전 설치 확인, 1=다운로드/검증/의존성 복구/설치 확인 실패
 proot_pkg_install_deb_url() { _port_not_impl "proot_pkg_install_deb_url"; }
 
 # 외부 APT 저장소 추가 (Arch: no-op) | $1=name $2=gpg_key_url $3=sources_line

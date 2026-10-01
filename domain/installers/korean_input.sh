@@ -34,7 +34,10 @@ app_install_korean_input() {
 }
 
 app_remove_korean_input() {
-    for p in fcitx5-gtk3 fcitx5-gtk4 fcitx5-qt fcitx5-configtool fcitx5-hangul fcitx5 libhangul-static libhangul; do
+    # libhangul is shared with Nimf and other apps; removing it explicitly also
+    # removes those dependents through apt's dependency resolution.
+    local p
+    for p in fcitx5-gtk3 fcitx5-gtk4 fcitx5-qt fcitx5-configtool fcitx5-hangul fcitx5; do
         if termux_pkg_is_installed "$p"; then termux_pkg_remove "$p" || return 1; fi
     done
     input_method_setup || return 1

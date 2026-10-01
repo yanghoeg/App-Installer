@@ -120,11 +120,23 @@ _claude_code_backup_current() {
     local ver="$1"
     [ -n "$ver" ] || return 0
     [ -f "${CLAUDE_CODE_PREFIX}/claude" ] || return 0
-    local bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${ver}"
+    local bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${ver}" stage
     [ -e "$bak_bin" ] && return 0
-    cp -f "${CLAUDE_CODE_PREFIX}/claude"       "$bak_bin"
-    [ -f "${CLAUDE_CODE_PREFIX}/package.json" ] && \
-        cp -f "${CLAUDE_CODE_PREFIX}/package.json" "${CLAUDE_CODE_PREFIX}/package.json.bak.v${ver}"
+    # Publish only a complete backup; a failed copy must not poison later retries.
+    stage=$(mktemp -d "${CLAUDE_CODE_PREFIX}/.backup.XXXXXX") || return 1
+    if ! cp -p "${CLAUDE_CODE_PREFIX}/claude" "$stage/claude"; then
+        rm -rf "$stage"
+        return 1
+    fi
+    if [ -f "${CLAUDE_CODE_PREFIX}/package.json" ]; then
+        if ! cp -p "${CLAUDE_CODE_PREFIX}/package.json" "$stage/package.json" ||
+           ! mv -f "$stage/package.json" "${CLAUDE_CODE_PREFIX}/package.json.bak.v${ver}"; then
+            rm -rf "$stage"
+            return 1
+        fi
+    fi
+    mv -f "$stage/claude" "$bak_bin" || { rm -rf "$stage"; return 1; }
+    rm -rf "$stage" || return 1
     return 0
 }
 
@@ -182,7 +194,10 @@ app_upgrade_claude_code() {
         echo "[INFO] 이미 최신 버전입니다 (${latest})"
         return 2
     fi
-    _claude_code_backup_current "$current"
+    _claude_code_backup_current "$current" || {
+        echo "[ERROR] 현재 Claude Code 백업 실패 — 업그레이드를 중단합니다." >&2
+        return 1
+    }
     _claude_code_download_native "$latest" || {
         [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
         return 1

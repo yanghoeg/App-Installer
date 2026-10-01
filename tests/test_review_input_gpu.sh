@@ -179,4 +179,63 @@ PROFILE
 }
 it 'legacy GPU exports allow a fresh container Turnip probe and profile migration' _review_gpu_legacy_install
 
+_review_fcitx_keeps_nimf() {
+    _review_sandbox
+    source "$_REVIEW_APP_DIR/domain/installers/korean_input.sh"
+    _REVIEW_NIMF_PRESENT=true
+    input_method_select nimf
+    local -A packages=([fcitx5]=yes [fcitx5-hangul]=yes [libhangul]=yes [libhangul-static]=yes [nimf]=yes)
+    termux_pkg_is_installed() { [ "${packages[$1]:-}" = yes ]; }
+    termux_pkg_remove() {
+        unset 'packages[$1]'
+        # Model apt's real dependency cascade if a shared library is removed.
+        if [ "$1" = libhangul ]; then
+            unset 'packages[nimf]'
+            _REVIEW_NIMF_PRESENT=false
+        fi
+    }
+    app_remove_korean_input
+    assert_eq yes "${packages[nimf]:-}"
+    assert_eq yes "${packages[libhangul]:-}"
+    assert_eq yes "${packages[libhangul-static]:-}"
+    assert_eq nimf "$(input_method_current)"
+    assert_file_contains "$HOME/.config/autostart/nimf.desktop" '^Hidden=false$'
+    [ -z "${packages[fcitx5-hangul]:-}" ]
+}
+it 'removing native Fcitx preserves shared Hangul libraries and selected Nimf' _review_fcitx_keeps_nimf
+
+_review_arch_fcitx_has_gtk() {
+    _review_sandbox
+    source "$_REVIEW_APP_DIR/domain/installers/korean_proot.sh"
+    export PROOT_DISTRO=archlinux PROOT_USER=desktop
+    local -a installed=()
+    has_proot_distro() { return 0; }
+    _proot_rootfs() { printf '%s\n' "$_REVIEW_SANDBOX/rootfs"; }
+    proot_pkg_is_installed() { return 1; }
+    proot_pkg_install_aur() { return 1; }
+    proot_pkg_install() { installed+=("$@"); }
+    proot_exec() { return 0; }
+    app_install_korean_proot
+    local p found=false
+    for p in "${installed[@]}"; do [ "$p" != fcitx5-gtk ] || found=true; done
+    assert_eq true "$found"
+    assert_file_contains "$_REVIEW_SANDBOX/rootfs/etc/profile.d/termux-xfce-locale.sh" '^export GTK_IM_MODULE=fcitx$'
+}
+it 'Arch Nimf failure installs the Fcitx GTK frontend before selecting Fcitx' _review_arch_fcitx_has_gtk
+
+_review_arch_gtk_failure_stops_selection() {
+    _review_sandbox
+    source "$_REVIEW_APP_DIR/domain/installers/korean_proot.sh"
+    export PROOT_DISTRO=archlinux PROOT_USER=desktop
+    has_proot_distro() { return 0; }
+    _proot_rootfs() { printf '%s\n' "$_REVIEW_SANDBOX/rootfs"; }
+    proot_pkg_is_installed() { return 1; }
+    proot_pkg_install_aur() { return 1; }
+    proot_pkg_install() { [ "$1" != fcitx5-gtk ]; }
+    proot_exec() { return 0; }
+    if app_install_korean_proot; then return 1; fi
+    [ ! -e "$_REVIEW_SANDBOX/rootfs/etc/profile.d/termux-xfce-locale.sh" ]
+}
+it 'a missing Fcitx GTK frontend fails instead of recording a broken input method' _review_arch_gtk_failure_stops_selection
+
 print_results
