@@ -1682,8 +1682,9 @@ _test_wayvnc_launcher_support() {
     app_install_wayvnc >/dev/null
     assert_was_called 'termux_pkg_install wayvnc'
     mkdir -p "$sb/bin"
+    # Termux 에는 /usr/bin/env 가 없다 — 프로젝트 규약대로 절대경로 shebang 을 쓴다
     cat > "$sb/bin/wayvnc" <<'EOF'
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 printf '%s\n' "$*" > "$HOME/wayvnc-invoked"
 EOF
     chmod +x "$sb/bin/wayvnc"

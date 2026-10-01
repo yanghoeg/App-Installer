@@ -4,6 +4,14 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/framework.sh"
 
+# Termux 의 /usr/bin:/bin 에서 빠진 것은 bash 뿐이다(나머지 기본 유틸은 Android
+# toybox 가 제공). PATH 에 $PREFIX/bin 을 통째로 넣으면 기기에 실제 설치된 앱이
+# 보여 app_is_installed_* 격리가 깨지므로, bash 하나만 샌드박스에 넣는다.
+_CLI_BASH="${BASH:-$(command -v bash)}"
+# 픽스처 ZIP 생성용 하네스 도구 — 피시험 대상이 아니므로 PATH 에 넣지 않고
+# 절대경로로 부른다(Termux 의 python3 도 $PREFIX/bin 에 있다).
+_CLI_PYTHON="$(command -v python3)"
+
 _cli_setup() {
     local sb="$1" name
     export HOME="$sb/home" PREFIX="$sb/usr" TMPDIR="$sb/tmp"
@@ -15,8 +23,9 @@ _cli_setup() {
     mkdir -p "$HOME/.config/termux-xfce" "$HOME/Desktop" "$sb/bin" "$TMPDIR" \
         "$PREFIX/lib" "$PREFIX/etc" "$PREFIX/bin" "$PREFIX/share/applications"
     touch "$PREFIX/etc/bash.bashrc" "$HOME/.zshrc" "$TEST_TRACE"
-    cat > "$sb/bin/stub" <<'STUB'
-#!/usr/bin/env bash
+    ln -sf "$_CLI_BASH" "$sb/bin/bash"
+    # shebang 은 실행 중인 bash 경로로 — Termux 에는 /usr/bin/env 가 없다
+    { printf '#!%s\n' "$_CLI_BASH"; cat <<'STUB'
 set -eu
 name="${0##*/}"
 printf '%s %s\n' "$name" "$*" >> "$TEST_TRACE"
@@ -70,6 +79,7 @@ esac
 echo "Unexpected fixture command: $name $*" >&2
 exit 1
 STUB
+    } > "$sb/bin/stub"
     chmod +x "$sb/bin/stub"
     for name in pkg dpkg wget curl sha256sum tar clang npm proot-distro glib-compile-schemas gio; do
         ln -s stub "$sb/bin/$name"
@@ -181,7 +191,7 @@ it 'failed npm removal preserves the Claude wrapper and binary' _test_cli_failed
 describe 'CLI — parent locale integration'
 _cli_locale_zip() {
     export KOREAN_LOCALE_ZIP="$TMPDIR/locale.zip"
-    python3 - "$KOREAN_LOCALE_ZIP" <<'PY'
+    "$_CLI_PYTHON" - "$KOREAN_LOCALE_ZIP" <<'PY'
 import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], "w") as archive:
     archive.writestr("ko/LC_MESSAGES/gtk30.mo", b"catalog fixture")
