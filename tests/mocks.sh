@@ -57,7 +57,6 @@ mock_pkg_adapter() {
     proot_pkg_add_external_repo() { _record_call "proot_pkg_add_external_repo $*"; }
     proot_pkg_install_libreoffice(){ _record_call "proot_pkg_install_libreoffice"; }
     proot_pkg_remove_libreoffice() { _record_call "proot_pkg_remove_libreoffice"; }
-    proot_pkg_install_jdk()       { _record_call "proot_pkg_install_jdk"; }
     proot_pkg_install_python_pip(){ _record_call "proot_pkg_install_python_pip"; }
     proot_pkg_install_zlib()      { _record_call "proot_pkg_install_zlib"; }
     proot_pkg_install_sasm()      { _record_call "proot_pkg_install_sasm"; }
@@ -66,7 +65,6 @@ mock_pkg_adapter() {
         MOCK_PROOT_INSTALLED_PKGS="${MOCK_PROOT_INSTALLED_PKGS} box64"
     }
     proot_pkg_install_wine_mesa() { _record_call "proot_pkg_install_wine_mesa"; }
-    proot_pkg_install_tor_deps()  { _record_call "proot_pkg_install_tor_deps"; }
     proot_pkg_install_vscode()    {
         _record_call "proot_pkg_add_external_repo vscode"
         _record_call "proot_pkg_install code"
@@ -103,13 +101,11 @@ mock_all_install_primitives_fail() {
     proot_pkg_install_deb_url()     { _record_call "proot_pkg_install_deb_url $*"; return 1; }
     proot_pkg_add_external_repo()   { _record_call "proot_pkg_add_external_repo $*"; return 1; }
     proot_pkg_install_libreoffice() { _record_call "proot_pkg_install_libreoffice"; return 1; }
-    proot_pkg_install_jdk()         { _record_call "proot_pkg_install_jdk"; return 1; }
     proot_pkg_install_python_pip()  { _record_call "proot_pkg_install_python_pip"; return 1; }
     proot_pkg_install_zlib()        { _record_call "proot_pkg_install_zlib"; return 1; }
     proot_pkg_install_sasm()        { _record_call "proot_pkg_install_sasm"; return 1; }
     proot_pkg_install_box64()       { _record_call "proot_pkg_install_box64"; return 1; }
     proot_pkg_install_wine_mesa()   { _record_call "proot_pkg_install_wine_mesa"; return 1; }
-    proot_pkg_install_tor_deps()    { _record_call "proot_pkg_install_tor_deps"; return 1; }
     proot_pkg_install_vscode()      { _record_call "proot_pkg_install_vscode"; return 1; }
     proot_setup_bwrap()             { _record_call "proot_setup_bwrap"; return 1; }
 

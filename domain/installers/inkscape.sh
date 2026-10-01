@@ -10,7 +10,7 @@ app_install_inkscape() {
 }
 
 app_remove_inkscape() {
-    termux_pkg_remove inkscape
+    termux_pkg_remove inkscape || return 1
     desktop_remove "inkscape"
 }
 

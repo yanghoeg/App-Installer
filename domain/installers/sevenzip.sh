@@ -50,7 +50,7 @@ EOF
 app_remove_sevenzip() {
     wine_exec_shell "
         rm -rf \"\$WINEPREFIX/drive_c/7-Zip\" 2>/dev/null
-    " 2>/dev/null || true
+    " || return 1
     rm -f "$_SEVENZIP_DESKTOP" "${HOME}/Desktop/sevenzip.desktop"
 }
 

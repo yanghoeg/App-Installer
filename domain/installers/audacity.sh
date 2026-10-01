@@ -10,7 +10,7 @@ app_install_audacity() {
 }
 
 app_remove_audacity() {
-    termux_pkg_remove audacity
+    termux_pkg_remove audacity || return 1
     desktop_remove "audacity"
 }
 

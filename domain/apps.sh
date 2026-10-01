@@ -33,15 +33,15 @@ APP_REGISTRY=(
     "watchexec|watchexec|개발|파일 변경 시 명령 재실행 (Termux native)"
     "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
     "burpsuite|Burp Suite|보안|웹 보안 테스트 도구 (proot)"
-    "tor_browser|Tor Browser|브라우저|익명 웹 브라우저 (proot)"
-    "notion|Notion|오피스|노트 및 협업 도구 (proot AppImage)"
+    "tor_browser|Tor Browser (기존 설치 제거)|브라우저|유지보수 중인 Linux ARM64 빌드 없음 — 신규 설치 중단"
+    "notion|Notion|오피스|노트 및 협업 도구 (Firefox 웹 앱)"
     "dbeaver|DBeaver|개발|범용 데이터베이스 클라이언트 (proot)"
     "miniforge|Miniforge3|개발|Python conda 환경 (proot)"
     "sasm|SASM|개발|어셈블러 IDE (proot)"
     "nautilus|Nautilus|유틸|파일 관리자 (proot)"
     "superfile|superfile|유틸|현대적 TUI 파일 매니저 spf (Termux native)"
     "uutils|uutils-coreutils|유틸|Rust로 재구현한 coreutils (Termux native)"
-    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC로 데스크탑 원격 접속 (wayland 세션 전용)"
+    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC 원격 접속 (wlroots 전용, Anland/KWin 미지원)"
     "ncnn_upscale|AI 업스케일 (ncnn)|미디어|Real-ESRGAN 확대 + RIFE 보간 (Vulkan 가속)"
     "wine|Wine (Box64+Staging)|Wine|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
     "hangover|Wine (Hangover)|Wine|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
@@ -55,11 +55,11 @@ APP_REGISTRY=(
     "nimf|한글 입력기 (nimf)|시스템|nimf 한글 입력 (Termux native, 흡혈귀왕 빌드)"
     "gpu_native|GPU 가속|시스템|Adreno Vulkan + Zink OpenGL (Termux native)"
     "gpu_dev|GPU 개발 도구|시스템|clvk, clinfo 등 (Termux native)"
-    "gpu_proot|GPU 가속 (proot)|시스템|KGSL mesa + Vulkan WSI Layer (proot, Snapdragon 전용)"
+    "gpu_proot|GPU 가속 (proot)|시스템|컨테이너 Turnip + Zink (KGSL 지원 드라이버 검증 후 활성화)"
     "korean_input|한글 입력기 (fcitx5)|시스템|fcitx5-hangul 한글 입력 (Termux native)"
     "korean_proot|한글 입력기 (proot)|시스템|proot 내부 한글 로케일 + nimf/fcitx5 입력기 (Ubuntu/Arch)"
     "korean_locale|한글 로케일|시스템|force_gettext.so 기반 UI 한글화 (Termux native)"
-    "api_conky_battery|Conky 배터리|Termux API|Conky 위젯에 배터리 잔량·온도 표시"
+    "api_conky_battery|패널 배터리|Termux API|XFCE 패널에 배터리 잔량·온도 표시"
     "api_brightness|밝기 조절|Termux API|XFCE 패널용 화면 밝기 조절 스크립트"
     "api_volume|볼륨 조절|Termux API|XFCE 패널용 볼륨 조절 스크립트"
     "api_notification|알림 도구|Termux API|스크립트에서 Android 알림바 전송"
@@ -97,6 +97,7 @@ app_install() {
 }
 
 # 앱 제거 — app_remove_<id> 호출
+# Removal must propagate errors and preserve launchers until the app is removed.
 app_remove() {
     local id="$1"
     "app_remove_${id}"
@@ -114,4 +115,13 @@ app_can_upgrade() {
 app_upgrade() {
     local id="$1"
     "app_upgrade_${id}"
+}
+
+# Retired installers remain addressable so users can remove existing copies.
+app_can_install() {
+    [ "$1" != tor_browser ]
+}
+
+app_is_visible() {
+    app_can_install "$1" || app_is_installed "$1"
 }

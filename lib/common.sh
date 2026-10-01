@@ -1,9 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# =============================================================================
-# lib/common.sh — 하위 호환 래퍼
-# =============================================================================
-# 이 파일을 직접 source하던 기존 스크립트 호환성 유지용.
-# 새 코드는 install.sh DI 컨테이너를 통해 어댑터를 로드할 것.
+# Shared configuration loading and proot user detection.
 
 _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${_COMMON_DIR}/lib/proot_path.sh"
@@ -26,43 +22,21 @@ _detect_proot_user() {
     echo "user"
 }
 
-_load_config() {
+_load_app_config() {
     local config="$HOME/.config/termux-xfce/config"
+    local distro_set="${PROOT_DISTRO+x}" distro="${PROOT_DISTRO-}"
+    local user_set="${PROOT_USER+x}" user="${PROOT_USER-}"
     if [ -f "$config" ]; then
-        source "$config"
-    else
-        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
+        source "$config" || return 1
     fi
-    if [ -z "${PROOT_USER:-}" ] && [ -n "${PROOT_DISTRO:-}" ]; then
-        PROOT_USER=$(ls "$(_proot_rootfs)/home/" 2>/dev/null \
-            | head -1 || echo "user")
+    if [ -n "$distro_set" ]; then
+        # A user recorded for another distro is not a default for this one.
+        if [ -z "$user_set" ] && [ "$distro" != "${PROOT_DISTRO-}" ]; then
+            unset PROOT_USER
+        fi
+        PROOT_DISTRO="$distro"
     fi
-    PROOT_USER="${PROOT_USER:-user}"
-
-    # DI: 새 어댑터 로드
-    source "${_COMMON_DIR}/ports/pkg_manager.sh"
-    source "${_COMMON_DIR}/adapters/output/pkg_termux.sh"
-    case "${PROOT_DISTRO:-}" in
-        archlinux) source "${_COMMON_DIR}/adapters/output/pkg_arch.sh" ;;
-        ubuntu)    source "${_COMMON_DIR}/adapters/output/pkg_ubuntu.sh" ;;
-        "")        ;;  # native only — proot 포트는 미구현 stub 유지
-        *)         echo "[WARN] 알 수 없는 PROOT_DISTRO: ${PROOT_DISTRO}" >&2 ;;
-    esac
-    source "${_COMMON_DIR}/domain/desktop.sh"
-}
-
-# 구 API → 새 API 매핑
-_prun()           { proot_exec "$@"; }
-_pkg_install()    { proot_pkg_install "$@"; }
-_pkg_remove()     { proot_pkg_remove "$@"; }
-_pkg_purge()      { proot_pkg_purge "$@"; }
-_pkg_update()     { proot_pkg_update; }
-_pkg_autoremove() { proot_pkg_autoremove; }
-_aur_install()    { proot_pkg_install_aur "$@"; }
-_pkg_install_deb_or_aur() { proot_pkg_install_deb_or_aur "$@"; }
-
-_install_desktop() {
-    local name="$1"
-    cp "${PREFIX}/share/applications/${name}" "${HOME}/Desktop/${name}"
-    chmod +x "${HOME}/Desktop/${name}"
+    [ -z "$user_set" ] || PROOT_USER="$user"
+    PROOT_DISTRO="${PROOT_DISTRO-ubuntu}"
+    PROOT_USER="${PROOT_USER:-$(_detect_proot_user)}"
 }

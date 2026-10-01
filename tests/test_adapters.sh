@@ -52,19 +52,38 @@ it "proot_exec → proot-distro login 사용" _test_ubuntu_exec_uses_proot_distr
 _test_ubuntu_exec_wine_has_mesa_env() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_exec_wine | grep -q "MESA_LOADER_DRIVER_OVERRIDE"
+        declare -f proot_exec_wine | grep -q -- '--login'
+        ! declare -f proot_exec_wine | grep -q 'MESA_LOADER_DRIVER_OVERRIDE=zink'
     )
 }
-it "proot_exec_wine → MESA_LOADER_DRIVER_OVERRIDE 포함" _test_ubuntu_exec_wine_has_mesa_env
+it "proot_exec_wine loads the optional container profile" _test_ubuntu_exec_wine_has_mesa_env
 
-_test_ubuntu_sasm_has_codename_workaround() {
+_test_proot_exec_does_not_force_display() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        # noble/oracular/plucky를 mantic으로 교체하는 로직이 있어야 함
-        declare -f proot_pkg_install_sasm | grep -q "mantic"
+        export PROOT_DISTRO=ubuntu PROOT_USER=testuser DISPLAY=:91
+        proot-distro() { printf '%s\n' "$@"; }
+        local out
+        out=$(proot_exec true)
+        assert_output_contains "$out" 'DISPLAY=:91'
+        unset DISPLAY
+        out=$(proot_exec true)
+        [[ "$out" != *DISPLAY=* ]]
     )
 }
-it "proot_pkg_install_sasm → Ubuntu codename 폴백 포함" _test_ubuntu_sasm_has_codename_workaround
+it "proot execution inherits DISPLAY instead of forcing a default" _test_proot_exec_does_not_force_display
+
+_test_ubuntu_sasm_uses_active_distro_apt() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        local implementation
+        implementation="$(declare -f proot_pkg_install_sasm)"
+        [[ "$implementation" == *"apt-get install -y sasm"* ]] &&
+            [[ "$implementation" != *"jammy"* ]] &&
+            [[ "$implementation" != *"sed -i"* ]]
+    )
+}
+it "proot_pkg_install_sasm → active distro APT without suite rewrite" _test_ubuntu_sasm_uses_active_distro_apt
 
 _test_ubuntu_add_repo_uses_gpg() {
     (
@@ -73,15 +92,6 @@ _test_ubuntu_add_repo_uses_gpg() {
     )
 }
 it "proot_pkg_add_external_repo → GPG 키 처리 포함" _test_ubuntu_add_repo_uses_gpg
-
-_test_ubuntu_jdk_has_fallback() {
-    (
-        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        # openjdk-21 실패 시 openjdk-11 폴백
-        declare -f proot_pkg_install_jdk | grep -q "11"
-    )
-}
-it "proot_pkg_install_jdk → openjdk-11 폴백 있음" _test_ubuntu_jdk_has_fallback
 
 # =============================================================================
 # pkg_arch.sh — proot Arch
@@ -112,13 +122,17 @@ _test_arch_aur_installs_yay_if_missing() {
 }
 it "proot_pkg_install_aur → yay 없으면 자동 설치" _test_arch_aur_installs_yay_if_missing
 
-_test_arch_box64_tries_chaotic_aur() {
+_test_arch_box64_uses_pinned_upstream_source() {
     (
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_box64 | grep -q "chaotic"
+        local implementation
+        implementation="$(declare -f proot_pkg_install_box64)"
+        [[ "$implementation" == *"box64_build_source_script"* ]] &&
+            [[ "$implementation" != *"chaotic"* ]] &&
+            [[ "$implementation" != *"lib32-mesa"* ]]
     )
 }
-it "proot_pkg_install_box64 → Chaotic-AUR 폴백 있음" _test_arch_box64_tries_chaotic_aur
+it "proot_pkg_install_box64 → pinned upstream source, no Chaotic-AUR" _test_arch_box64_uses_pinned_upstream_source
 
 _test_arch_deb_or_aur_delegates_to_aur() {
     (
@@ -164,20 +178,33 @@ _test_arch_box64_propagates_failure() {
 it "pkg_arch proot_pkg_install_box64 → 실패 시 rc!=0 전파" _test_arch_box64_propagates_failure
 
 # =============================================================================
-# proot_pkg_add_external_repo — set -e 안전성 (L10)
+# proot_pkg_add_external_repo — failure propagation without obsolete bootstrap packages
 # =============================================================================
-describe "proot_pkg_add_external_repo — set -e 안전성"
+describe "proot_pkg_add_external_repo — failure propagation"
 
-_test_ubuntu_add_repo_script_has_set_e() {
+_test_ubuntu_add_repo_script_is_strict_and_no_bootstrap_packages() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
         local captured=""
         proot_exec() { captured="$*"; }
         proot_pkg_add_external_repo "test" "https://example.com/key.asc" "deb test line"
-        [[ "$captured" == *"set -eo pipefail"* ]]
+        [[ "$captured" == *"set -eu"* ]] &&
+            [[ "$captured" != *"apt-transport-https"* ]] &&
+            [[ "$captured" != *"software-properties-common"* ]]
     )
 }
-it "proot_pkg_add_external_repo → bash -c 스크립트에 set -eo pipefail 있음" _test_ubuntu_add_repo_script_has_set_e
+it "proot_pkg_add_external_repo → strict and no obsolete bootstrap packages" _test_ubuntu_add_repo_script_is_strict_and_no_bootstrap_packages
+
+_test_ubuntu_add_repo_propagates_failure() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        proot_exec() { return 37; }
+        local rc=0
+        proot_pkg_add_external_repo "test" "https://example.com/key.asc" "deb test line" || rc=$?
+        assert_eq 37 "$rc"
+    )
+}
+it "proot_pkg_add_external_repo returns its failed proot command status" _test_ubuntu_add_repo_propagates_failure
 
 # =============================================================================
 # proot_pkg_install_deb_url — sha256 검증 (M14)
@@ -215,6 +242,9 @@ STUB
 #!/data/data/com.termux/files/usr/bin/bash
 echo "apt $*" >> "${DEB_TEST_LOG}"
 STUB
+    # Use the current interpreter on both Linux hosts and Termux devices.
+    local stub
+    for stub in "${sb}/bin/"*; do sed -i "1c\\#!${BASH}" "$stub"; done
     chmod +x "${sb}/bin/"*
 }
 
@@ -326,20 +356,20 @@ _test_arch_deb_url_unsupported() {
 it "pkg_arch.sh — .deb 직접 설치 미지원 → rc 1" _test_arch_deb_url_unsupported
 
 # =============================================================================
-# lib/common.sh — 하위 호환 래퍼
+# lib/common.sh — shared configuration
 # =============================================================================
-describe "lib/common.sh — 하위 호환 API"
+describe "lib/common.sh — shared configuration API"
 
-_test_common_exposes_legacy_api() {
+_test_common_exposes_only_current_config_api() {
     (
         source "${APP_DIR}/lib/common.sh" 2>/dev/null || true
-        declare -f _prun >/dev/null 2>&1 && \
-        declare -f _pkg_install >/dev/null 2>&1 && \
-        declare -f _pkg_remove >/dev/null 2>&1 && \
-        declare -f _load_config >/dev/null 2>&1
+        declare -f _load_app_config >/dev/null 2>&1 && \
+        declare -f _detect_proot_user >/dev/null 2>&1 && \
+        ! declare -f _load_config >/dev/null 2>&1 && \
+        ! declare -f _prun >/dev/null 2>&1
     )
 }
-it "_prun, _pkg_install, _pkg_remove, _load_config 함수 존재" _test_common_exposes_legacy_api
+it "keeps config/user helpers and removes obsolete compatibility wrappers" _test_common_exposes_only_current_config_api
 
 # =============================================================================
 # proot_pkg_install_deb_or_aur — sha256 3번째 인자 (M10)
@@ -409,24 +439,106 @@ _test_arch_deb_or_aur_ignores_sha() {
 it "pkg_arch deb_or_aur → sha256 인자를 무시하고 AUR에 위임" _test_arch_deb_or_aur_ignores_sha
 
 # =============================================================================
-# proot_pkg_install_box64 — 죽은 GitHub .deb 경로 제거 (M10)
+# proot_pkg_install_box64 — pinned upstream source build
 # =============================================================================
 describe "pkg_ubuntu.sh — box64 GitHub 경로 제거"
 
-_test_ubuntu_box64_has_no_github_api() {
+_test_ubuntu_box64_uses_pinned_upstream_source() {
     (
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        if declare -f proot_pkg_install_box64 | grep -q 'api\.github\.com'; then
-            echo "[ASSERT] proot_pkg_install_box64에 GitHub API 조회가 남아 있음" >&2
-            exit 1
-        fi
-        if declare -f proot_pkg_install_box64 | grep -q 'box64_Ubuntu_'; then
-            echo "[ASSERT] proot_pkg_install_box64에 .deb 미제공 에셋 경로가 남아 있음" >&2
-            exit 1
-        fi
-        declare -f proot_pkg_install_box64 | grep -q 'proot_pkg_install box64'
+        declare -f proot_pkg_install_box64 | grep -q 'box64_build_source_script'
+        declare -f box64_build_source_script | grep -q '2f130fab1d6e1a4ee8a71dc60cfdfcc839ad192a'
     )
 }
-it "proot_pkg_install_box64 → GitHub 릴리스 경로 없이 apt만 사용" _test_ubuntu_box64_has_no_github_api
+it "proot_pkg_install_box64 → verified upstream source revision" _test_ubuntu_box64_uses_pinned_upstream_source
+
+_test_arch_wine_mesa_has_no_32bit_package() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        ! declare -f proot_pkg_install_wine_mesa | grep -q 'lib32-'
+    )
+}
+it "Arch Wine Mesa dependencies stay 64-bit" _test_arch_wine_mesa_has_no_32bit_package
+
+_test_gpu_tools_are_distro_specific() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
+        declare -f proot_pkg_install_gpu_tools | grep -q 'mesa-utils vulkan-tools'
+    ) && (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        declare -f proot_pkg_install_gpu_tools | grep -q 'mesa-demos vulkan-tools'
+    )
+}
+it "GPU diagnostic tools use distro-specific packages" _test_gpu_tools_are_distro_specific
+
+describe 'Arch removal — propagate failures'
+_test_arch_vscode_remove_failure() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    local removed="" rc=0
+    proot_pkg_is_installed() { [ "$1" = visual-studio-code-bin ]; }
+    proot_pkg_remove() { removed="$1"; return 42; }
+    if proot_pkg_remove_vscode; then rc=0; else rc=$?; fi
+    assert_eq 42 "$rc"
+    assert_eq visual-studio-code-bin "$removed"
+}
+it 'VS Code removal failure is not hidden by trying a different package' _test_arch_vscode_remove_failure
+
+_test_arch_autoremove_failure() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    # Execute the actual container snippet with a fake pacman, without sudo/proot.
+    proot_exec() { shift; "$@"; }
+    pacman() {
+        if [ "$1" = -Qdtq ]; then echo unused-package; return 0; fi
+        return 42
+    }
+    export -f pacman
+    local rc=0
+    if proot_pkg_autoremove; then rc=0; else rc=$?; fi
+    assert_eq 42 "$rc"
+}
+it 'orphan package removal failure is returned from the container shell' _test_arch_autoremove_failure
+
+_test_arch_autoremove_empty() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    proot_exec() { shift; "$@"; }
+    pacman() {
+        if [ "$1" = -Qdtq ]; then return 1; fi
+        return 42
+    }
+    export -f pacman
+    proot_pkg_autoremove
+}
+it 'no orphan packages remains a successful no-op' _test_arch_autoremove_empty
+
+describe 'Pinned source-build contracts'
+
+_test_box64_build_uses_private_temp_dir() {
+    (
+        source "${APP_DIR}/lib/build_box64.sh"
+        local script
+        script="$(box64_build_source_script)"
+        [[ "$script" == *'mktemp -d "${TMPDIR:-/tmp}/box64-${box64_version}.XXXXXX"'* ]] &&
+            [[ "$script" == *"trap 'rm -rf \"\$box64_src\"' EXIT"* ]] &&
+            [[ "$script" != *'/tmp/box64-'* ]] &&
+            [[ "$script" == *'2f130fab1d6e1a4ee8a71dc60cfdfcc839ad192a'* ]]
+    )
+}
+it 'Box64 source build uses a trapped mktemp directory and exact revision' _test_box64_build_uses_private_temp_dir
+
+_test_arch_sasm_uses_pinned_build_and_install_target() {
+    (
+        source "${APP_DIR}/adapters/output/pkg_arch.sh"
+        local packages='' command=''
+        proot_pkg_install() { packages="$*"; }
+        proot_exec() { command="$*"; }
+        proot_pkg_install_sasm
+        [[ "$packages" == 'nasm qt5-base qt5-tools make gcc git' ]] &&
+            [[ "$command" == *'sasm_version='\''3.16.0'\'''* ]] &&
+            [[ "$command" == *'c622d5a0f00e1391171b372dac42af0f54dc2538'* ]] &&
+            [[ "$command" == *'make install'* ]] &&
+            [[ "$command" == *'/usr/share/sasm'* ]]
+    )
+}
+it 'Arch SASM installs the pinned release with its runtime data' _test_arch_sasm_uses_pinned_build_and_install_target
 
 print_results

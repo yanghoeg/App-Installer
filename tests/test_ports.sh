@@ -23,13 +23,12 @@ PKG_PROOT_CONTRACTS=(
     proot_pkg_add_external_repo
     proot_pkg_install_libreoffice
     proot_pkg_remove_libreoffice
-    proot_pkg_install_jdk
     proot_pkg_install_python_pip
     proot_pkg_install_zlib
     proot_pkg_install_sasm
     proot_pkg_install_box64
     proot_pkg_install_wine_mesa
-    proot_pkg_install_tor_deps
+    proot_pkg_install_gpu_tools
 )
 
 PKG_TERMUX_CONTRACTS=(

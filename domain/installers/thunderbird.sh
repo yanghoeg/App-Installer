@@ -10,7 +10,7 @@ app_install_thunderbird() {
 }
 
 app_remove_thunderbird() {
-    termux_pkg_remove thunderbird
+    termux_pkg_remove thunderbird || return 1
     desktop_remove "thunderbird"
 }
 

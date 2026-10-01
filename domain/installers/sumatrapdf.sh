@@ -8,8 +8,8 @@
 _SUMATRA_DESKTOP="${PREFIX}/share/applications/sumatrapdf.desktop"
 _SUMATRA_WIN_PATH='C:\Program Files\SumatraPDF\SumatraPDF.exe'
 
-_SUMATRA_VER="3.5.2"
-_SUMATRA_SHA256="66ccb395c9184dce6822dfbb9970c877383b3ead6d9417b5106a844aac512989"
+_SUMATRA_VER="3.6.1"
+_SUMATRA_SHA256="98b33a518d42986856d225064b0cd2d3643ecf78cbf84ab873d26cc51877a544"
 
 _sumatrapdf_portable_url() {
     local ver="${1:-${_SUMATRA_VER}}"
@@ -63,7 +63,7 @@ EOF
 app_remove_sumatrapdf() {
     wine_exec_shell "
         rm -rf \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\" 2>/dev/null
-    " 2>/dev/null || true
+    " || return 1
     rm -f "$_SUMATRA_DESKTOP" "${HOME}/Desktop/sumatrapdf.desktop"
 }
 

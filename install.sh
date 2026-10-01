@@ -21,19 +21,7 @@ esac
 # -----------------------------------------------------------------------------
 # 설정 로드
 # -----------------------------------------------------------------------------
-_load_config() {
-    local config="$HOME/.config/termux-xfce/config"
-    if [ -f "$config" ]; then
-        source "$config"
-    else
-        PROOT_DISTRO="${PROOT_DISTRO:-ubuntu}"
-    fi
-    if [ -z "${PROOT_USER:-}" ]; then
-        PROOT_USER=$(_detect_proot_user)
-    fi
-}
-
-_load_config
+_load_app_config
 
 # -----------------------------------------------------------------------------
 # DI: 포트 + 어댑터 로드
@@ -160,6 +148,7 @@ _run_yad_notebook() {
             for _entry in "${APP_REGISTRY[@]}"; do
                 IFS='|' read -r _id _name _category _desc <<< "$_entry"
                 _category_in_tab "$_category" "$_tab_cats" || continue
+                app_is_visible "$_id" || continue
                 rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
             done
 
@@ -199,6 +188,7 @@ _run_yad_flat() {
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
         [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
+        app_is_visible "$_id" || continue
         rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 
@@ -229,6 +219,7 @@ _run_zenity() {
     for _entry in "${APP_REGISTRY[@]}"; do
         IFS='|' read -r _id _name _category _desc <<< "$_entry"
         [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
+        app_is_visible "$_id" || continue
         zenity_rows+=("FALSE" "$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
     done
 

@@ -9,7 +9,7 @@ app_install_vlc() {
 }
 
 app_remove_vlc() {
-    termux_pkg_remove vlc
+    termux_pkg_remove vlc || return 1
     desktop_remove "vlc"
 }
 

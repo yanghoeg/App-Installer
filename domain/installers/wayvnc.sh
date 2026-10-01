@@ -1,19 +1,40 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # DOMAIN: wayvnc — Termux native (x11-repo)
-# wlroots 기반 Wayland 컴포지터용 VNC 서버. 이 프로젝트의 wayland 어댑터는
-# labwc(wlroots) 를 쓰므로 그대로 붙는다. X11 세션에서는 동작하지 않는다.
+# wlroots 기반 Wayland 컴포지터용 VNC 서버. Anland/KWin과 X11은 지원하지 않는다.
 # GUI 항목이 아니라 세션에 붙는 서버라 .desktop 런처는 생성하지 않는다.
 
 _WAYVNC_LAUNCHER="${PREFIX}/bin/wayvnc-start"
 
+_wayvnc_check_compositor() {
+    local display_server="${DISPLAY_SERVER:-}"
+    if [ -z "$display_server" ] && [ -f "$HOME/.config/termux-xfce/config" ]; then
+        display_server=$(. "$HOME/.config/termux-xfce/config"; printf '%s' "${DISPLAY_SERVER:-}") || return 1
+    fi
+    case "${XFCE4_SESSION_COMPOSITOR:-}:${XDG_CURRENT_DESKTOP:-}:${WAYLAND_DISPLAY:-}:${ANLAND:-}" in
+        *kwin*|*KDE*|*wayland-termux-xfce*|*:1)
+            echo "[ERROR] wayvnc는 Anland/KWin을 지원하지 않습니다. wlroots 세션이 필요합니다." >&2
+            return 1 ;;
+    esac
+    # With no active session, --display wayland selects this project's KWin backend.
+    if [ -z "${WAYLAND_DISPLAY:-}" ] && [ "$display_server" = wayland ]; then
+        echo "[ERROR] 현재 Wayland 설정은 Anland/KWin입니다. wayvnc는 wlroots 전용입니다." >&2
+        return 1
+    fi
+}
+
 _wayvnc_write_launcher() {
-    cat > "$_WAYVNC_LAUNCHER" << 'LAUNCHEOF'
+    {
+    cat << 'LAUNCHEOF'
 #!/data/data/com.termux/files/usr/bin/bash
 # 실행 중인 wayland 세션에 wayvnc를 붙인다.
 #   wayvnc-start [<bind-addr> [<port>]]   기본값 127.0.0.1 5900
 # 외부에서 접속하려면 0.0.0.0 으로 바인드할 것 (인증 없이 화면이 노출되므로 주의).
 
 set -uo pipefail
+LAUNCHEOF
+    declare -f _wayvnc_check_compositor
+    cat << 'LAUNCHEOF'
+_wayvnc_check_compositor || exit 1
 _addr="${1:-127.0.0.1}"
 _port="${2:-5900}"
 
@@ -37,24 +58,27 @@ if [ -z "${WAYLAND_DISPLAY:-}" ]; then
     exit 1
 fi
 export WAYLAND_DISPLAY
+_wayvnc_check_compositor || exit 1
 
 echo "wayvnc: WAYLAND_DISPLAY=$WAYLAND_DISPLAY → ${_addr}:${_port}"
 exec wayvnc "$_addr" "$_port"
 LAUNCHEOF
+    } > "$_WAYVNC_LAUNCHER" || return 1
     chmod +x "$_WAYVNC_LAUNCHER"
 }
 
 app_install_wayvnc() {
+    _wayvnc_check_compositor || return 1
     termux_pkg_enable_repo x11-repo || return 1
     termux_pkg_install wayvnc || return 1
     _wayvnc_write_launcher || return 1
 
     echo "[wayvnc] 'wayvnc-start' 로 실행합니다 (기본 127.0.0.1:5900)."
-    echo "[wayvnc] wayland 세션 전용 — --display wayland 로 설치한 경우에만 동작합니다."
+    echo "[wayvnc] wlroots 세션 전용 — Anland/KWin 및 X11은 지원하지 않습니다."
 }
 
 app_remove_wayvnc() {
-    termux_pkg_remove wayvnc
+    termux_pkg_remove wayvnc || return 1
     rm -f "$_WAYVNC_LAUNCHER"
 }
 

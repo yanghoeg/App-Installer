@@ -6,13 +6,13 @@ app_install_nautilus() {
     proot_pkg_update || return 1
     proot_pkg_install nautilus || return 1
     proot_setup_bwrap || return 1
-    desktop_register "nautilus" "Nautilus" \
-        'bash -c "prun env XDG_SESSION_TYPE=x11 GSK_RENDERER=cairo GDK_RENDERING=image dbus-run-session -- nautilus </dev/null >/dev/null 2>&1 &"' \
+    desktop_register_proot "nautilus" "Nautilus" \
+        'env XDG_SESSION_TYPE=x11 GSK_RENDERER=cairo GDK_RENDERING=image dbus-run-session -- nautilus' \
         "org.gnome.Nautilus" "System;FileManager;"
 }
 
 app_remove_nautilus() {
-    proot_pkg_purge nautilus 2>/dev/null || true
+    proot_pkg_purge nautilus || return 1
     desktop_remove "nautilus"
 }
 

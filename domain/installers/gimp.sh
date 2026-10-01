@@ -10,7 +10,7 @@ app_install_gimp() {
 }
 
 app_remove_gimp() {
-    termux_pkg_remove gimp
+    termux_pkg_remove gimp || return 1
     desktop_remove "gimp"
 }
 

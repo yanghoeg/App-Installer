@@ -11,14 +11,18 @@ CLAUDE_CODE_NPM_PKG="@anthropic-ai/claude-code-linux-arm64"
 CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # 핀 버전 — Termux /login 회귀 조사 이력은 docs/claude-code-login-regression.md 참조.
 # 2026-09-05: 2.1.132 → 2.1.261 상향. 근거는 GHSA-7835-87q9-rgvv(HIGH, <2.1.163) 해소 +
-# npm latest 대조. 실기기 /login 2026-09-06 검증 완료 — 회귀 시 롤백 절차는 위 문서 참조.
+# npm latest 대조. 실기기 /login 2026-09-06 검증 완료.
+# 2026-10-01: 2.1.261 → 2.1.286 상향. 신규 advisory는 없다(미해소 최상 하한은 여전히 2.1.163) —
+# npm latest 추종이 근거. 2.1.262~2.1.286 CHANGELOG에 런처/네이티브 바이너리 회귀 항목 없음.
+# 회귀 시 롤백 절차는 위 문서 참조.
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
-CLAUDE_CODE_PIN_VERSION="2.1.261"
+CLAUDE_CODE_PIN_VERSION="2.1.286"
 
 # 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
 # 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
 declare -gA CLAUDE_CODE_TARBALL_SHA256=(
     ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
+    ["2.1.286"]="ab87947d331c045aa6fc3c7934d31d8cca5fcdf676d10bcae0b0adfc5210f397"
 )
 
 _claude_code_fetch_latest_version() {
@@ -36,14 +40,28 @@ _claude_code_installed_version() {
     cat "${CLAUDE_CODE_VERSION_FILE}"
 }
 
+# 실행 중인 claude 위에 제자리 덮어쓰기를 하면 안 된다 — grun(ld.so)이 바이너리를 mmap으로
+# 올리므로 커널 deny-write가 걸리지 않아 ETXTBSY도 안 나고, 쓰는 순간 실행 중 세션이
+# SIGBUS로 조용히 죽는다. staging 에 풀고 rename 으로 바꿔 끼우면 옛 inode가 살아남아
+# 돌고 있는 claude 안에서 업그레이드를 돌려도 그 세션이 보존된다.
 _claude_code_download_native() {
     local version="$1"
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
     mkdir -p "${CLAUDE_CODE_PREFIX}"
-    local tarball="${CLAUDE_CODE_PREFIX}/native.tgz"
-    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" || return 1
-    tar xzf "$tarball" -C "${CLAUDE_CODE_PREFIX}" --strip-components=1 || return 1
+    # staging 은 반드시 PREFIX 안 — rename 하려면 같은 파일시스템이어야 한다
+    local stage="${CLAUDE_CODE_PREFIX}/.stage"
+    rm -rf "$stage" && mkdir -p "$stage" || return 1
+    local tarball="${stage}/native.tgz"
+    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" \
+        || { rm -rf "$stage"; return 1; }
+    tar xzf "$tarball" -C "$stage" --strip-components=1 || { rm -rf "$stage"; return 1; }
     rm -f "$tarball"
+    local f
+    for f in "$stage"/*; do
+        [ -e "$f" ] || continue
+        mv -f "$f" "${CLAUDE_CODE_PREFIX}/${f##*/}" || { rm -rf "$stage"; return 1; }
+    done
+    rm -rf "$stage"
     chmod +x "${CLAUDE_CODE_PREFIX}/claude"
     printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
 }
@@ -51,13 +69,15 @@ _claude_code_download_native() {
 _claude_code_remove_npm_wrapper() {
     command -v npm >/dev/null 2>&1 || return 0
     npm ls -g --depth=0 2>/dev/null | grep -q "@anthropic-ai/claude-code" || return 0
-    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+    npm uninstall -g @anthropic-ai/claude-code
 }
 
+# RC 전역 LD_PRELOAD(부모 domain/termux_env.sh 가 넣는 bionic force_gettext.so)는
+# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → grun 실행 전에 env -u 로 떼어낸다.
 _claude_code_install_wrapper() {
     cat > "${CLAUDE_CODE_BIN_PATH}" << EOF
 #!${PREFIX}/bin/bash
-exec grun "${CLAUDE_CODE_PREFIX}/claude" "\$@"
+exec env -u LD_PRELOAD grun "${CLAUDE_CODE_PREFIX}/claude" "\$@"
 EOF
     chmod +x "${CLAUDE_CODE_BIN_PATH}"
 }
@@ -82,7 +102,7 @@ EOF
 app_install_claude_code() {
     termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner || return 1
-    _claude_code_remove_npm_wrapper
+    _claude_code_remove_npm_wrapper || return 1
     local version
     version=$(_claude_code_fetch_latest_version)
     [ -z "$version" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
@@ -165,10 +185,10 @@ app_upgrade_claude_code() {
 }
 
 app_remove_claude_code() {
-    rm -f "${CLAUDE_CODE_BIN_PATH}"
-    rm -rf "${CLAUDE_CODE_PREFIX}"
     # npm 글로벌 패키지가 남아 있으면 bin/claude 심볼릭이 재생성돼 되살아남 → 함께 제거
-    _claude_code_remove_npm_wrapper
+    _claude_code_remove_npm_wrapper || return 1
+    rm -f "${CLAUDE_CODE_BIN_PATH}" || return 1
+    rm -rf "${CLAUDE_CODE_PREFIX}"
 }
 
 app_is_installed_claude_code() {

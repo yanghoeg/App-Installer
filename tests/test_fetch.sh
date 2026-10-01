@@ -27,6 +27,9 @@ STUB
     fi
     # curl 폴백은 항상 실패 — wget 경로/실패 전파를 명확히 갈라 보기 위함
     printf '#!/data/data/com.termux/files/usr/bin/bash\nexit 1\n' > "${sb}/bin/curl"
+    # Use the current interpreter on both Linux hosts and Termux devices.
+    local stub
+    for stub in "${sb}/bin/"*; do sed -i "1c\\#!${BASH}" "$stub"; done
     chmod +x "${sb}/bin/"*
 }
 

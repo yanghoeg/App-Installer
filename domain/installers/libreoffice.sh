@@ -11,8 +11,8 @@ app_install_libreoffice() {
 }
 
 app_remove_libreoffice() {
-    proot_pkg_remove_libreoffice 2>/dev/null || true
-    proot_pkg_autoremove
+    proot_pkg_remove_libreoffice || return 1
+    proot_pkg_autoremove || return 1
     desktop_remove_prefix "libreoffice"
 }
 

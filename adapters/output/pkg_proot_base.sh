@@ -9,8 +9,10 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/fetch.sh"
 
 proot_exec() {
+    local -a display_env=()
+    [ -z "${DISPLAY:-}" ] || display_env=(env DISPLAY="$DISPLAY")
     proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
-        --shared-tmp -- env DISPLAY="${DISPLAY:-:0.0}" "$@"
+        --shared-tmp -- "${display_env[@]}" "$@"
 }
 
 # sudo PATH 초기화 문제 해결:
@@ -28,9 +30,6 @@ proot_setup_sudo_path() {
         done
     " 2>/dev/null || true
 }
-
-# Tor Browser 의존성 — distro별로 패키지명이 다름 (override in distro adapter)
-proot_pkg_install_tor_deps() { proot_pkg_install curl dbus-glib; }
 
 # proot 내부에 bwrap 스텁 설치 — GTK4 앱이 glycin(SVG 로더)을 쓸 때 필요
 # bwrap는 user namespace가 필요하지만 proot에선 없음 → 스텁으로 샌드박스 없이 직접 exec
@@ -58,12 +57,6 @@ chmod +x /usr/local/bin/bwrap'
 }
 
 proot_exec_wine() {
-    proot-distro login "${PROOT_DISTRO}" --user "${PROOT_USER}" \
-        --shared-tmp -- env \
-            DISPLAY="${DISPLAY:-:0.0}" \
-            MESA_LOADER_DRIVER_OVERRIDE=zink \
-            TU_DEBUG=noconform \
-            ZINK_DESCRIPTORS=lazy \
-            MESA_NO_ERROR=1 \
-        "$@"
+    # Read the optional container GPU profile rather than forcing host settings.
+    proot_exec bash --login -c 'exec "$@"' wine-exec "$@"
 }

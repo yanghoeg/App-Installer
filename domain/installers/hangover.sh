@@ -95,10 +95,10 @@ app_install_hangover() {
 }
 
 app_remove_hangover() {
-    termux_pkg_is_installed hangover && termux_pkg_remove hangover
-    rm -f "$_HANGOVER_BIN"
-    desktop_remove "hangover"
-    desktop_remove "hangover-winecfg"
+    if termux_pkg_is_installed hangover; then termux_pkg_remove hangover || return 1; fi
+    rm -f "$_HANGOVER_BIN" || return 1
+    desktop_remove "hangover" || return 1
+    desktop_remove "hangover-winecfg" || return 1
 
     # 디스패처: 다른 백엔드가 남아 있으면 그쪽으로 넘기고, 없으면 함께 제거
     if [ -x "$_WINE_BOX64_BIN" ]; then
