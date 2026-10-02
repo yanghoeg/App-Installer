@@ -30,7 +30,11 @@ proot_pkg_remove()       { _proot_ubuntu_remove remove "$@"; }
 proot_pkg_purge()        { _proot_ubuntu_remove purge "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo apt update; }
 proot_pkg_autoremove()   { proot_exec sudo apt autoremove -y; }
-proot_pkg_is_installed() { proot_exec dpkg -s "$1" &>/dev/null; }
+proot_pkg_is_installed() {
+    local state
+    state=$(proot_exec dpkg-query -W -f='${Status}' -- "$1" 2>/dev/null) || return 1
+    [ "${state#* }" = 'ok installed' ]
+}
 
 proot_pkg_install_aur() {
     echo "[WARN] Ubuntu에는 AUR 없음, apt 폴백 시도: $*" >&2

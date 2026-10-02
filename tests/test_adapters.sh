@@ -28,13 +28,15 @@ _test_termux_remove_uses_uninstall() {
 }
 it "termux_pkg_remove → 'pkg uninstall -y' 사용" _test_termux_remove_uses_uninstall
 
-_test_termux_is_installed_checks_list() {
+_test_termux_is_installed_checks_status() {
     (
         source "${APP_DIR}/adapters/output/pkg_termux.sh"
-        grep -q "list-installed" <<< "$(declare -f termux_pkg_is_installed)"
+        local implementation
+        implementation=$(declare -f termux_pkg_is_installed)
+        [[ "$implementation" == *'dpkg-query'* ]] && [[ "$implementation" == *'ok installed'* ]]
     )
 }
-it "termux_pkg_is_installed → 'pkg list-installed' 사용" _test_termux_is_installed_checks_list
+it "termux_pkg_is_installed → exact dpkg installed status" _test_termux_is_installed_checks_status
 
 # =============================================================================
 # pkg_ubuntu.sh — proot Ubuntu

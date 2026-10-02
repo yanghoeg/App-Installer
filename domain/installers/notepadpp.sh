@@ -21,6 +21,9 @@ app_install_notepadpp() {
         app_install_wine || return 1
     fi
 
+    local context
+    context=$(wine_backend_context) || return 1
+
     local url
     url=$(_notepadpp_portable_url)
 
@@ -32,10 +35,12 @@ app_install_notepadpp() {
         unzip -qo \${TMPDIR:-/tmp}/npp.zip -d \"\$WINEPREFIX/drive_c/Program Files/Notepad++\"
         rm -f \${TMPDIR:-/tmp}/npp.zip
         [ -f \"\$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe\" ]
-    "; then
+    " "$context"; then
         echo "[ERROR] Notepad++ 다운로드/설치 실패" >&2
         return 1
     fi
+
+    wine_app_record "notepadpp" "$context" || return 1
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_NOTEPADPP_DESKTOP" << 'EOF'
@@ -44,7 +49,7 @@ Version=1.0
 Type=Application
 Name=Notepad++
 Comment=텍스트 에디터 (Wine)
-Exec=bash -c "wine 'C:\\Program Files\\Notepad++\\notepad++.exe' %f </dev/null >/dev/null 2>&1 &"
+Exec=wine-app-notepadpp %f
 Icon=wine
 Categories=Development;TextEditor;
 MimeType=text/plain;text/x-c;text/x-c++;text/x-java;application/xml;
@@ -61,12 +66,9 @@ EOF
 }
 
 app_remove_notepadpp() {
-    wine_exec_shell "
-        rm -rf \"\$WINEPREFIX/drive_c/Program Files/Notepad++\" 2>/dev/null
-    " || return 1
-    rm -f "$_NOTEPADPP_DESKTOP" "${HOME}/Desktop/notepadpp.desktop"
+    wine_app_remove "notepadpp"
 }
 
 app_is_installed_notepadpp() {
-    [ -e "$_NOTEPADPP_DESKTOP" ]
+    wine_app_is_installed "notepadpp"
 }

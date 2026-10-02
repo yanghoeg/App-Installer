@@ -32,6 +32,7 @@ CODEX_REAL_BIN="${CODEX_PREFIX}/codex"
 CODEX_BIN_PATH="${PREFIX}/bin/codex"
 # 헬퍼 파일명은 upstream이 고정 — 바꾸면 Code Mode가 못 찾는다.
 CODEX_CMH_BIN="${CODEX_PREFIX}/codex-code-mode-host"
+CODEX_INSTALL_MANIFEST="${CODEX_PREFIX}/installation"
 CODEX_TARBALL_MEMBER="codex-aarch64-unknown-linux-musl"
 CODEX_CMH_TARBALL_MEMBER="codex-code-mode-host-aarch64-unknown-linux-musl"
 
@@ -57,34 +58,89 @@ _codex_installed_version() {
     "${CODEX_REAL_BIN}" --version 2>/dev/null | awk '{print $NF}'
 }
 
-# 핀 버전 tarball에서 바이너리 하나를 받아 교체한다.
-# 실행 중이어도 안전하도록 임시 파일에 풀고 mv로 갈아끼운다.
+# 핀 버전 tarball에서 바이너리 하나를 받아 지정된 staging 경로에 준비한다.
 # _codex_fetch_binary <ver> <tarball-member> <dest> <sha256>
 _codex_fetch_binary() {
     local ver="$1" member="$2" dest="$3" sha="$4"
     local url="https://github.com/openai/codex/releases/download/rust-v${ver}/${member}.tar.gz"
-    local tmp_tgz="${TMPDIR:-/tmp}/${member}-${ver}.tar.gz"
-    local tmp_bin="${dest}.new"
-    mkdir -p "${CODEX_PREFIX}"
-    fetch_verified "$url" "$tmp_tgz" "$sha" || return 1
-    if ! tar xzf "$tmp_tgz" -O "${member}" > "$tmp_bin"; then
-        rm -f "$tmp_tgz" "$tmp_bin"; return 1
+    local work
+    [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+    mkdir -p "${dest%/*}" || return 1
+    work=$(mktemp -d "${dest%/*}/.codex-fetch.XXXXXX") || return 1
+    if ! fetch_verified "$url" "$work/archive.tar.gz" "$sha" ||
+       ! tar xzf "$work/archive.tar.gz" -O "$member" > "$work/binary" ||
+       [ ! -s "$work/binary" ] || ! chmod +x "$work/binary" ||
+       ! mv -f -- "$work/binary" "$dest"; then
+        rm -rf -- "$work"
+        return 1
     fi
-    rm -f "$tmp_tgz"
-    chmod +x "$tmp_bin"
-    mv -f "$tmp_bin" "$dest"
+    rm -rf -- "$work"
 }
 
 _codex_download() {
-    local ver="$1"
-    _codex_fetch_binary "$ver" "${CODEX_TARBALL_MEMBER}" "${CODEX_REAL_BIN}" \
-        "${CODEX_TARBALL_SHA256[$ver]:-}" || return 1
-    _codex_fetch_binary "$ver" "${CODEX_CMH_TARBALL_MEMBER}" "${CODEX_CMH_BIN}" \
-        "${CODEX_CMH_SHA256[$ver]:-}"
+    local ver="$1" stage file main_hash helper_hash
+    local -a files=(codex codex-code-mode-host installation)
+    if ! [[ "${CODEX_TARBALL_SHA256[$ver]:-}" =~ ^[0-9a-f]{64}$ ]] ||
+       ! [[ "${CODEX_CMH_SHA256[$ver]:-}" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "[ERROR] Codex 본체/헬퍼 sha256이 등록되지 않은 버전입니다: $ver" >&2
+        return 1
+    fi
+    mkdir -p "$CODEX_PREFIX" || return 1
+    stage=$(mktemp -d "$CODEX_PREFIX/.codex-install.XXXXXX") || return 1
+    if ! _codex_fetch_binary "$ver" "$CODEX_TARBALL_MEMBER" "$stage/codex" "${CODEX_TARBALL_SHA256[$ver]}" ||
+       ! _codex_fetch_binary "$ver" "$CODEX_CMH_TARBALL_MEMBER" "$stage/codex-code-mode-host" "${CODEX_CMH_SHA256[$ver]}" ||
+       ! main_hash=$(sha256sum "$stage/codex") ||
+       ! helper_hash=$(sha256sum "$stage/codex-code-mode-host") ||
+       ! printf '%s %s %s\n' "$ver" "${main_hash%% *}" "${helper_hash%% *}" > "$stage/installation"; then
+        rm -rf -- "$stage"
+        return 1
+    fi
+    # A failed helper download or publication must preserve the installed pair.
+    # The manifest is published last and records the release and verified bytes.
+    for file in "${files[@]}"; do
+        if [ -e "$CODEX_PREFIX/$file" ] || [ -L "$CODEX_PREFIX/$file" ]; then
+            if [ -d "$CODEX_PREFIX/$file" ] || ! cp -a -- "$CODEX_PREFIX/$file" "$stage/old-$file"; then
+                rm -rf -- "$stage"
+                return 1
+            fi
+        fi
+    done
+    for file in "${files[@]}"; do
+        if ! mv -f -- "$stage/$file" "$CODEX_PREFIX/$file"; then
+            for file in "${files[@]}"; do
+                if [ -e "$stage/old-$file" ] || [ -L "$stage/old-$file" ]; then
+                    mv -f -- "$stage/old-$file" "$CODEX_PREFIX/$file" || {
+                        echo "[ERROR] Codex 복구 실패: $file (백업: $stage/old-$file)" >&2
+                        return 1
+                    }
+                else
+                    rm -f -- "$CODEX_PREFIX/$file" || return 1
+                fi
+            done
+            rm -rf -- "$stage"
+            return 1
+        fi
+    done
+    rm -rf -- "$stage"
+}
+
+_codex_install_complete() {
+    local ver="$1" recorded main_hash helper_hash got
+    [ -x "$CODEX_REAL_BIN" ] && [ -x "$CODEX_CMH_BIN" ] && [ -r "$CODEX_INSTALL_MANIFEST" ] || return 1
+    IFS=' ' read -r recorded main_hash helper_hash < "$CODEX_INSTALL_MANIFEST" || return 1
+    [ "$recorded" = "$ver" ] && [ "$(_codex_installed_version)" = "$ver" ] || return 1
+    [[ "$main_hash" =~ ^[0-9a-f]{64}$ ]] && [[ "$helper_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+    got=$(sha256sum "$CODEX_REAL_BIN") || return 1
+    [ "${got%% *}" = "$main_hash" ] || return 1
+    got=$(sha256sum "$CODEX_CMH_BIN") || return 1
+    [ "${got%% *}" = "$helper_hash" ]
 }
 
 _codex_install_wrapper() {
-    cat > "${CODEX_BIN_PATH}" << EOF
+    local stage
+    mkdir -p "${CODEX_BIN_PATH%/*}" || return 1
+    stage=$(mktemp "${CODEX_BIN_PATH}.XXXXXX") || return 1
+    if ! cat > "$stage" << EOF
 #!${PREFIX}/bin/bash
 # codex는 musl 정적 바이너리 — Bionic 리졸버/CA 경로를 못 쓴다. 단일 바이너리라
 # 백그라운드 서버(데몬)도 쓸 수 없다. 상세는 app-installer
@@ -93,7 +149,14 @@ export SSL_CERT_FILE="\${SSL_CERT_FILE:-${PREFIX}/etc/tls/cert.pem}"
 exec proot -b "${PREFIX}/etc/resolv.conf:/etc/resolv.conf" "${CODEX_REAL_BIN}" \\
     -c features.daemon_auto_start=false "\$@"
 EOF
-    chmod +x "${CODEX_BIN_PATH}"
+    then
+        rm -f -- "$stage"
+        return 1
+    fi
+    if ! chmod +x "$stage" || ! mv -f -- "$stage" "$CODEX_BIN_PATH"; then
+        rm -f -- "$stage"
+        return 1
+    fi
 }
 
 # TUR dpkg 패키지가 남아 있으면 $PREFIX/bin/codex 소유권이 겹친다 → 먼저 제거
@@ -107,8 +170,8 @@ _codex_remove_tur_pkg() {
 app_install_codex() {
     termux_pkg_install proot || return 1
     _codex_remove_tur_pkg || return 1
-    # 헬퍼가 빠진 과거 설치도 여기서 메꿔진다.
-    if [ "$(_codex_installed_version)" != "${CODEX_PIN_VERSION}" ] || [ ! -x "${CODEX_CMH_BIN}" ]; then
+    # Recover missing, mismatched or damaged helpers, including pre-manifest installs.
+    if ! _codex_install_complete "$CODEX_PIN_VERSION"; then
         _codex_download "${CODEX_PIN_VERSION}" || return 1
     fi
     _codex_install_wrapper || return 1
@@ -121,7 +184,7 @@ app_upgrade_codex() {
         echo "[ERROR] codex가 설치되어 있지 않습니다" >&2
         return 1
     fi
-    if [ "$(_codex_installed_version)" = "${CODEX_PIN_VERSION}" ] && [ -x "${CODEX_CMH_BIN}" ]; then
+    if _codex_install_complete "$CODEX_PIN_VERSION"; then
         echo "[INFO] 이미 최신 버전입니다 (${CODEX_PIN_VERSION})"
         return 2
     fi
@@ -137,4 +200,8 @@ app_remove_codex() {
 
 app_is_installed_codex() {
     [ -x "${CODEX_BIN_PATH}" ] && [ -x "${CODEX_REAL_BIN}" ]
+}
+
+app_verify_codex() {
+    _codex_install_complete "$CODEX_PIN_VERSION"
 }

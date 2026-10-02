@@ -244,15 +244,17 @@ _test_wine_exec_skips_login_hooks_and_preserves_arguments() {
 
 _test_wine_removal_deletes_source_box64_without_package_entry() {
     _review_setup
+    wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER" "$PROOT_ROOTFS_BASE"
     proot_pkg_is_installed() { return 1; }
     proot_pkg_remove() { echo 'unexpected package removal' >&2; return 42; }
     local snippet=''
     proot_exec() {
         [ "$1" = sudo ] && [ "$2" = bash ] && [ "$3" = -c ]
-        snippet="$4"
+        printf '%s' "$4" > "$HOME/proot-removal.sh"
     }
     touch "$_WINE_BIN" "$_WINE_DESKTOP"
     app_remove_wine
+    snippet=$(cat "$HOME/proot-removal.sh")
     [[ "$snippet" == *'rm -f /usr/local/bin/box64'* ]]
     # Execute the cleanup with every container absolute path mapped into sandbox.
     snippet="${snippet//\/usr\/local\/bin/$PREFIX/bin}"

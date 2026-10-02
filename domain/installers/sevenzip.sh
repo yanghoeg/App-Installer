@@ -15,6 +15,9 @@ app_install_sevenzip() {
         app_install_wine || return 1
     fi
 
+    local context
+    context=$(wine_backend_context) || return 1
+
     echo "[7-Zip] 다운로드 및 설치 중... (백엔드: $(wine_backend))"
     wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
@@ -22,7 +25,9 @@ app_install_sevenzip() {
         wine \${TMPDIR:-/tmp}/7z_install.exe /S 2>/dev/null || true
         rm -f \${TMPDIR:-/tmp}/7z_install.exe
         test -f \"\$WINEPREFIX/drive_c/7-Zip/7zFM.exe\"
-    " || { echo "[ERROR] 7-Zip 설치 실패" >&2; return 1; }
+    " "$context" || { echo "[ERROR] 7-Zip 설치 실패" >&2; return 1; }
+
+    wine_app_record "sevenzip" "$context" || return 1
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_SEVENZIP_DESKTOP" << 'EOF'
@@ -31,7 +36,7 @@ Version=1.0
 Type=Application
 Name=7-Zip
 Comment=파일 압축/해제 (Wine)
-Exec=bash -c "wine 'C:\\7-Zip\\7zFM.exe' %f </dev/null >/dev/null 2>&1 &"
+Exec=wine-app-sevenzip %f
 Icon=wine
 Categories=Utility;Archiving;
 MimeType=application/zip;application/x-7z-compressed;application/gzip;application/x-tar;application/x-rar;
@@ -48,12 +53,9 @@ EOF
 }
 
 app_remove_sevenzip() {
-    wine_exec_shell "
-        rm -rf \"\$WINEPREFIX/drive_c/7-Zip\" 2>/dev/null
-    " || return 1
-    rm -f "$_SEVENZIP_DESKTOP" "${HOME}/Desktop/sevenzip.desktop"
+    wine_app_remove "sevenzip"
 }
 
 app_is_installed_sevenzip() {
-    [ -e "$_SEVENZIP_DESKTOP" ]
+    wine_app_is_installed "sevenzip"
 }

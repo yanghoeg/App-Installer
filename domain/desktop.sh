@@ -152,25 +152,66 @@ desktop_register() {
     local app_id="$1" name="$2" exec_cmd="$3" icon="$4" categories="$5"
     local extra="${6:-}"
     local desktop_file="${PREFIX}/share/applications/${app_id}.desktop"
+    local shortcut="${HOME}/Desktop/${app_id}.desktop" stage shortcut_stage backup_stage target file
+    local -a fields=(
+        '[Desktop Entry]' 'Version=1.0' 'Type=Application' "Name=${name}"
+        "Exec=${exec_cmd}" "Icon=${icon}" "Categories=${categories}"
+        'Terminal=false' 'StartupNotify=false'
+    )
+    [ -z "$extra" ] || fields+=("$extra")
 
-    mkdir -p "${PREFIX}/share/applications" "${HOME}/Desktop"
-
-    {
-        echo "[Desktop Entry]"
-        echo "Version=1.0"
-        echo "Type=Application"
-        echo "Name=${name}"
-        echo "Exec=${exec_cmd}"
-        echo "Icon=${icon}"
-        echo "Categories=${categories}"
-        echo "Terminal=false"
-        echo "StartupNotify=false"
-        [ -n "$extra" ] && echo "$extra"
-    } > "$desktop_file"
-
-    cp "$desktop_file" "${HOME}/Desktop/${app_id}.desktop"
-    chmod +x "${HOME}/Desktop/${app_id}.desktop"
-    gio set "${HOME}/Desktop/${app_id}.desktop" metadata::trusted true 2>/dev/null || true
+    mkdir -p "${PREFIX}/share/applications" "${HOME}/Desktop" || return 1
+    [ ! -d "$desktop_file" ] && [ ! -d "$shortcut" ] || return 1
+    stage=$(mktemp -d "${PREFIX}/share/applications/.desktop-register.XXXXXX") || return 1
+    # Keep each staged file on its destination filesystem so publication is a rename.
+    shortcut_stage=$(mktemp -d "${HOME}/Desktop/.desktop-register.XXXXXX") || {
+        rm -rf -- "$stage"
+        return 1
+    }
+    if ! printf '%s\n' "${fields[@]}" > "$stage/menu" ||
+       ! chmod 644 "$stage/menu" ||
+       ! cp -- "$stage/menu" "$shortcut_stage/shortcut" ||
+       ! chmod +x "$shortcut_stage/shortcut"; then
+        rm -rf -- "$stage" "$shortcut_stage"
+        return 1
+    fi
+    # Prepare both files and their backups before changing either launcher.
+    for file in menu shortcut; do
+        if [ "$file" = menu ]; then
+            target="$desktop_file"; backup_stage="$stage"
+        else
+            target="$shortcut"; backup_stage="$shortcut_stage"
+        fi
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            if ! cp -a -- "$target" "$backup_stage/old-$file"; then
+                rm -rf -- "$stage" "$shortcut_stage"
+                return 1
+            fi
+        fi
+    done
+    if ! mv -f -- "$stage/menu" "$desktop_file" ||
+       ! mv -f -- "$shortcut_stage/shortcut" "$shortcut"; then
+        for file in menu shortcut; do
+            if [ "$file" = menu ]; then
+                target="$desktop_file"; backup_stage="$stage"
+            else
+                target="$shortcut"; backup_stage="$shortcut_stage"
+            fi
+            if [ -e "$backup_stage/old-$file" ] || [ -L "$backup_stage/old-$file" ]; then
+                mv -f -- "$backup_stage/old-$file" "$target" || {
+                    echo "[ERROR] 런처 복구 실패: $target (백업: $backup_stage/old-$file)" >&2
+                    return 1
+                }
+            else
+                rm -f -- "$target" || return 1
+            fi
+        done
+        rm -rf -- "$stage" "$shortcut_stage"
+        return 1
+    fi
+    rm -rf -- "$stage" "$shortcut_stage" || return 1
+    gio set "$shortcut" metadata::trusted true 2>/dev/null || true
+    return 0
 }
 
 # proot 내부 .desktop 파일을 Termux 메뉴로 복사 후 Exec 재작성

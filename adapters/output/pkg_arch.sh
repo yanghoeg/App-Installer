@@ -23,7 +23,7 @@ proot_pkg_remove() {
     ' _ "$@"
 }
 proot_pkg_purge()        { proot_pkg_remove "$@"; }
-proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Sy --noconfirm; }
+proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Syu --noconfirm; }
 proot_pkg_autoremove() {
     proot_exec sudo bash -c \
         'orphans=$(pacman -Qdtq 2>/dev/null) || true

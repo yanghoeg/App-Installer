@@ -21,6 +21,9 @@ _WINE_BOX64_BIN="${PREFIX}/bin/wine-box64"
 _WINE_HANGOVER_BIN="${PREFIX}/bin/wine-hangover"
 _WINE_DISPATCHER="${PREFIX}/bin/wine"
 _WINE_BACKEND_CLI="${PREFIX}/bin/wine-backend"
+_WINE_BOX64_CONTEXT="${HOME}/.config/termux-xfce/wine-box64-context"
+_WINE_APP_STATE="${HOME}/.config/termux-xfce/wine-apps"
+_WINE_BACKEND_LIB="$(cd "${BASH_SOURCE[0]%/*}" && pwd)/wine_backend.sh"
 
 # -----------------------------------------------------------------------------
 # 조회
@@ -86,20 +89,247 @@ wine_backend_set_default() {
 # 실행
 # -----------------------------------------------------------------------------
 
-# 활성 백엔드의 문맥에서 셸 조각을 실행하고 WINEPREFIX를 주입한다.
-# 조각 안에서는 $WINEPREFIX 를 쓰면 되고, box64+proot면 컨테이너 안에서,
-# 그 외(hangover / box64 native)는 Termux 안에서 실행된다.
-# 조각 안의 `wine` 호출은 각 문맥의 wine(컨테이너 wine / PATH 디스패처)으로 간다.
-wine_exec_shell() {
-    local snippet="$1"
+# Context records contain data, never shell code:
+# backend|native/proot|distro|user|rootfs-base (empty base means the default).
+_wine_context_valid() {
+    local backend mode distro user base extra
+    IFS='|' read -r backend mode distro user base extra <<< "$1"
+    [ -z "${extra:-}" ] && [[ "$1" != *$'\n'* ]] || return 1
+    case "$backend:$mode" in
+        box64:native|hangover:native) [ "$1" = "$backend|native|||" ] ;;
+        box64:proot)
+            case "$distro" in ubuntu|archlinux) ;; *) return 1 ;; esac
+            [[ "$user" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || return 1
+            [ "$1" = "box64|proot|$distro|$user|$base" ] || return 1
+            [ -z "$base" ] || [[ "$base" = /* ]] ;;
+        *) return 1 ;;
+    esac
+}
 
-    if [ "$(wine_backend)" = "box64" ] && has_proot_distro; then
-        # Preserve DISPLAY and load the optional GPU profile without login hooks.
-        proot_exec_wine bash -c 'export WINEPREFIX="$HOME/.wine"
-'"$snippet"
-    else
-        DISPLAY="${DISPLAY:-:0.0}" WINEPREFIX="$(wine_prefix)" bash -c "$snippet"
+_wine_context_write() {
+    local file="$1" context="$2" stage
+    _wine_context_valid "$context" || return 1
+    mkdir -p "${file%/*}" || return 1
+    stage=$(mktemp "${file}.XXXXXX") || return 1
+    if ! printf '%s\n' "$context" > "$stage" || ! mv -f "$stage" "$file"; then
+        rm -f "$stage"
+        return 1
     fi
+}
+
+wine_backend_record_context() {
+    local context="box64|${1}|${2:-}|${3:-}|${4:-}"
+    _wine_context_write "$_WINE_BOX64_CONTEXT" "$context"
+}
+
+wine_backend_context() {
+    local backend="${1:-$(wine_backend)}" context=''
+    if [ "$backend" = hangover ]; then
+        printf '%s\n' 'hangover|native|||'
+        return 0
+    fi
+    [ "$backend" = box64 ] || return 1
+    if [ -f "$_WINE_BOX64_CONTEXT" ]; then
+        IFS= read -r context < "$_WINE_BOX64_CONTEXT" || [ -n "$context" ] || return 1
+    elif [ -r "$_WINE_BOX64_BIN" ]; then
+        # New wrappers retain their target even if the context file is missing.
+        context=$(sed -n 's/^# wine-context: //p' "$_WINE_BOX64_BIN") || return 1
+        if [ -z "$context" ] && grep -Eq 'exec prun|proot-distro login' "$_WINE_BOX64_BIN"; then
+            context="box64|proot|${PROOT_DISTRO:-}|${PROOT_USER:-}|${PROOT_ROOTFS_BASE:-}"
+        fi
+    fi
+    # A native wrapper stays native when a container is added later. Unknown
+    # legacy wrappers also stay on the host; container presence is not ownership.
+    context="${context:-box64|native|||}"
+    _wine_context_valid "$context" && [[ "$context" = box64\|* ]] || return 1
+    printf '%s\n' "$context"
+}
+
+# Scope the saved target to this operation. Adapter proot_exec is generic and
+# reads these variables; a generated app launcher loads that generic adapter.
+wine_exec_shell() (
+    local snippet="$1" context backend mode distro user base
+    if [ "$#" -gt 1 ]; then context="$2"; shift 2
+    else context=$(wine_backend_context) || return 1; shift; fi
+    _wine_context_valid "$context" || return 1
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    if [ "$mode" = proot ]; then
+        export PROOT_DISTRO="$distro" PROOT_USER="$user"
+        if [ -n "$base" ]; then export PROOT_ROOTFS_BASE="$base"; else unset PROOT_ROOTFS_BASE; fi
+        [ -d "$(_proot_rootfs)" ] || { echo '[ERROR] 저장된 Wine 컨테이너가 없습니다.' >&2; return 1; }
+        proot_exec_wine bash -c '
+            export WINEPREFIX="$HOME/.wine" WINEESYNC=1 WINEDEBUG="${WINEDEBUG:--all}"
+            wine() { /opt/wine-staging/bin/wine "$@"; }
+        '"$snippet" wine-context "$@"
+    else
+        local runner="${WINE_CONTEXT_RUNNER:-${PREFIX}/bin/wine-${backend}}"
+        DISPLAY="${DISPLAY:-:0.0}" WINEPREFIX="$(wine_prefix_for_backend "$backend")" \
+            bash -c 'runner=$1; shift; wine() { "$runner" "$@"; }
+'"$snippet" wine-context "$runner" "$@"
+    fi
+)
+
+wine_prefix_for_backend() {
+    case "$1" in
+        hangover) printf '%s' "$HOME/.wine-hangover" ;;
+        box64) printf '%s' "$HOME/.wine" ;;
+        *) return 1 ;;
+    esac
+}
+
+_wine_app_relpath() {
+    case "$1" in
+        sevenzip) printf '%s' '7-Zip/7zFM.exe' ;;
+        notepadpp) printf '%s' 'Program Files/Notepad++/notepad++.exe' ;;
+        sumatrapdf) printf '%s' 'Program Files/SumatraPDF/SumatraPDF.exe' ;;
+        winmerge) printf '%s' 'Program Files/WinMerge/WinMergeU.exe' ;;
+        *) return 1 ;;
+    esac
+}
+
+_wine_app_file() (
+    local context="$1" id="$2" backend mode distro user base rootfs userhome rel
+    _wine_context_valid "$context" || return 1
+    rel=$(_wine_app_relpath "$id") || return 1
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    if [ "$mode" = native ]; then
+        printf '%s/drive_c/%s\n' "$(wine_prefix_for_backend "$backend")" "$rel"
+    else
+        export PROOT_DISTRO="$distro" PROOT_USER="$user"
+        if [ -n "$base" ]; then export PROOT_ROOTFS_BASE="$base"; else unset PROOT_ROOTFS_BASE; fi
+        rootfs=$(_proot_rootfs) || return 1
+        [ -d "$rootfs" ] || return 1
+        userhome=$(awk -F: -v user="$user" '$1 == user {print $6; exit}' "$rootfs/etc/passwd" 2>/dev/null) || userhome=''
+        if [ -z "$userhome" ]; then
+            if [ "$user" = root ]; then userhome=/root; else userhome="/home/$user"; fi
+        fi
+        [[ "$userhome" = /* ]] && [[ "$userhome" != *'/../'* ]] || return 1
+        printf '%s%s/.wine/drive_c/%s\n' "$rootfs" "$userhome" "$rel"
+    fi
+)
+
+# Old desktop-only installs have no ownership record. Inspect actual executables
+# in both native prefixes and available containers before migrating their entry.
+wine_app_context() {
+    local id="$1" context file backend distro user rootfs base
+    _wine_app_relpath "$id" >/dev/null || return 1
+    file="$_WINE_APP_STATE/$id.context"
+    if [ -f "$file" ]; then
+        IFS= read -r context < "$file" || [ -n "$context" ] || return 1
+        _wine_context_valid "$context" || return 1
+        printf '%s\n' "$context"
+        return 0
+    fi
+    for backend in "$(wine_backend)" hangover box64; do
+        context=$(wine_backend_context "$backend") || continue
+        file=$(_wine_app_file "$context" "$id") || continue
+        if [ -f "$file" ]; then printf '%s\n' "$context"; return 0; fi
+    done
+    context='box64|native|||'
+    file=$(_wine_app_file "$context" "$id") || return 1
+    if [ -f "$file" ]; then printf '%s\n' "$context"; return 0; fi
+    base="${PROOT_ROOTFS_BASE:-$PREFIX/var/lib/proot-distro}"
+    for distro in ubuntu archlinux; do
+        for rootfs in "$base/containers/$distro/rootfs" "$base/installed-rootfs/$distro"; do
+            [ -d "$rootfs" ] || continue
+            for file in "$rootfs"/home/* "$rootfs/root"; do
+                [ -d "$file" ] || continue
+                user="${file##*/}"
+                context="box64|proot|$distro|$user|${PROOT_ROOTFS_BASE:-}"
+                _wine_context_valid "$context" || continue
+                file=$(_wine_app_file "$context" "$id") || continue
+                if [ -f "$file" ]; then printf '%s\n' "$context"; return 0; fi
+            done
+        done
+    done
+    return 1
+}
+
+wine_app_write_launcher() {
+    local id="$1" launcher="${PREFIX}/bin/wine-app-${1}" stage desktop
+    _wine_app_relpath "$id" >/dev/null || return 1
+    stage=$(mktemp "${launcher}.XXXXXX") || return 1
+    {
+        printf '#!%s/bin/bash\n' "$PREFIX"
+        printf 'source %q || exit 1\n' "${_WINE_BACKEND_LIB%/*}/proot_path.sh"
+        printf 'source %q || exit 1\n' "${_WINE_BACKEND_LIB%/*}/../adapters/output/pkg_proot_base.sh"
+        printf 'source %q || exit 1\n' "$_WINE_BACKEND_LIB"
+        printf 'wine_app_launch %q "$@"\n' "$id"
+    } > "$stage" || { rm -f "$stage"; return 1; }
+    chmod +x "$stage" && mv -f "$stage" "$launcher" || { rm -f "$stage"; return 1; }
+    # Field codes now remain separate argv, outside any bash -c string.
+    for desktop in "$PREFIX/share/applications/$id.desktop" "$HOME/Desktop/$id.desktop"; do
+        [ -f "$desktop" ] || continue
+        sed -i "s|^Exec=.*|Exec=wine-app-$id %f|" "$desktop" || return 1
+    done
+}
+
+wine_app_record() {
+    local id="$1" context="${2:-}" backend mode distro user base stage runner
+    _wine_app_relpath "$id" >/dev/null || return 1
+    [ -n "$context" ] || context=$(wine_backend_context) || return 1
+    _wine_context_valid "$context" || return 1
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    mkdir -p "$_WINE_APP_STATE" || return 1
+    if [ "$mode" = native ]; then
+        runner="$_WINE_APP_STATE/$id.runner"
+        stage=$(mktemp "${runner}.XXXXXX") || return 1
+        # Keep the native implementation even if wine-box64 is later replaced by
+        # a container wrapper. Hangover and Box64 prefixes remain independent.
+        local source_runner="${PREFIX}/bin/wine-${backend}"
+        if [ "$backend" = box64 ]; then
+            if [ -x "${_WINE_BOX64_BIN}-native" ]; then
+                source_runner="${_WINE_BOX64_BIN}-native"
+            elif [[ "$(wine_backend_context box64)" = box64\|proot\|* ]]; then
+                declare -F _wine_write_box64_native_wrapper >/dev/null || { rm -f "$stage"; return 1; }
+                _wine_write_box64_native_wrapper "${_WINE_BOX64_BIN}-native" || { rm -f "$stage"; return 1; }
+                source_runner="${_WINE_BOX64_BIN}-native"
+            fi
+        fi
+        if ! cp "$source_runner" "$stage" || ! chmod +x "$stage" || ! mv -f "$stage" "$runner"; then
+            rm -f "$stage"
+            return 1
+        fi
+    fi
+    _wine_context_write "$_WINE_APP_STATE/$id.context" "$context" || return 1
+    wine_app_write_launcher "$id"
+}
+
+wine_app_is_installed() {
+    local id="$1" context file
+    [ -f "$PREFIX/share/applications/$id.desktop" ] || return 1
+    context=$(wine_app_context "$id") || return 1
+    file=$(_wine_app_file "$context" "$id") || return 1
+    [ -f "$file" ] || return 1
+    if [ ! -f "$_WINE_APP_STATE/$id.context" ] || [ ! -x "$PREFIX/bin/wine-app-$id" ]; then
+        wine_app_record "$id" "$context" || return 1
+    fi
+}
+
+wine_app_launch() {
+    local id="$1" context rel backend mode distro user base
+    shift
+    context=$(wine_app_context "$id") || { echo '[ERROR] Wine 앱 설치 위치를 확인할 수 없습니다.' >&2; return 1; }
+    rel=$(_wine_app_relpath "$id") || return 1
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    if [ "$mode" = native ]; then
+        [ -x "$_WINE_APP_STATE/$id.runner" ] || wine_app_record "$id" "$context" || return 1
+        local WINE_CONTEXT_RUNNER="$_WINE_APP_STATE/$id.runner"
+        export WINE_CONTEXT_RUNNER
+    fi
+    local windows='C:\'
+    windows+="${rel//\//\\}"
+    wine_exec_shell 'wine "$@"' "$context" "$windows" "$@"
+}
+
+wine_app_remove() {
+    local id="$1" context rel directory
+    rel=$(_wine_app_relpath "$id") || return 1
+    context=$(wine_app_context "$id") || { echo '[ERROR] Wine 앱 설치 위치를 확인할 수 없습니다.' >&2; return 1; }
+    directory="${rel%/*}"
+    wine_exec_shell 'rm -rf -- "$WINEPREFIX/drive_c/$1"' "$context" "$directory" || return 1
+    rm -f "$PREFIX/share/applications/$id.desktop" "$HOME/Desktop/$id.desktop" \
+        "$PREFIX/bin/wine-app-$id" "$_WINE_APP_STATE/$id.context" "$_WINE_APP_STATE/$id.runner"
 }
 
 # -----------------------------------------------------------------------------

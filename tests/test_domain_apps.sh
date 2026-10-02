@@ -12,7 +12,7 @@ _DOMAIN_BASH="${BASH:-$(command -v bash)}"
 _guard_domain_commands() {
     local sb="$1" tool
     mkdir -p "$sb/mock-bin"
-    for tool in pkg apt apt-get pacman dpkg sudo proot-distro curl wget git npm \
+    for tool in pkg apt apt-get pacman dpkg dpkg-query sudo proot-distro curl wget git npm \
         cargo pip pip3 wine wineboot wineserver grun prun termux-wake-lock gio; do
         {
             printf '#!%s\n' "$_DOMAIN_BASH"
@@ -301,7 +301,7 @@ _test_dbeaver_failure_propagates_without_desktop() {
 it "다운로드 실패 → non-zero 반환, .desktop 미생성" _test_dbeaver_failure_propagates_without_desktop
 
 # =============================================================================
-# Miniforge — 설치 판단 기준 (디렉토리)
+# Miniforge — 설치 판단 기준 (완성된 환경)
 # =============================================================================
 describe "Miniforge — 설치 상태 판단"
 
@@ -314,11 +314,16 @@ it "miniforge3 디렉토리 없으면 is_installed → false" _test_miniforge_no
 
 _test_miniforge_installed_with_dir() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    local env_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    mkdir -p "$env_dir/bin" "$env_dir/conda-meta"
+    printf '#!/bin/sh\nexit 0\n' > "$env_dir/bin/conda"
+    printf '#!/bin/sh\nexit 0\n' > "$env_dir/bin/python"
+    chmod +x "$env_dir/bin/conda" "$env_dir/bin/python"
+    touch "$env_dir/conda-meta/history"
     app_is_installed_miniforge
     cleanup_sandbox "$sb"
 }
-it "miniforge3 디렉토리 있으면 is_installed → true" _test_miniforge_installed_with_dir
+it "완성된 Miniforge 환경이면 is_installed → true" _test_miniforge_installed_with_dir
 
 _test_miniforge_failure_propagates() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -599,8 +604,11 @@ it "wine_exec_shell이 native 문맥에 WINEPREFIX를 주입한다" _test_wine_e
 _test_wine_exec_shell_uses_proot_for_box64() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     MOCK_HAS_PROOT=true
+    wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER"
+    local trace="$sb/wine-proot.trace"
+    proot_exec_wine() { printf '%s\n' "$*" > "$trace"; }
     wine_exec_shell 'true'
-    assert_was_called "proot_exec_wine"
+    assert_file_contains "$trace" 'export WINEPREFIX="\$HOME/.wine"'
     cleanup_sandbox "$sb"
 }
 it "box64+proot에서는 proot_exec_wine을 탄다" _test_wine_exec_shell_uses_proot_for_box64
@@ -1749,7 +1757,13 @@ it 'locale-gen failure does not leave a completed installation marker' _test_kor
 describe 'regression — removal failures propagate before launcher cleanup'
 _test_failed_removal_for_current_id() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    local cleanup_seen=0 rc=0
+    local cleanup_seen=0 removal_command_seen=0 rc=0
+    case "$_remove_id" in
+        notepadpp|sevenzip|sumatrapdf|winmerge)
+            _wine_context_write "$_WINE_APP_STATE/$_remove_id.context" 'box64|native|||'
+            ;;
+        wine) wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER" ;;
+    esac
     termux_pkg_is_installed() { return 0; }
     proot_pkg_is_installed() { return 0; }
     termux_pkg_remove() { return 42; }
@@ -1758,7 +1772,7 @@ _test_failed_removal_for_current_id() {
     proot_pkg_remove_libreoffice() { return 42; }
     proot_pkg_purge() { return 42; }
     proot_exec() { return 42; }
-    wine_exec_shell() { return 42; }
+    wine_exec_shell() { removal_command_seen=1; return 42; }
     dpkg() { return 42; }
     desktop_remove() { cleanup_seen=1; }
     rm() { cleanup_seen=1; }
@@ -1767,6 +1781,9 @@ _test_failed_removal_for_current_id() {
     unset -f rm
     assert_nonzero "$rc" "$_remove_id hid a removal failure"
     assert_eq 0 "$cleanup_seen" "$_remove_id cleaned up before removal succeeded"
+    case "$_remove_id" in
+        notepadpp|sevenzip|sumatrapdf|winmerge) assert_eq 1 "$removal_command_seen" ;;
+    esac
     cleanup_sandbox "$sb"
 }
 for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev gpu_native hangover \

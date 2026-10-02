@@ -21,7 +21,7 @@ _cli_setup() {
     export PATH="$sb/bin:/usr/bin:/bin"
     unset PROOT_DISTRO PROOT_USER PROOT_ROOTFS_BASE KOREAN_LOCALE_ZIP UI
     unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
-    unset TEST_SHA TEST_REMOVE_RC TEST_CLANG_RC TEST_NPM_INSTALLED TEST_GRUN_RC
+    unset TEST_SHA TEST_REMOVE_RC TEST_CLANG_RC TEST_NPM_INSTALLED TEST_GRUN_RC TEST_DPKG_INSTALLED
     mkdir -p "$HOME/.config/termux-xfce" "$HOME/Desktop" "$sb/bin" "$TMPDIR" \
         "$PREFIX/lib" "$PREFIX/etc" "$PREFIX/bin" "$PREFIX/share/applications"
     touch "$PREFIX/etc/bash.bashrc" "$HOME/.zshrc" "$TEST_TRACE"
@@ -42,6 +42,12 @@ case "$name" in
         case "$1" in
             -i) exit 0 ;;
             -r) exit "${TEST_REMOVE_RC:-0}" ;;
+        esac ;;
+    dpkg-query)
+        case "${!#}" in
+            codex) exit 1 ;;
+            *) [ "${TEST_DPKG_INSTALLED:-0}" = 1 ] || exit 1
+               printf 'install ok installed\n'; exit 0 ;;
         esac ;;
     wget|curl)
         while [ "$#" -gt 0 ]; do
@@ -87,7 +93,7 @@ exit 1
 STUB
     } > "$sb/bin/stub"
     chmod +x "$sb/bin/stub"
-    for name in pkg dpkg wget curl sha256sum tar clang npm grun proot-distro glib-compile-schemas gio; do
+    for name in pkg dpkg dpkg-query wget curl sha256sum tar clang npm grun proot-distro glib-compile-schemas gio; do
         ln -s stub "$sb/bin/$name"
     done
 }
