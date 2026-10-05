@@ -6,11 +6,35 @@ source "$(dirname "${BASH_SOURCE[0]}")/pkg_proot_base.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
 
 proot_pkg_install()      { proot_exec sudo apt install -y "$@"; }
-proot_pkg_remove()       { proot_exec sudo apt remove -y "$@"; }
-proot_pkg_purge()        { proot_exec sudo apt purge -y "$@"; }
+_proot_ubuntu_remove() {
+    proot_exec sudo bash -c '
+        set -eu
+        mode=$1; shift
+        packages=$(dpkg-query -W -f='"'"'${binary:Package}\t${db:Status-Status}\n'"'"') || exit $?
+        targets=()
+        for pkg in "$@"; do
+            while IFS=$'"'"'\t'"'"' read -r name state; do
+                [ "$name" = "$pkg" ] || [ "${name%%:*}" = "$pkg" ] || continue
+                case "$state" in
+                    ""|not-installed) continue ;;
+                    config-files) [ "$mode" = purge ] || continue ;;
+                esac
+                targets+=("$pkg")
+                break
+            done <<< "$packages"
+        done
+        [ "${#targets[@]}" -eq 0 ] || exec apt "$mode" -y -- "${targets[@]}"
+    ' _ "$@"
+}
+proot_pkg_remove()       { _proot_ubuntu_remove remove "$@"; }
+proot_pkg_purge()        { _proot_ubuntu_remove purge "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo apt update; }
 proot_pkg_autoremove()   { proot_exec sudo apt autoremove -y; }
-proot_pkg_is_installed() { proot_exec dpkg -s "$1" &>/dev/null; }
+proot_pkg_is_installed() {
+    local state
+    state=$(proot_exec dpkg-query -W -f='${Status}' -- "$1" 2>/dev/null) || return 1
+    [ "${state#* }" = 'ok installed' ]
+}
 
 proot_pkg_install_aur() {
     echo "[WARN] Ubuntu에는 AUR 없음, apt 폴백 시도: $*" >&2
@@ -35,28 +59,42 @@ proot_pkg_install_deb_or_aur() {
 # 각 인자는 "URL" 또는 "URL|sha256" — sha256이 주어지면 dpkg -i 전에 무결성을 검증하고,
 # 불일치 시 받은 파일을 지운 뒤 그 항목을 설치하지 않으며 함수 전체가 rc≠0을 반환한다.
 # (GitHub Releases 변조/오다운로드를 조용히 통과시키지 않는다 — 포트 계약 참조.)
-# dpkg 자체의 의존성 미해결 실패는 뒤따르는 apt-get install -f -y가 보정하므로 관대 처리.
+# dpkg 의존성 실패는 apt-get install -f와 최종 상태/버전 검증이 성공할 때만 복구로 인정한다.
 proot_pkg_install_deb_url() {
-    local entry url sha rc=0
-    for entry in "$@"; do
-        url="${entry%%|*}"
-        if [ "$entry" = "$url" ]; then
-            sha=""
-        else
-            sha="${entry#*|}"
-        fi
-        proot_exec bash -c "$(fetch_verified_src)"$'\n''
-            url="$1"; sha="$2"
-            name="${url##*/}"
-            deb="${TMPDIR:-/tmp}/${name}"
-            fetch_verified "$url" "$deb" "$sha" || exit 1
-            sudo dpkg -i "$deb" || echo "[WARN] ${name} dpkg 의존성 미해결 — apt-get install -f로 보정" >&2
-            rm -f "$deb"
-            exit 0
-        ' _ "$url" "$sha" || rc=1
-    done
-    proot_exec sudo apt-get install -f -y 2>/dev/null || true
-    return "$rc"
+    proot_exec bash -c "$(fetch_verified_src)"$'\n''
+        set -eu
+        stage=$(mktemp -d "${TMPDIR:-/tmp}/app-debs.XXXXXX") || exit 1
+        trap '\''rm -rf "$stage"'\'' EXIT
+        packages=(); versions=(); architectures=()
+        rc=0; index=0
+        for entry in "$@"; do
+            url="${entry%%|*}"; sha=""
+            [ "$entry" = "$url" ] || sha="${entry#*|}"
+            index=$((index + 1))
+            mkdir -p "$stage/$index" || exit 1
+            deb="$stage/$index/${url##*/}"
+            fetch_verified "$url" "$deb" "$sha" || { rc=1; continue; }
+            package=$(dpkg-deb -f "$deb" Package) &&
+                version=$(dpkg-deb -f "$deb" Version) &&
+                architecture=$(dpkg-deb -f "$deb" Architecture) || { rc=1; continue; }
+            [ -n "$package" ] && [ -n "$version" ] && [ -n "$architecture" ] || { rc=1; continue; }
+            packages+=("$package"); versions+=("$version"); architectures+=("$architecture")
+            sudo dpkg -i "$deb" || echo "[WARN] ${deb##*/} dpkg 실패 — apt-get install -f와 설치 상태를 확인합니다." >&2
+        done
+        [ "${#packages[@]}" -gt 0 ] || exit "$rc"
+        sudo apt-get install -f -y || exit 1
+        for index in "${!packages[@]}"; do
+            package="${packages[index]}"; architecture="${architectures[index]}"
+            query="$package"
+            [ "$architecture" = all ] || query="$package:$architecture"
+            state=$(dpkg-query -W -f='\''${Status}|${Version}|${Architecture}'\'' "$query") || { rc=1; continue; }
+            if [ "$state" != "install ok installed|${versions[index]}|$architecture" ]; then
+                echo "[ERROR] .deb 설치 상태/버전 불일치: $query ($state)" >&2
+                rc=1
+            fi
+        done
+        exit "$rc"
+    ' _ "$@"
 }
 
 proot_pkg_add_external_repo() {
@@ -97,7 +135,7 @@ proot_pkg_install_sasm() {
 
 # Build the pinned upstream ARM64 release; no third-party binary repository.
 proot_pkg_install_box64() {
-    proot_pkg_install git cmake build-essential pkg-config || return 1
+    proot_pkg_install git cmake build-essential pkg-config python3 file || return 1
     proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 

@@ -7,13 +7,37 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_box64.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/build_sasm.sh"
 
 proot_pkg_install()      { proot_exec sudo pacman -S --noconfirm --needed "$@"; }
-proot_pkg_remove()       { proot_exec sudo pacman -Rns --noconfirm "$@"; }
-proot_pkg_purge()        { proot_exec sudo pacman -Rns --noconfirm "$@"; }
-proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Sy --noconfirm; }
+proot_pkg_remove() {
+    # Query once; a missing target is already removed, but database/removal errors
+    # must still reach the caller so it can retain the launchers.
+    proot_exec sudo bash -c '
+        set -eu
+        installed=$(pacman -Qq) || exit $?
+        targets=()
+        for pkg in "$@"; do
+            case $'"'"'\n'"'"'"$installed"$'"'"'\n'"'"' in
+                *$'"'"'\n'"'"'"$pkg"$'"'"'\n'"'"'*) targets+=("$pkg") ;;
+            esac
+        done
+        [ "${#targets[@]}" -eq 0 ] || exec pacman -Rns --noconfirm -- "${targets[@]}"
+    ' _ "$@"
+}
+proot_pkg_purge()        { proot_pkg_remove "$@"; }
+proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Syu --noconfirm; }
 proot_pkg_autoremove() {
-    proot_exec sudo bash -c \
-        'orphans=$(pacman -Qdtq 2>/dev/null) || true
-         if [ -n "$orphans" ]; then pacman -Rns --noconfirm $orphans; fi'
+    # pacman -Qdtq exits 1 both for "no orphans" and for a failed query, so
+    # check the database first and accept 1 only with empty output.
+    proot_exec sudo bash -c '
+        pacman -Qq >/dev/null || exit $?
+        orphans=$(pacman -Qdtq) || {
+            status=$?
+            [ "$status" -eq 1 ] && [ -z "$orphans" ] || exit "$status"
+        }
+        if [ -n "$orphans" ]; then
+            mapfile -t targets <<< "$orphans"
+            pacman -Rns --noconfirm -- "${targets[@]}" || exit $?
+        fi
+    '
 }
 proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 
@@ -70,7 +94,7 @@ proot_pkg_remove_vscode() {
 }
 
 proot_pkg_install_box64() {
-    proot_pkg_install git cmake base-devel || return 1
+    proot_pkg_install git cmake base-devel python || return 1
     proot_exec sudo bash -c "$(box64_build_source_script)"
 }
 

@@ -23,6 +23,9 @@ app_install_winmerge() {
         app_install_wine || return 1
     fi
 
+    local context
+    context=$(wine_backend_context) || return 1
+
     local url
     url=$(_winmerge_portable_url)
 
@@ -40,7 +43,9 @@ app_install_winmerge() {
         fi
         rm -f \${TMPDIR:-/tmp}/winmerge.zip
         test -e \"\$WINEPREFIX/drive_c/Program Files/WinMerge/WinMergeU.exe\"
-    " || { echo "[ERROR] WinMerge 설치 실패" >&2; return 1; }
+    " "$context" || { echo "[ERROR] WinMerge 설치 실패" >&2; return 1; }
+
+    wine_app_record "winmerge" "$context" || return 1
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_WINMERGE_DESKTOP" << 'EOF'
@@ -49,7 +54,7 @@ Version=1.0
 Type=Application
 Name=WinMerge
 Comment=파일/폴더 비교·병합 (Wine)
-Exec=bash -c "wine 'C:\\Program Files\\WinMerge\\WinMergeU.exe' </dev/null >/dev/null 2>&1 &"
+Exec=wine-app-winmerge %f
 Icon=wine
 Categories=Development;Utility;
 Terminal=false
@@ -65,12 +70,9 @@ EOF
 }
 
 app_remove_winmerge() {
-    wine_exec_shell "
-        rm -rf \"\$WINEPREFIX/drive_c/Program Files/WinMerge\" 2>/dev/null
-    " || return 1
-    rm -f "$_WINMERGE_DESKTOP" "${HOME}/Desktop/winmerge.desktop"
+    wine_app_remove "winmerge"
 }
 
 app_is_installed_winmerge() {
-    [ -e "$_WINMERGE_DESKTOP" ]
+    wine_app_is_installed "winmerge"
 }

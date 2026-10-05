@@ -120,7 +120,7 @@ _test_ubuntu_overrides_proot_exec() {
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
         # proot_exec가 제대로 override 되었으면 선언되어 있어야 함
-        declare -f proot_exec | grep -q "proot-distro"
+        grep -q "proot-distro" <<< "$(declare -f proot_exec)"
     )
 }
 it "pkg_ubuntu.sh의 proot_exec는 proot-distro를 호출한다" _test_ubuntu_overrides_proot_exec
@@ -129,7 +129,7 @@ _test_arch_overrides_proot_pkg_install() {
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install | grep -q "pacman"
+        grep -q "pacman" <<< "$(declare -f proot_pkg_install)"
     )
 }
 it "pkg_arch.sh의 proot_pkg_install은 pacman을 호출한다" _test_arch_overrides_proot_pkg_install
@@ -138,7 +138,7 @@ _test_ubuntu_proot_install_uses_apt() {
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
-        declare -f proot_pkg_install | grep -q "apt"
+        grep -q "apt" <<< "$(declare -f proot_pkg_install)"
     )
 }
 it "pkg_ubuntu.sh의 proot_pkg_install은 apt를 호출한다" _test_ubuntu_proot_install_uses_apt
@@ -154,7 +154,7 @@ _test_ubuntu_libreoffice_pkg() {
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_ubuntu.sh"
         # proot_pkg_install_libreoffice가 'libreoffice'(fresh 아님)를 설치하는지
-        declare -f proot_pkg_install_libreoffice | grep -q "libreoffice[^-]"
+        grep -q "libreoffice[^-]" <<< "$(declare -f proot_pkg_install_libreoffice)"
     )
 }
 it "Ubuntu: proot_pkg_install_libreoffice → libreoffice (not fresh)" _test_ubuntu_libreoffice_pkg
@@ -163,7 +163,7 @@ _test_arch_libreoffice_pkg() {
     (
         source "${APP_DIR}/ports/pkg_manager.sh"
         source "${APP_DIR}/adapters/output/pkg_arch.sh"
-        declare -f proot_pkg_install_libreoffice | grep -q "libreoffice-fresh"
+        grep -q "libreoffice-fresh" <<< "$(declare -f proot_pkg_install_libreoffice)"
     )
 }
 it "Arch: proot_pkg_install_libreoffice → libreoffice-fresh" _test_arch_libreoffice_pkg

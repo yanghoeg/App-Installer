@@ -7,6 +7,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${SCRIPT_DIR}/.."
 source "${SCRIPT_DIR}/framework.sh"
 source "${SCRIPT_DIR}/mocks.sh"
+_DOMAIN_BASH="${BASH:-$(command -v bash)}"
+
+_guard_domain_commands() {
+    local sb="$1" tool
+    mkdir -p "$sb/mock-bin"
+    for tool in pkg apt apt-get pacman dpkg dpkg-query sudo proot-distro curl wget git npm \
+        cargo pip pip3 wine wineboot wineserver grun prun termux-wake-lock gio; do
+        {
+            printf '#!%s\n' "$_DOMAIN_BASH"
+            printf 'echo "[MOCK] unexpected external command: ${0##*/} $*" >&2\nexit 99\n'
+        } > "$sb/mock-bin/$tool"
+    done
+    chmod +x "$sb/mock-bin/"*
+    export PATH="$sb/mock-bin:$PATH"
+}
+
+_guard_domain_downloads() {
+    fetch_verified() { echo "[MOCK] download needs an explicit fixture: $1" >&2; return 1; }
+}
+
+_fixture_libreoffice_desktop() {
+    local apps="$(_proot_rootfs)/usr/share/applications"
+    mkdir -p "$apps"
+    printf '[Desktop Entry]\nName=LibreOffice Writer\nExec=libreoffice --writer %%U\n' > "$apps/libreoffice-writer.desktop"
+}
 
 # 공통 설정: sandbox + mock 어댑터 + 도메인 로드
 _setup() {
@@ -15,8 +40,11 @@ _setup() {
     export PROOT_USER="testuser"
     unset DISPLAY_SERVER WAYLAND_DISPLAY ANLAND XFCE4_SESSION_COMPOSITOR XDG_CURRENT_DESKTOP
     setup_fs_sandbox "$sb"
+    _guard_domain_commands "$sb"
+    source "${APP_DIR}/lib/proot_path.sh"
     source "${APP_DIR}/ports/pkg_manager.sh"
     source "${APP_DIR}/lib/fetch.sh"
+    _guard_domain_downloads
     unset _WINE_BACKEND_SH   # 샌드박스마다 HOME/PREFIX가 바뀌므로 재소싱 강제
     source "${APP_DIR}/lib/wine_backend.sh"
     source "${APP_DIR}/domain/desktop.sh"
@@ -231,6 +259,7 @@ describe "LibreOffice — proot 설치"
 
 _test_libreoffice_install_uses_abstract_pkg_fn() {
     local sb; sb=$(make_sandbox); _setup "$sb"
+    _fixture_libreoffice_desktop
     app_install_libreoffice
     assert_was_called "proot_pkg_install_libreoffice"
     cleanup_sandbox "$sb"
@@ -272,7 +301,7 @@ _test_dbeaver_failure_propagates_without_desktop() {
 it "다운로드 실패 → non-zero 반환, .desktop 미생성" _test_dbeaver_failure_propagates_without_desktop
 
 # =============================================================================
-# Miniforge — 설치 판단 기준 (디렉토리)
+# Miniforge — 설치 판단 기준 (완성된 환경)
 # =============================================================================
 describe "Miniforge — 설치 상태 판단"
 
@@ -285,11 +314,16 @@ it "miniforge3 디렉토리 없으면 is_installed → false" _test_miniforge_no
 
 _test_miniforge_installed_with_dir() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    mkdir -p "${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    local env_dir="${PREFIX}/var/lib/proot-distro/installed-rootfs/${PROOT_DISTRO}/home/${PROOT_USER}/miniforge3"
+    mkdir -p "$env_dir/bin" "$env_dir/conda-meta"
+    printf '#!/bin/sh\nexit 0\n' > "$env_dir/bin/conda"
+    printf '#!/bin/sh\nexit 0\n' > "$env_dir/bin/python"
+    chmod +x "$env_dir/bin/conda" "$env_dir/bin/python"
+    touch "$env_dir/conda-meta/history"
     app_is_installed_miniforge
     cleanup_sandbox "$sb"
 }
-it "miniforge3 디렉토리 있으면 is_installed → true" _test_miniforge_installed_with_dir
+it "완성된 Miniforge 환경이면 is_installed → true" _test_miniforge_installed_with_dir
 
 _test_miniforge_failure_propagates() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -570,8 +604,11 @@ it "wine_exec_shell이 native 문맥에 WINEPREFIX를 주입한다" _test_wine_e
 _test_wine_exec_shell_uses_proot_for_box64() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     MOCK_HAS_PROOT=true
+    wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER"
+    local trace="$sb/wine-proot.trace"
+    proot_exec_wine() { printf '%s\n' "$*" > "$trace"; }
     wine_exec_shell 'true'
-    assert_was_called "proot_exec_wine"
+    assert_file_contains "$trace" 'export WINEPREFIX="\$HOME/.wine"'
     cleanup_sandbox "$sb"
 }
 it "box64+proot에서는 proot_exec_wine을 탄다" _test_wine_exec_shell_uses_proot_for_box64
@@ -874,6 +911,48 @@ _test_claude_rollback_no_backup() {
     cleanup_sandbox "$sb"
 }
 it "백업 없이 롤백 → return 1" _test_claude_rollback_no_backup
+
+# 롤백도 download 와 같은 staging + rename 이어야 한다 — 제자리 cp 는 실행 중 세션의
+# mmap 페이지를 덮어 SIGBUS 로 죽이고, 중단되면 짧은 파일을 남긴다.
+_test_claude_rollback_swaps_inode() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "3.0.0"
+    printf 'old\n' > "${CLAUDE_CODE_PREFIX}/claude.bak.v1.0.0"
+    _claude_code_install_wrapper() { :; }
+    local ino_before ino_after
+    ino_before=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    app_rollback_claude_code "1.0.0" >/dev/null
+    ino_after=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
+    assert_ne "$ino_before" "$ino_after" "롤백이 inode를 바꿔 끼워야 함(제자리 덮어쓰기 금지)" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "old" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "백업 내용으로 복원" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    [ -x "${CLAUDE_CODE_PREFIX}/claude" ] || {
+        echo "[ASSERT] 롤백된 바이너리에 실행 권한이 없음" >&2; cleanup_sandbox "$sb"; return 1; }
+    [ ! -e "${CLAUDE_CODE_PREFIX}/claude.restore" ] || {
+        echo "[ASSERT] staging 파일 claude.restore 가 남음" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "롤백 → 제자리 덮어쓰기 대신 rename 으로 교체 (실행 중 세션 보존)" _test_claude_rollback_swaps_inode
+
+describe "app_verify — 설치본 무결성 확인"
+
+_test_app_verify_without_hook() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_verify thunderbird || { echo "[ASSERT] verify 훅이 없으면 성공해야 함" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "verify 훅이 없는 앱 → app_verify 성공(확인 생략)" _test_app_verify_without_hook
+
+_test_app_verify_claude_uses_smoke_check() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_smoke_check() { _record_call "smoke"; return 1; }
+    local rc; app_verify claude_code && rc=0 || rc=$?
+    assert_eq "1" "$rc" "스모크 실패 → app_verify 실패" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "smoke"
+    cleanup_sandbox "$sb"
+}
+it "claude_code → app_verify 가 스모크 체크 결과를 그대로 돌려준다" _test_app_verify_claude_uses_smoke_check
 
 # =============================================================================
 # has_proot_distro — 유틸 함수
@@ -1369,15 +1448,19 @@ _test_contract_install_success_for_all_ids() {
         setup_fs_sandbox "$sb"
         MOCK_INSTALLED_PKGS=""
         MOCK_PROOT_INSTALLED_PKGS=""
+        MOCK_PROOT_WINE_TREE=false
         MOCK_HAS_PROOT=true
         reset_mock_calls
         unset -f curl wget tar dpkg npm fetch_verified 2>/dev/null || true
         source "${APP_DIR}/lib/fetch.sh"
+        _guard_domain_downloads
 
         # mock만으로는 만들 수 없는 "실제 업스트림 산출물"이 필요한 소수의 설치기만
         # 최소한으로 보강한다 (다운로드 파이프라인 자체를 검증하는 게 아니라, 그 이후의
         # 계약 로직 — 실패 전파/= desktop 등록 — 이 성공 경로에서 깨지지 않았는지만 본다).
         case "$id" in
+            libreoffice) _fixture_libreoffice_desktop ;;
+            wayvnc) export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=sway ;;
             hangover)
                 : > "${PREFIX}/bin/hangover-wine"; chmod +x "${PREFIX}/bin/hangover-wine"
                 ;;
@@ -1413,6 +1496,35 @@ _test_contract_install_success_for_all_ids() {
 it "APP_REGISTRY 전체 — 정상 mock에서는 app_install이 성공한다 (gpu_proot/korean_locale은 skip)" \
     _test_contract_install_success_for_all_ids
 
+# codex 단일 바이너리 설치의 두 전제: code-mode 헬퍼를 바이너리 옆에 깔고,
+# 래퍼가 백그라운드 서버를 끈다. 둘 중 하나라도 빠지면 실기기에서 각각
+# "Code Mode is unavailable" / "no complete local package"로 깨진다.
+_test_codex_installs_code_mode_host_and_disables_daemon() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    local failed=0
+    unset -f curl wget tar dpkg npm fetch_verified 2>/dev/null || true
+    source "${APP_DIR}/lib/fetch.sh"
+    fetch_verified() { printf 'tgz\n' > "$2"; }
+    tar() { printf 'native binary fixture\n'; }
+
+    if ! app_install codex >/dev/null 2>&1; then
+        echo '[ASSERT] app_install codex가 실패함' >&2
+        failed=1
+    fi
+    if [ ! -x "${CODEX_CMH_BIN}" ]; then
+        echo "[ASSERT] code-mode 헬퍼가 설치되지 않음: ${CODEX_CMH_BIN}" >&2
+        failed=1
+    fi
+    if ! command grep -q 'features.daemon_auto_start=false' "${CODEX_BIN_PATH}"; then
+        echo '[ASSERT] 래퍼가 daemon_auto_start를 끄지 않음' >&2
+        failed=1
+    fi
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "codex — code-mode 헬퍼를 함께 설치하고 래퍼가 데몬 자동시작을 끈다" \
+    _test_codex_installs_code_mode_host_and_disables_daemon
+
 # =============================================================================
 # M10: 다운로드 무결성 — 버전 핀 + sha256 상수 + 스니펫 주입
 # =============================================================================
@@ -1437,6 +1549,14 @@ _test_sha256_constants_are_64hex() {
         echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.286]가 64자 hex가 아님: '${val}'" >&2
         failed=1
     fi
+    # codex는 본체와 code-mode 헬퍼 둘 다 핀 버전 sha256이 있어야 한다.
+    for v in CODEX_TARBALL_SHA256 CODEX_CMH_SHA256; do
+        eval "val=\"\${${v}[${CODEX_PIN_VERSION}]:-}\""
+        if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "[ASSERT] ${v}[${CODEX_PIN_VERSION}]가 64자 hex가 아님: '${val}'" >&2
+            failed=1
+        fi
+    done
     cleanup_sandbox "$sb"
     return "$failed"
 }
@@ -1550,9 +1670,16 @@ describe "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑"
 _test_claude_wrapper_drops_ld_preload() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     _claude_code_install_wrapper
-    grep -q 'exec env -u LD_PRELOAD grun ' "${CLAUDE_CODE_BIN_PATH}" || {
-        echo "[ASSERT] 래퍼에 env -u LD_PRELOAD 없음 — bionic force_gettext.so가 glibc 로딩을 깨뜨린다" >&2
-        cleanup_sandbox "$sb"; return 1; }
+    {
+        printf '#!%s\n' "$_DOMAIN_BASH"
+        printf '[ -z "${LD_PRELOAD+x}" ] || exit 42\nprintf "%%s\\n" "$@"\n'
+    } > "$PREFIX/bin/grun"
+    chmod +x "$PREFIX/bin/grun"
+    local out
+    # Set the preload only inside an existing shell, so no host binary ever
+    # starts with it. The generated wrapper then execs this sandbox grun.
+    out=$(export LD_PRELOAD=mock-only; source "$CLAUDE_CODE_BIN_PATH" 'space value' '%literal')
+    assert_eq "$CLAUDE_CODE_PREFIX/claude"$'\nspace value\n%literal' "$out"
     cleanup_sandbox "$sb"
 }
 it "래퍼는 grun 앞에서 LD_PRELOAD를 떼어낸다" _test_claude_wrapper_drops_ld_preload
@@ -1588,7 +1715,8 @@ _test_gui_explicit_target() {
     # Verify that DI selected the adapter for the explicit distro, too.
     proot_exec() { _record_call "proot_exec $*"; }
     proot_pkg_remove example
-    assert_was_called 'proot_exec sudo pacman -Rns --noconfirm example'
+    assert_was_called 'pacman -Qq'
+    assert_was_called 'exec pacman -Rns --noconfirm'
     cleanup_sandbox "$sb"
 }
 it 'GUI preserves explicit distro/user and selects their adapter' _test_gui_explicit_target
@@ -1629,7 +1757,13 @@ it 'locale-gen failure does not leave a completed installation marker' _test_kor
 describe 'regression — removal failures propagate before launcher cleanup'
 _test_failed_removal_for_current_id() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    local cleanup_seen=0 rc=0
+    local cleanup_seen=0 removal_command_seen=0 rc=0
+    case "$_remove_id" in
+        notepadpp|sevenzip|sumatrapdf|winmerge)
+            _wine_context_write "$_WINE_APP_STATE/$_remove_id.context" 'box64|native|||'
+            ;;
+        wine) wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER" ;;
+    esac
     termux_pkg_is_installed() { return 0; }
     proot_pkg_is_installed() { return 0; }
     termux_pkg_remove() { return 42; }
@@ -1638,7 +1772,7 @@ _test_failed_removal_for_current_id() {
     proot_pkg_remove_libreoffice() { return 42; }
     proot_pkg_purge() { return 42; }
     proot_exec() { return 42; }
-    wine_exec_shell() { return 42; }
+    wine_exec_shell() { removal_command_seen=1; return 42; }
     dpkg() { return 42; }
     desktop_remove() { cleanup_seen=1; }
     rm() { cleanup_seen=1; }
@@ -1647,6 +1781,9 @@ _test_failed_removal_for_current_id() {
     unset -f rm
     assert_nonzero "$rc" "$_remove_id hid a removal failure"
     assert_eq 0 "$cleanup_seen" "$_remove_id cleaned up before removal succeeded"
+    case "$_remove_id" in
+        notepadpp|sevenzip|sumatrapdf|winmerge) assert_eq 1 "$removal_command_seen" ;;
+    esac
     cleanup_sandbox "$sb"
 }
 for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev gpu_native hangover \
@@ -1691,7 +1828,7 @@ EOF
     PATH="$sb/bin:$PATH" bash "$_WAYVNC_LAUNCHER" 127.0.0.1 5901 >/dev/null
     assert_file_contains "$HOME/wayvnc-invoked" '127.0.0.1 5901'
     rm "$HOME/wayvnc-invoked"
-    if WAYLAND_DISPLAY=wayland-termux-xfce PATH="$sb/bin:$PATH" \
+    if WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=KDE PATH="$sb/bin:$PATH" \
         bash "$_WAYVNC_LAUNCHER" >/dev/null 2>&1; then return 1; fi
     [ ! -e "$HOME/wayvnc-invoked" ]
     cleanup_sandbox "$sb"

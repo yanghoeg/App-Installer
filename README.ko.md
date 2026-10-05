@@ -37,7 +37,9 @@ bash app-install.sh remove vlc
 ```
 
 분류 필터에는 `개발`, `시스템`, `Termux API`, `Wine` 등 레지스트리의 값을 사용합니다.
-`install`은 이미 설치된 것으로 판정한 항목을 건너뜁니다. `status`는 상태를 출력하며
+`install`은 이미 설치된 것으로 판정한 항목을 건너뜁니다 — 단 앱이 무결성 확인
+(`app_verify_<id>`)을 제공하면 그 확인에 실패한 설치본은 재설치로 복구합니다
+(현재 Claude Code만 해당). `status`는 상태를 출력하며
 알려진 ID라면 설치·미설치 모두 성공으로 종료하므로 종료 코드만으로 설치 여부를
 판정할 수 없습니다. 알 수 없는 ID와 작업 실패는 0이 아닌 코드로 종료합니다.
 CLI에는 `upgrade`나 `rollback` 하위 명령이 없습니다.
@@ -49,8 +51,8 @@ CLI에는 `upgrade`나 `rollback` 하위 명령이 없습니다.
 
 | 앱 | 업그레이드 동작 |
 |----|-----------------|
-| Claude Code | `CLAUDE_CODE_PIN_VERSION`으로 갱신. 기록된 기존 버전을 백업하고 다운로드 후 `--version` 실행. 다운로드·스모크 실패 시 해당 백업 복원 시도 |
-| Codex CLI | `CODEX_PIN_VERSION`으로 바이너리와 래퍼 갱신. Claude Code의 백업·스모크·롤백 절차는 없음 |
+| Claude Code | `CLAUDE_CODE_PIN_VERSION`으로 갱신. 기록된 기존 버전을 백업하고 다운로드 후 `--version` 실행. 백업 실패 시 바이너리 교체 전에 중단. 다운로드·스모크 실패 시 해당 백업 복원 시도 |
+| Codex CLI | `CODEX_PIN_VERSION`으로 바이너리·`codex-code-mode-host` 헬퍼·래퍼 갱신. Claude Code의 백업·스모크·롤백 절차는 없음 |
 | Notion | 기존 AppImage 런처를 Termux Firefox 웹 런처로 교체. 이전 앱 디렉터리는 제거할 때까지 보존 |
 
 그 외 설치된 항목은 제거할 수 있습니다. Claude Code의 스모크 검사는 `/login`을
@@ -92,7 +94,7 @@ GUI에서는 기존 설치가 감지될 때만 표시합니다. CLI 목록에는
 | `llama_cpp` | **llama.cpp** | GGUF 추론 (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = 네이티브 OpenCL GPU 가속 (기본 컨텍스트 4096, `LLAMA_CTX`로 변경); `llama-model-get`로 Qwen2.5/Qwen3.5 GGUF 다운로드 (`3.5-2b` Q5, `3.5-4b` Q4) |
 | `aichat` | **aichat** | 터미널 AI 어시스턴트 CLI | Termux native | 로컬(`llama-server`)/클라우드 API 연동 |
 | `crush` | **Crush** | 터미널 AI 코딩 에이전트 | Termux native | 제공자 API 키 필요 |
-| `codex` | **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | 업스트림 정적 musl 바이너리(핀 버전) + proot 네트워크 shim(DNS/CA), `codex login` 또는 `OPENAI_API_KEY` 필요 |
+| `codex` | **Codex CLI** | OpenAI 코딩 에이전트 CLI | Termux native | 업스트림 정적 musl 바이너리(핀 버전) + `codex-code-mode-host` 헬퍼 + proot 네트워크 shim(DNS/CA). 래퍼가 임베디드 모드로 고정(`features.daemon_auto_start=false`)하므로 `codex agents` / `/daemon`은 사용 불가. `codex login` 또는 `OPENAI_API_KEY` 필요 |
 | `code_server` | **code-server** | 브라우저에서 여는 VS Code | Termux native | 127.0.0.1:8080 서빙 |
 | `ml_python` | **PyTorch + ONNX Runtime** | 온디바이스 ML 런타임 | Termux native | 약 280MB |
 | `ncnn_upscale` | **AI 업스케일 (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan 가속 |
@@ -295,12 +297,14 @@ APK·자산 다운로드는 별도 경로이므로 이 헬퍼의 검증 범위�
 App Installer 저장소 폴더에서 실행합니다.
 
 ```bash
-for suite in domain_apps adapters ports fetch proot_path cli; do
+for suite in domain_apps adapters ports fetch proot_path cli \
+    review_claude_code review_input_gpu review_removal_wine review_app_core; do
     bash "tests/test_${suite}.sh" || exit 1
 done
 ```
 
-도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI를 검사합니다. PC에서는 mock과 정적
+도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI, Wine 실행, 입력기 의존성,
+제거 및 업그레이드 실패 처리를 검사합니다. PC에서는 mock과 정적
 검사를 사용하며, CLI 테스트는 패키지·다운로드 명령을 격리한 상태에서 실제 진입점을
 실행합니다. 부모 로케일 통합 테스트에는 Termux_XFCE 저장소가 필요합니다.
 `tests/test_nimf_*_real.sh`는 실기기의 Termux에서 실행하며 스크립트가 직접 proot에

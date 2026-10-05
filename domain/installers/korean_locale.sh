@@ -30,8 +30,8 @@ app_install_korean_locale() (
 )
 
 app_remove_korean_locale() {
-    # force_gettext.so 제거
-    rm -f "${PREFIX}/lib/force_gettext.so" || return 1
+    # force_gettext.so 및 소스 해시 제거
+    rm -f "${PREFIX}/lib/force_gettext.so" "${PREFIX}/lib/force_gettext.so.sha256" || return 1
 
     # RC 파일에서 korean 블록 제거
     local rc
@@ -49,3 +49,17 @@ app_remove_korean_locale() {
 app_is_installed_korean_locale() {
     [ -s "${PREFIX}/lib/force_gettext.so" ]
 }
+
+# 카탈로그 재선택 없이 기존 한글 훅과 RC 환경만 갱신한다.
+app_upgrade_korean_locale() (
+    app_is_installed_korean_locale || return 1
+    local main_dir
+    main_dir="$(cd "${BASH_SOURCE[0]%/*}/../../.." && pwd)" || return 1
+    SCRIPT_DIR="$main_dir"
+    source "$main_dir/adapters/output/ui_terminal.sh" || return 1
+    source "$main_dir/adapters/output/pkg_common_termux.sh" || return 1
+    source "$main_dir/domain/termux_env.sh" || return 1
+    source "$main_dir/domain/locale_ko.sh" || return 1
+    _build_force_gettext || return 1
+    setup_korean_rc
+)

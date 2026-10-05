@@ -20,17 +20,19 @@ app_install_sasm() {
 }
 
 app_remove_sasm() {
-    local rootfs="$(_proot_rootfs)"
-    local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
-    # Arch: 소스 빌드 → 직접 삭제 / Ubuntu: apt purge
-    case "${PROOT_DISTRO:-}" in
-        archlinux)
-            proot_exec sudo rm -f /usr/bin/sasm /usr/local/bin/sasm || return 1
-            proot_exec sudo rm -rf /usr/share/sasm || return 1
-            ;;
-        *) proot_pkg_purge sasm || return 1 ;;
-    esac
-    if [ -f "$bashrc" ]; then sed -i '/alias sasm=/d' "$bashrc" || return 1; fi
+    if has_proot_distro; then
+        local rootfs="$(_proot_rootfs)"
+        local bashrc="${rootfs}/home/${PROOT_USER}/.bashrc"
+        # Arch: 소스 빌드 → 직접 삭제 / Ubuntu: apt purge
+        case "${PROOT_DISTRO:-}" in
+            archlinux)
+                proot_exec sudo rm -f /usr/bin/sasm /usr/local/bin/sasm || return 1
+                proot_exec sudo rm -rf /usr/share/sasm || return 1
+                ;;
+            *) proot_pkg_purge sasm || return 1 ;;
+        esac
+        if [ -f "$bashrc" ]; then sed -i '/alias sasm=/d' "$bashrc" || return 1; fi
+    fi
     desktop_remove "sasm"
 }
 

@@ -62,6 +62,5 @@ app_remove_gpu_proot() {
 
 app_is_installed_gpu_proot() {
     has_proot_distro || return 1
-    [ -f "$(_gpu_proot_profile_path)" ] || \
-        grep -q '^export MESA_LOADER_DRIVER_OVERRIDE=zink' "$(_proot_rootfs)/etc/profile.d/termux-xfce-env.sh" 2>/dev/null
+    [ -f "$(_gpu_proot_profile_path)" ]
 }

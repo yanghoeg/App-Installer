@@ -16,6 +16,7 @@ _detect_proot_user() {
     local d
     for d in "$home_dir"/*/; do
         [ -d "$d" ] || continue
+        [ "${d%/}" != "$home_dir/alarm" ] || continue
         basename "$d"
         return
     done

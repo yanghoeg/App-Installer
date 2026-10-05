@@ -18,6 +18,9 @@
 - 다운로드는 `$PREFIX/share/claude-code/.stage`에 푼 뒤 `rename`으로 바꿔 끼웁니다.
   실행 중인 claude 위에 제자리로 덮어쓰면 그 세션이 SIGBUS로 죽기 때문입니다 —
   `grun`은 `ld.so`가 바이너리를 mmap으로 올리므로 커널 deny-write(`ETXTBSY`)가 안 걸립니다.
+- 복원(`app_rollback_claude_code`)도 같은 이유로 `claude.restore`에 복사한 뒤 `rename`
+  으로 바꿔 끼웁니다. 제자리 덮어쓰기는 실행 중 세션을 죽이고, 복사가 끊기면 짧은
+  파일이 남아 다음 실행이 `ld.so`의 `file too short`로 깨집니다.
 - `$PREFIX/bin/claude` 래퍼는 `grun` 실행 전에 `env -u LD_PRELOAD`로 LD_PRELOAD를 떼어냅니다.
   부모 `domain/termux_env.sh`가 RC에 넣는 bionic `force_gettext.so`가 glibc 바이너리의
   `libdl.so` 로딩을 깨뜨리기 때문입니다.
@@ -30,8 +33,11 @@
 - 새 `~/.claude/settings.json`에는 `DISABLE_AUTOUPDATER=1`을 넣습니다. 기존 파일은
   수정하지 않으므로 이미 설정 파일이 있다면 자동 갱신 설정도 직접 확인해야 합니다.
 
-CLI의 `install claude_code`는 이미 설치된 항목을 건너뜁니다. 업그레이드는 GUI의
-**업그레이드**를 사용하며 `app-install.sh`에 `upgrade`나 `rollback` 명령은 없습니다.
+CLI의 `install claude_code`는 이미 설치된 항목을 건너뛰지만, 건너뛰기 전에
+`app_verify_claude_code`(= 스모크 검사)로 바이너리가 실제로 로드되는지 확인합니다.
+내용이 깨진 설치본은 `app_is_installed_claude_code`의 실행권한 검사를 통과하므로,
+이 확인이 없으면 재설치로 복구할 수 없었습니다. 업그레이드는 GUI의 **업그레이드**를
+사용하며 `app-install.sh`에 `upgrade`나 `rollback` 명령은 없습니다.
 
 ## 백업에서 수동 복원
 
@@ -92,6 +98,27 @@ claude
 토큰 값은 테스트 로그나 이 문서에 기록하지 않습니다.
 
 ## 변경 이력
+
+### 2026-10-01 (2) — 손상된 설치본 복구 경로, 롤백 스왑
+
+증상: 실기기에서 claude 가 `file too short`로 실행되지 않았습니다. 바이너리는
+`$PREFIX/share/claude-code/claude`(2.1.286) 그대로였고 디렉터리 mtime 상 설치기가
+건드린 흔적은 없었습니다 — 리뷰 서브에이전트 14개가 돌던 중 Android LMK 가 Termux 를
+통째로 죽인 시점(14:20)을 전후로 같은 inode 의 내용만 깨졌습니다. 2.1.286 자체는 정상
+(tarball 재다운로드 SHA-256 일치, `grun …/claude --version` 성공)이었고 복구는
+`app_rollback_claude_code 2.1.261` 로 했습니다.
+
+- `app-install.sh install claude_code` 로는 복구가 안 됐습니다. `app_is_installed_claude_code`
+  가 `-x` 만 보므로 깨진 바이너리도 "이미 설치되어 있습니다"로 빠졌습니다 →
+  `app_verify_<id>` 훅(`domain/apps.sh`의 `app_verify`)을 추가하고 `cmd_install` 이
+  확인 실패 시 재설치로 복구하게 했습니다. Claude Code 의 훅은 기존 스모크 검사입니다.
+- `app_rollback_claude_code` 가 `cp -f` 로 제자리 덮어쓰기를 했습니다 → download 와 같은
+  staging + `rename` 스왑으로 교체. 240MB 파일로 실측하니 제자리 덮어쓰기는 매핑된
+  프로세스에 SIGBUS 111,221 회를 일으키고(MAP_PRIVATE COW 페이지까지 덮임) `rename`
+  스왑은 0 회였습니다.
+
+  회귀 테스트: `tests/test_domain_apps.sh` → "롤백 → 제자리 덮어쓰기 대신 rename 으로 교체",
+  "app_verify — 설치본 무결성 확인"; `tests/test_cli.sh` → corrupt/healthy Claude install.
 
 ### 2026-10-01 — 핀 2.1.261 → 2.1.286, 설치기 버그 2건 수정
 

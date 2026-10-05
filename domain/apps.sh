@@ -33,15 +33,15 @@ APP_REGISTRY=(
     "watchexec|watchexec|개발|파일 변경 시 명령 재실행 (Termux native)"
     "libreoffice|LibreOffice|오피스|오픈소스 오피스 (proot)"
     "burpsuite|Burp Suite|보안|웹 보안 테스트 도구 (proot)"
-    "tor_browser|Tor Browser (기존 설치 제거)|브라우저|유지보수 중인 Linux ARM64 빌드 없음 — 신규 설치 중단"
-    "notion|Notion|오피스|노트 및 협업 도구 (Firefox 웹 앱)"
+    "tor_browser|Tor Browser (기존 설치 제거)|브라우저|기존 proot 설치 제거용 — 신규 설치 중단"
+    "notion|Notion|오피스|노트 및 협업 도구 (Termux native Firefox 웹 앱)"
     "dbeaver|DBeaver|개발|범용 데이터베이스 클라이언트 (proot)"
     "miniforge|Miniforge3|개발|Python conda 환경 (proot)"
     "sasm|SASM|개발|어셈블러 IDE (proot)"
     "nautilus|Nautilus|유틸|파일 관리자 (proot)"
     "superfile|superfile|유틸|현대적 TUI 파일 매니저 spf (Termux native)"
     "uutils|uutils-coreutils|유틸|Rust로 재구현한 coreutils (Termux native)"
-    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC 원격 접속 (wlroots 전용, Anland/KWin 미지원)"
+    "wayvnc|wayvnc 원격 데스크탑|유틸|VNC 원격 접속 (Termux native, 외부 Sway 세션 전용)"
     "ncnn_upscale|AI 업스케일 (ncnn)|미디어|Real-ESRGAN 확대 + RIFE 보간 (Vulkan 가속)"
     "wine|Wine (Box64+Staging)|Wine|Windows 앱 실행 — Box64 (proot 또는 glibc-runner)"
     "hangover|Wine (Hangover)|Wine|Windows 앱 실행 — FEX/ARM64EC (Termux native, 더 빠름)"
@@ -115,6 +115,15 @@ app_can_upgrade() {
 app_upgrade() {
     local id="$1"
     "app_upgrade_${id}"
+}
+
+# 설치본 동작 확인 — app_verify_<id>가 있으면 호출, 없으면 확인 생략(성공)
+# app_is_installed_<id>는 파일 존재/실행권한만 보므로 내용이 깨진 설치본도 통과한다.
+# cmd_install이 재설치로 복구할지 판단하는 근거.
+app_verify() {
+    local id="$1"
+    declare -F "app_verify_${id}" >/dev/null 2>&1 || return 0
+    "app_verify_${id}"
 }
 
 # Retired installers remain addressable so users can remove existing copies.

@@ -22,6 +22,9 @@ app_install_sumatrapdf() {
         app_install_wine || return 1
     fi
 
+    local context
+    context=$(wine_backend_context) || return 1
+
     echo "[Sumatra PDF] portable exe 다운로드 중... (백엔드: $(wine_backend))"
     wine_exec_shell "$(fetch_verified_src)"$'\n'"
         set -e
@@ -35,7 +38,9 @@ app_install_sumatrapdf() {
         done
         [ -f \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF/SumatraPDF.exe\" ]
         rm -f \${TMPDIR:-/tmp}/sumatra.zip
-    " || { echo "[ERROR] Sumatra PDF 다운로드/설치 실패" >&2; return 1; }
+    " "$context" || { echo "[ERROR] Sumatra PDF 다운로드/설치 실패" >&2; return 1; }
+
+    wine_app_record "sumatrapdf" "$context" || return 1
 
     mkdir -p "${PREFIX}/share/applications"
     cat > "$_SUMATRA_DESKTOP" << 'EOF'
@@ -44,7 +49,7 @@ Version=1.0
 Type=Application
 Name=Sumatra PDF
 Comment=PDF/EPUB/MOBI 뷰어 (Wine)
-Exec=bash -c "wine 'C:\\Program Files\\SumatraPDF\\SumatraPDF.exe' %f </dev/null >/dev/null 2>&1 &"
+Exec=wine-app-sumatrapdf %f
 Icon=wine
 Categories=Office;Viewer;
 MimeType=application/pdf;application/epub+zip;
@@ -61,12 +66,9 @@ EOF
 }
 
 app_remove_sumatrapdf() {
-    wine_exec_shell "
-        rm -rf \"\$WINEPREFIX/drive_c/Program Files/SumatraPDF\" 2>/dev/null
-    " || return 1
-    rm -f "$_SUMATRA_DESKTOP" "${HOME}/Desktop/sumatrapdf.desktop"
+    wine_app_remove "sumatrapdf"
 }
 
 app_is_installed_sumatrapdf() {
-    [ -e "$_SUMATRA_DESKTOP" ]
+    wine_app_is_installed "sumatrapdf"
 }

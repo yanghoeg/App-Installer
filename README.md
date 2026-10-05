@@ -37,7 +37,9 @@ bash app-install.sh remove vlc
 ```
 
 The category filter uses registry labels such as `개발`, `시스템`, `Termux API`, and
-`Wine`. `install` skips entries already reported as installed. `status` prints the
+`Wine`. `install` skips entries already reported as installed — unless the app provides an
+integrity check (`app_verify_<id>`) and that check fails, in which case the damaged
+install is repaired by reinstalling (only Claude Code provides one today). `status` prints the
 state; both installed and absent known IDs return success, so its exit code alone
 is not an installed-state test. Unknown IDs and failed operations return nonzero.
 The CLI has no `upgrade` or `rollback` subcommand.
@@ -49,8 +51,8 @@ An installed app with an `app_upgrade_<id>` handler offers **Upgrade** alongside
 
 | App | Upgrade behavior |
 |-----|------------------|
-| Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. On download/smoke failure, attempt to restore that backup |
-| Codex CLI | Update to `CODEX_PIN_VERSION`; replace the binary and wrapper, without Claude Code's backup/smoke/rollback flow |
+| Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. Abort before replacing the binary if backup fails. On download/smoke failure, attempt to restore that backup |
+| Codex CLI | Update to `CODEX_PIN_VERSION`; replace the binary, the `codex-code-mode-host` helper and the wrapper, without Claude Code's backup/smoke/rollback flow |
 | Notion | Replace the old AppImage launcher with a Termux Firefox web launcher; keep the old app directory until removal |
 
 Other installed entries offer removal. The Claude Code smoke check does not test
@@ -94,7 +96,7 @@ detected; the CLI list still includes it.
 | `llama_cpp` | **llama.cpp** | GGUF inference (`llama-gpu` / `llama-cli` / `llama-server`) | Termux native | `llama-gpu` = native OpenCL GPU accel (default ctx 4096, `LLAMA_CTX` to override); `llama-model-get` fetches Qwen2.5/Qwen3.5 GGUF (`3.5-2b` Q5, `3.5-4b` Q4) |
 | `aichat` | **aichat** | Terminal AI assistant CLI | Termux native | local (`llama-server`) / cloud API |
 | `crush` | **Crush** | Terminal AI coding agent | Termux native | needs provider API key |
-| `codex` | **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary + proot network shim (DNS/CA), needs `codex login` or `OPENAI_API_KEY` |
+| `codex` | **Codex CLI** | OpenAI coding agent CLI | Termux native | pinned upstream static musl binary + `codex-code-mode-host` helper + proot network shim (DNS/CA); the wrapper pins embedded mode (`features.daemon_auto_start=false`), so `codex agents` / `/daemon` are unavailable; needs `codex login` or `OPENAI_API_KEY` |
 | `code_server` | **code-server** | VS Code in the browser | Termux native | serve on 127.0.0.1:8080 |
 | `ml_python` | **PyTorch + ONNX Runtime** | On-device ML runtimes | Termux native | ~280 MB |
 | `ncnn_upscale` | **AI upscale (ncnn)** | Real-ESRGAN + RIFE | Termux native | Vulkan accelerated |
@@ -301,12 +303,14 @@ APK/asset download paths; this helper's guarantees do not cover every parent dow
 From the App Installer checkout:
 
 ```bash
-for suite in domain_apps adapters ports fetch proot_path cli; do
+for suite in domain_apps adapters ports fetch proot_path cli \
+    review_claude_code review_input_gpu review_removal_wine review_app_core; do
     bash "tests/test_${suite}.sh" || exit 1
 done
 ```
 
-These suites cover the domain, adapters, ports, downloads, rootfs paths, and CLI.
+These suites cover the domain, adapters, ports, downloads, rootfs paths, CLI,
+Wine execution, input method dependencies, removal, and upgrade failure handling.
 On a PC they use mocks and static checks; CLI tests run the real entry point with
 isolated package/download commands. Parent locale integration tests require the
 Termux_XFCE checkout. `tests/test_nimf_*_real.sh` are run from Termux on a real device and enter proot

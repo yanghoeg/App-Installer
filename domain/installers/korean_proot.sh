@@ -45,6 +45,7 @@ _KOREAN_PROOT_PKGS_ARCH_NIMF=(
 _KOREAN_PROOT_PKGS_ARCH_FCITX5=(
     fcitx5-hangul
     fcitx5-configtool
+    fcitx5-gtk
 )
 
 # Managed locale file and legacy ~/.profile block markers.
@@ -207,7 +208,7 @@ app_remove_korean_proot() {
     local -a candidates=() installed=()
     case "${PROOT_DISTRO:-}" in
         ubuntu) candidates=(nimf nimf-i18n) ;;
-        archlinux) candidates=(nimf nimf-libhangul fcitx5-hangul fcitx5-configtool) ;;
+        archlinux) candidates=(nimf nimf-libhangul fcitx5-hangul fcitx5-configtool fcitx5-gtk) ;;
     esac
     for p in "${candidates[@]}"; do
         if proot_pkg_is_installed "$p"; then installed+=("$p"); fi

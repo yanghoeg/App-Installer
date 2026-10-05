@@ -41,6 +41,7 @@ _wine_install_tarball_proot() {
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
     proot_exec_wine sudo bash -c "$(fetch_verified_src)"$'\n'"
         set -e
+        command -v file >/dev/null 2>&1 || { echo '[ERROR] Wine ELF 판별에 file 명령이 필요합니다.' >&2; exit 1; }
         mkdir -p /opt/wine-staging
         fetch_verified '${wine_url}' /tmp/wine-staging.tar.xz '${_WINE_STAGING_SHA256}'
         tar -xJf /tmp/wine-staging.tar.xz -C /opt/wine-staging --strip-components=1
@@ -50,13 +51,18 @@ _wine_install_tarball_proot() {
         # argv[0] 보존: box64가 wine 경로의 basename을 argv[0]으로 전달
         cd /opt/wine-staging/bin
         mkdir -p .elf
+        wrapped_required=0
         for f in wine wineserver wineboot winedbg; do
             if [ -f \"\$f\" ] && file \"\$f\" 2>/dev/null | grep -q 'x86-64'; then
                 mv \"\$f\" \".elf/\$f\"
                 printf '#!/bin/bash\nexec box64 /opt/wine-staging/bin/.elf/%s \"\$@\"\n' \"\$f\" > \"\$f\"
                 chmod +x \"\$f\"
+                case \"\$f\" in wine|wineserver) wrapped_required=\$((wrapped_required + 1)) ;; esac
             fi
         done
+        [ \"\$wrapped_required\" -eq 2 ] && test -x .elf/wine && test -x .elf/wineserver || {
+            echo '[ERROR] Wine x86-64 ELF 래퍼 생성 실패' >&2; exit 1;
+        }
         # ELF의 상대경로 ../lib, ../share 가 올바른 위치를 가리키도록 symlink
         ln -sf ../lib /opt/wine-staging/bin/lib
         ln -sf ../share /opt/wine-staging/bin/share
@@ -87,24 +93,24 @@ _wine_init_prefix_proot() {
     echo "[Wine] WINEPREFIX 초기화 중..."
     proot_exec_wine bash -c \
         "WINEPREFIX=\$HOME/.wine WINEDEBUG=-all wine wineboot --init 2>/dev/null || true" || true
-    # wineserver persistent: 후속 실행 속도 향상 (prefix 초기화 상태 유지)
-    proot_exec_wine bash -c "wineserver -p 2>/dev/null &" || true
 }
 
 # Termux native: glibc-runner + box64-glibc + Wine-Staging tarball
 _wine_install_native() {
     echo "[Wine] Termux native: glibc-runner + box64-glibc + Wine-Staging"
 
-    # 래퍼가 아니라 wine 트리 자체로 판정한다.
-    # (래퍼 경로가 wine → wine-box64로 바뀐 기존 설치도 재다운로드하지 않도록)
-    if [ -x "$_WINE_NATIVE_DIR/bin/wine" ]; then
-        echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
-        _wine_write_box64_native_wrapper
-        return 0
-    fi
-
     termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner box64-glibc || return 1
+
+    # An executable alone can remain after an interrupted extraction. Accept
+    # legacy trees only when the server and essential Unix/PE libraries exist.
+    if _wine_native_tree_complete "$_WINE_NATIVE_DIR"; then
+        echo "[Wine] 이미 설치되어 있습니다. 래퍼만 갱신합니다."
+        _wine_write_box64_native_wrapper || return 1
+        cp "$_WINE_BIN" "${_WINE_BIN}-native" || return 1
+        wine_backend_record_context native
+        return $?
+    fi
 
     for p in \
         mesa-glibc vulkan-volk-glibc mesa-vulkan-icd-freedreno-glibc \
@@ -119,31 +125,47 @@ _wine_install_native() {
     local wine_url
     wine_url=$(_wine_tarball_url)
     echo "[Wine] wine-staging 다운로드 중... (수분 소요)"
-    mkdir -p "$_WINE_NATIVE_DIR"
-    local _tmp_tar="${TMPDIR:-/tmp}/wine-staging.tar.xz"
-    fetch_verified "$wine_url" "$_tmp_tar" "$_WINE_STAGING_SHA256" || {
+    local stage backup
+    stage=$(mktemp -d "${_WINE_NATIVE_DIR}.stage.XXXXXX") || return 1
+    backup="${stage}.previous"
+    local _tmp_tar="$stage/wine-staging.tar.xz"
+    if ! fetch_verified "$wine_url" "$_tmp_tar" "$_WINE_STAGING_SHA256"; then
+        rm -rf "$stage"
         echo "[ERROR] Wine 다운로드 실패" >&2
         return 1
-    }
-    if ! tar -xJf "$_tmp_tar" -C "$_WINE_NATIVE_DIR" --strip-components=1; then
-        rm -f "$_tmp_tar"
-        echo "[ERROR] Wine 압축 해제 실패" >&2
+    fi
+    if ! tar -xJf "$_tmp_tar" -C "$stage" --strip-components=1 || ! _wine_native_tree_complete "$stage"; then
+        rm -rf "$stage"
+        echo "[ERROR] Wine 압축 해제/필수 파일 검증 실패" >&2
         return 1
     fi
-    rm -f "$_tmp_tar"
-    [ -x "$_WINE_NATIVE_DIR/bin/wine" ] || {
-        echo "[ERROR] Wine 실행 파일을 찾을 수 없습니다." >&2
+    rm -f "$_tmp_tar" || { rm -rf "$stage"; return 1; }
+    if [ -e "$_WINE_NATIVE_DIR" ]; then
+        mv "$_WINE_NATIVE_DIR" "$backup" || { rm -rf "$stage"; return 1; }
+    fi
+    if ! mv "$stage" "$_WINE_NATIVE_DIR"; then
+        [ ! -e "$backup" ] || mv "$backup" "$_WINE_NATIVE_DIR"
+        rm -rf "$stage"
         return 1
-    }
-
-    _wine_write_box64_native_wrapper
+    fi
+    rm -rf "$backup" || return 1
+    _wine_write_box64_native_wrapper || return 1
+    cp "$_WINE_BIN" "${_WINE_BIN}-native" || return 1
+    wine_backend_record_context native || return 1
 
     "$_WINE_BIN" wineboot --init 2>/dev/null || true
+}
+
+_wine_native_tree_complete() {
+    [ -x "$1/bin/wine" ] && [ -x "$1/bin/wineserver" ] &&
+    [ -s "$1/lib/wine/x86_64-unix/ntdll.so" ] &&
+    [ -s "$1/lib/wine/x86_64-windows/kernel32.dll" ]
 }
 
 # $PREFIX/bin/wine-box64 — Termux native (glibc-runner) 래퍼
 # Mesa/Vulkan/Wine 공통 env는 wine_emit_env_block()(lib/wine_backend.sh)에서 온다.
 _wine_write_box64_native_wrapper() {
+    local destination="${1:-$_WINE_BIN}"
     {
         cat << 'WRAP_HEAD'
 #!/data/data/com.termux/files/usr/bin/bash
@@ -174,36 +196,55 @@ export BOX64_DYNAREC_SAFEFLAGS=2
 # DXVK
 export DXVK_ASYNC="${DXVK_ASYNC:-1}"
 export DXVK_STATE_CACHE="${DXVK_STATE_CACHE:-reset}"
-if [ -x "$HOME/.wine-staging/bin/wineserver" ]; then
-    grun "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
+# grun's unquoted argv handling loses Windows paths containing spaces. Invoke
+# its ARM64 glibc loader directly, with Box64 handling the x86-64 Wine programs.
+unset LD_PRELOAD
+export PATH="$PREFIX/glibc/bin:$PATH"
+_loader="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
+_box64="$PREFIX/glibc/bin/box64"
+if [ ! -x "$_loader" ] || [ ! -x "$_box64" ]; then
+    echo "[ERROR] glibc 또는 Box64가 없습니다. Wine을 다시 설치하세요." >&2
+    exit 1
 fi
-exec grun "$HOME/.wine-staging/bin/wine" "$@"
+if [ -x "$HOME/.wine-staging/bin/wineserver" ]; then
+    "$_loader" --library-path "$PREFIX/glibc/lib" "$_box64" "$HOME/.wine-staging/bin/wineserver" -p 2>/dev/null &
+fi
+exec "$_loader" --library-path "$PREFIX/glibc/lib" "$_box64" "$HOME/.wine-staging/bin/wine" "$@"
 WRAP_TAIL
-    } > "$_WINE_BIN"
-    chmod +x "$_WINE_BIN"
+    } > "$destination" || return 1
+    chmod +x "$destination"
 }
 
 # .desktop + proot 래퍼 스크립트 생성
 _wine_create_launchers() {
     if has_proot_distro; then
-        cat > "$_WINE_BIN" << 'WRAPEOF'
-#!/data/data/com.termux/files/usr/bin/bash
-# Wine wrapper — prun을 통해 proot 내 wine-staging 실행, 백엔드 id: box64
-# WINE_DPI=240 wine explorer   ← DPI 오버라이드 예시
+        local context
+        context="box64|proot|${PROOT_DISTRO}|${PROOT_USER}|${PROOT_ROOTFS_BASE:-}"
+        _wine_context_valid "$context" || return 1
+        {
+        printf '#!%s/bin/bash\n# wine-context: %s\n' "$PREFIX" "$context"
+        printf 'export PROOT_DISTRO=%q PROOT_USER=%q\n' "$PROOT_DISTRO" "$PROOT_USER"
+        if [ -n "${PROOT_ROOTFS_BASE:-}" ]; then
+            printf 'export PROOT_ROOTFS_BASE=%q\n' "$PROOT_ROOTFS_BASE"
+        else
+            printf 'unset PROOT_ROOTFS_BASE\n'
+        fi
+        cat << 'WRAPEOF'
+# Wine wrapper — pinned container target, backend id: box64
+# WINE_DPI=240 wine explorer
 
 WINE_DPI="${WINE_DPI:-240}"
 
 # Android CPU 쓰로틀링 방지
 termux-wake-lock 2>/dev/null
 
-# Load the configured proot distro; native-only configurations must not pick one.
-_conf="$HOME/.config/termux-xfce/config"
-[ -f "$_conf" ] && . "$_conf"
-if [ -z "${PROOT_DISTRO:-}" ]; then
-    echo "[ERROR] Wine Box64 requires PROOT_DISTRO in ~/.config/termux-xfce/config." >&2
-    exit 1
-fi
-exec prun env WINE_DPI="$WINE_DPI" bash -c '
+# Invoke the saved container directly: prun loads the current desktop config and
+# would silently replace this installation's distro/user after a config change.
+unset LD_PRELOAD
+exec proot-distro login "$PROOT_DISTRO" --user "$PROOT_USER" --shared-tmp -- \
+    env -u LD_PRELOAD DISPLAY="${DISPLAY:-:0.0}" WINE_DPI="$WINE_DPI" \
+    bash --noprofile --norc -c '
+    if [ -r /etc/profile.d/gpu-accel.sh ]; then . /etc/profile.d/gpu-accel.sh || exit $?; fi
     export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}" WINEESYNC=1 WINEDEBUG="${WINEDEBUG:--all}"
     case "$WINE_DPI" in *[!0-9]*|"") echo "[ERROR] WINE_DPI must be a positive integer" >&2; exit 2 ;; esac
     _reg="$WINEPREFIX/user.reg"
@@ -211,10 +252,12 @@ exec prun env WINE_DPI="$WINE_DPI" bash -c '
         _hex=$(printf "%08x" "$((10#$WINE_DPI))")
         sed -i "s/\"LogPixels\"=dword:[0-9a-f]\{8\}/\"LogPixels\"=dword:${_hex}/" "$_reg"
     fi
-    exec wine "$@"
+    exec /opt/wine-staging/bin/wine "$@"
 ' wine-box64 "$@"
 WRAPEOF
-        chmod +x "$_WINE_BIN"
+        } > "$_WINE_BIN" || return 1
+        chmod +x "$_WINE_BIN" || return 1
+        wine_backend_record_context proot "$PROOT_DISTRO" "$PROOT_USER" "${PROOT_ROOTFS_BASE:-}" || return 1
     fi
 
     mkdir -p "${PREFIX}/share/applications"
@@ -279,12 +322,17 @@ app_install_wine() {
         echo "[Wine] proot 감지: ${PROOT_DISTRO} (user: ${PROOT_USER})"
 
         # 이미 설치된 경우 건너뜀
-        if proot_exec which wine &>/dev/null 2>&1; then
+        if proot_exec env PATH=/usr/local/bin:/usr/bin:/bin bash -c \
+            'test -x /opt/wine-staging/bin/wine && test -x /opt/wine-staging/bin/wineserver &&
+             test -x /opt/wine-staging/bin/.elf/wine && test -x /opt/wine-staging/bin/.elf/wineserver &&
+             grep -Fqx "exec box64 /opt/wine-staging/bin/.elf/wine \"\$@\"" /opt/wine-staging/bin/wine &&
+             grep -Fqx "exec box64 /opt/wine-staging/bin/.elf/wineserver \"\$@\"" /opt/wine-staging/bin/wineserver &&
+             command -v box64 >/dev/null' &>/dev/null; then
             echo "[Wine] 이미 설치되어 있습니다. 건너뜁니다."
         else
             proot_pkg_update || return 1
             proot_pkg_install_box64 || return 1
-            if ! proot_exec which box64 &>/dev/null; then
+            if ! proot_exec env PATH=/usr/local/bin:/usr/bin:/bin bash -c 'command -v box64' &>/dev/null; then
                 echo "[ERROR] Box64 설치 실패 — Wine을 설치할 수 없습니다." >&2
                 return 1
             fi
@@ -311,19 +359,41 @@ app_install_wine() {
 }
 
 app_remove_wine() {
-    if has_proot_distro; then
-        if proot_pkg_is_installed box64; then proot_pkg_remove box64 || return 1; fi
-        proot_exec sudo bash -c "
+    local context backend mode distro user base
+    context=$(wine_backend_context box64) || return 1
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    if [ "$mode" = proot ]; then
+        _wine_remove_proot_context "$context" || return 1
+    else
+        rm -rf "$_WINE_NATIVE_DIR" || return 1
+    fi
+
+    rm -f "$_WINE_BOX64_CONTEXT" "${_WINE_BIN}-native" || return 1
+    _wine_remove_launchers
+}
+
+_wine_remove_proot_context() (
+    local context="$1" backend mode distro user base selected="${PROOT_DISTRO:-}"
+    IFS='|' read -r backend mode distro user base <<< "$context"
+    export PROOT_DISTRO="$distro" PROOT_USER="$user"
+    if [ -n "$base" ]; then export PROOT_ROOTFS_BASE="$base"; else unset PROOT_ROOTFS_BASE; fi
+    [ -d "$(_proot_rootfs)" ] || { echo '[ERROR] 저장된 Wine 컨테이너가 없습니다.' >&2; return 1; }
+    if [ "$selected" != "$distro" ]; then
+        source "${_WINE_BACKEND_LIB%/*}/../adapters/output/pkg_${distro/archlinux/arch}.sh" || return 1
+    fi
+    if proot_pkg_is_installed box64; then proot_pkg_remove box64 || return 1; fi
+    proot_exec sudo bash -c "
             set -e
+            # Source builds are not registered in the package database.
+            rm -f /usr/local/bin/box64
             rm -rf /opt/wine-staging
             for bin in wine wineboot winecfg wineserver msiexec regedit winetricks; do
                 rm -f /usr/local/bin/\$bin
             done
         " || return 1
-    else
-        rm -rf "$_WINE_NATIVE_DIR" || return 1
-    fi
+)
 
+_wine_remove_launchers() {
     rm -f "$_WINE_BIN" "$_WINE_DESKTOP" "$_WINECFG_DESKTOP" "$_WINE_APPS_DESKTOP" || return 1
     rm -f "${HOME}/Desktop/wine64.desktop" "${HOME}/Desktop/winecfg.desktop" \
         "${HOME}/Desktop/wine-apps.desktop" || return 1
@@ -338,4 +408,15 @@ app_remove_wine() {
 
 app_is_installed_wine() {
     [ -e "$_WINE_DESKTOP" ]
+}
+
+# CLI reinstall also repairs an old desktop marker over a partial native tree.
+app_verify_wine() {
+    local context
+    context=$(wine_backend_context box64) || return 1
+    case "$context" in
+        box64\|native\|*) _wine_native_tree_complete "$_WINE_NATIVE_DIR" ;;
+        box64\|proot\|*) return 0 ;;
+        *) return 1 ;;
+    esac
 }
