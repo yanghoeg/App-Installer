@@ -25,9 +25,19 @@ proot_pkg_remove() {
 proot_pkg_purge()        { proot_pkg_remove "$@"; }
 proot_pkg_update()       { proot_setup_sudo_path; proot_exec sudo pacman -Syu --noconfirm; }
 proot_pkg_autoremove() {
-    proot_exec sudo bash -c \
-        'orphans=$(pacman -Qdtq 2>/dev/null) || true
-         if [ -n "$orphans" ]; then pacman -Rns --noconfirm $orphans; fi'
+    # pacman -Qdtq exits 1 both for "no orphans" and for a failed query, so
+    # check the database first and accept 1 only with empty output.
+    proot_exec sudo bash -c '
+        pacman -Qq >/dev/null || exit $?
+        orphans=$(pacman -Qdtq) || {
+            status=$?
+            [ "$status" -eq 1 ] && [ -z "$orphans" ] || exit "$status"
+        }
+        if [ -n "$orphans" ]; then
+            mapfile -t targets <<< "$orphans"
+            pacman -Rns --noconfirm -- "${targets[@]}" || exit $?
+        fi
+    '
 }
 proot_pkg_is_installed() { proot_exec pacman -Q "$1" &>/dev/null; }
 

@@ -59,8 +59,9 @@ _desktop_proot_exec() {
     printf 'prun-gui %s -- %s' "$quoted" "$cmd"
 }
 
+# $2: name used in warnings (defaults to the file; imports pass their source).
 desktop_rewrite_for_proot() {
-    local file="$1" name=App line content='' quoted cmd stage
+    local file="$1" label="${2:-$1}" name=App line content='' quoted cmd stage target
     [ -f "$file" ] && [ -r "$file" ] || return 1
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in Name=*) name="${line#Name=}"; break ;; esac
@@ -71,7 +72,7 @@ desktop_rewrite_for_proot() {
         case "$line" in
             Exec=*)
                 cmd=$(_desktop_proot_exec "${line#Exec=}" "$quoted") || {
-                    echo "[WARN] 안전하게 변환할 수 없는 proot 런처: $file" >&2
+                    echo "[WARN] 안전하게 변환할 수 없는 proot 런처: $label" >&2
                     return 1
                 }
                 line="Exec=$cmd"
@@ -81,26 +82,31 @@ desktop_rewrite_for_proot() {
         esac
         content+="$line"$'\n'
     done < "$file" || return 1
-    stage=$(mktemp "${file}.XXXXXX") || return 1
-    if ! cp -p -- "$file" "$stage" || ! printf '%s' "$content" > "$stage" ||
-       ! mv -f -- "$stage" "$file"; then
+    # An unchanged launcher keeps its inode, links and Xfce trust checksum.
+    printf '%s' "$content" | cmp -s - "$file" && return 0
+    # Replace the link target so a linked desktop icon stays a link.
+    target=$(readlink -f -- "$file") || return 1
+    stage=$(mktemp "${target}.XXXXXX") || return 1
+    if ! cp -p -- "$target" "$stage" || ! printf '%s' "$content" > "$stage" ||
+       ! mv -f -- "$stage" "$target"; then
         rm -f -- "$stage"
         return 1
     fi
 }
 
-# Migrate existing proot launchers while leaving native menu entries alone.
+# Migrate launchers that still run prun directly. A launcher already using
+# prun-gui, in any form, is left as it is: rewriting it would change the
+# checksum behind its Xfce trust mark.
 desktop_migrate_proot_launcher() {
-    local file="$1" line
+    local file="$1" line legacy=false
     [ -f "$file" ] && [ -r "$file" ] || return 1
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
-            Exec=prun\ *|Exec=prun-gui\ *|'Exec=bash -c "prun '*|'Exec=bash -c "prun-gui '*)
-                desktop_rewrite_for_proot "$file"
-                return $?
-                ;;
+            Exec=*prun-gui*) return 0 ;;
+            Exec=prun\ *|'Exec=bash -c "prun '*) legacy=true ;;
         esac
     done < "$file" || return 1
+    [ "$legacy" = false ] || desktop_rewrite_for_proot "$file"
 }
 
 # Resolve symlinks with container / as the root, including parent directories.
@@ -119,7 +125,11 @@ desktop_resolve_proot_source() {
             links=$((links + 1))
             [ "$links" -le 40 ] || return 1
             target=$(readlink -- "$source/$part") || return 1
-            case "$target" in /*) source="$rootfs"; target="${target#/}" ;; esac
+            case "$target" in
+                # proot's link2symlink stores hard links as host paths in the rootfs.
+                "$rootfs"/*) source="$rootfs"; target="${target#"$rootfs"/}" ;;
+                /*) source="$rootfs"; target="${target#/}" ;;
+            esac
             path="$target${path:+/$path}"
         else
             source="$source/$part"
@@ -139,7 +149,7 @@ desktop_import_proot() {
     [ -f "$source" ] && [ -r "$source" ] || return 1
     mkdir -p -- "${destination%/*}" || return 1
     stage=$(mktemp "${destination%/*}/.desktop-import.XXXXXX") || return 1
-    if ! cp -p -- "$source" "$stage" || ! desktop_rewrite_for_proot "$stage" ||
+    if ! cp -p -- "$source" "$stage" || ! desktop_rewrite_for_proot "$stage" "$file" ||
        ! mv -f -- "$stage" "$destination"; then
         rm -f -- "$stage"
         return 1
@@ -227,9 +237,15 @@ desktop_copy_from_proot() {
     for desktop in "${rootfs}/usr/share/applications"/${app_prefix}*.desktop; do
         [ -e "$desktop" ] || [ -L "$desktop" ] || continue
         fname="${desktop##*/}"
-        desktop_import_proot "$desktop" "$rootfs" "${PREFIX}/share/applications/${fname}" || return 1
-        copied=$((copied + 1))
+        # Skip an entry that cannot be imported (a dangling link, an empty Exec)
+        # rather than stopping with the menu half imported.
+        if desktop_import_proot "$desktop" "$rootfs" "${PREFIX}/share/applications/${fname}"; then
+            copied=$((copied + 1))
+        else
+            echo "[WARN] 메뉴로 가져오지 못한 항목을 건너뜁니다: ${desktop#"$rootfs"}" >&2
+        fi
     done
+    # Fail, with nothing registered, only when no entry could be imported.
     [ "$copied" -gt 0 ]
 }
 

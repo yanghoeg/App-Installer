@@ -504,7 +504,10 @@ _test_arch_autoremove_failure() {
     # Execute the actual container snippet with a fake pacman, without sudo/proot.
     proot_exec() { shift; "$@"; }
     pacman() {
-        if [ "$1" = -Qdtq ]; then echo unused-package; return 0; fi
+        case "$1" in
+            -Qq) return 0 ;;
+            -Qdtq) echo unused-package; return 0 ;;
+        esac
         return 42
     }
     export -f pacman
@@ -518,13 +521,39 @@ _test_arch_autoremove_empty() {
     source "${APP_DIR}/adapters/output/pkg_arch.sh"
     proot_exec() { shift; "$@"; }
     pacman() {
-        if [ "$1" = -Qdtq ]; then return 1; fi
+        case "$1" in
+            -Qq) return 0 ;;
+            -Qdtq) return 1 ;;
+        esac
         return 42
     }
     export -f pacman
     proot_pkg_autoremove
 }
 it 'no orphan packages remains a successful no-op' _test_arch_autoremove_empty
+
+_test_arch_autoremove_query_failure() {
+    source "${APP_DIR}/adapters/output/pkg_arch.sh"
+    proot_exec() { shift; "$@"; }
+    local rc=0
+    # A database that cannot be read is an error, not "no orphans".
+    pacman() { [ "$1" != -Qq ] || return 1; return 0; }
+    export -f pacman
+    if proot_pkg_autoremove; then rc=0; else rc=$?; fi
+    assert_eq 1 "$rc"
+    # A query that fails after printing is not an empty orphan list either.
+    pacman() {
+        case "$1" in
+            -Qq) return 0 ;;
+            -Qdtq) echo partial; return 1 ;;
+        esac
+        return 0
+    }
+    export -f pacman
+    if proot_pkg_autoremove; then rc=0; else rc=$?; fi
+    assert_eq 1 "$rc"
+}
+it 'orphan query failures are returned instead of reported as success' _test_arch_autoremove_query_failure
 
 describe 'Pinned source-build contracts'
 

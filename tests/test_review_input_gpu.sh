@@ -116,6 +116,36 @@ _review_hidden_preserved() {
 }
 it 'setup preserves disabled autostart and explicit selection enables the chosen method' _review_hidden_preserved
 
+_review_legacy_hidden_selection() {
+    _review_sandbox
+    _REVIEW_NIMF_PRESENT=true
+    _REVIEW_FCITX_PRESENT=true
+    printf 'export GTK_IM_MODULE=fcitx5\n' >> "$HOME/.zshrc"
+    # Written by a Nimf-era installer, before the selection key existed.
+    mkdir -p "$HOME/.config/autostart"
+    printf '[Desktop Entry]\nExec=fcitx5 -d\nHidden=true\n' > "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
+    printf '[Desktop Entry]\nExec=nimf\nHidden=false\n' > "$HOME/.config/autostart/nimf.desktop"
+    input_method_setup
+    assert_eq fcitx5 "$(input_method_current)"
+    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" '^Hidden=false$'
+    assert_file_contains "$HOME/.config/autostart/nimf.desktop" '^Hidden=true$'
+}
+it 'a legacy entry hidden by an older installer starts once its method is imported as selected' _review_legacy_hidden_selection
+
+_review_config_change_follows_selection() {
+    _review_sandbox
+    input_method_select nimf
+    printf 'fcitx5\n' > "$HOME/.config/termux-xfce/input-method"
+    input_method_setup
+    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" '^Hidden=false$'
+    assert_file_contains "$HOME/.config/autostart/nimf.desktop" '^Hidden=true$'
+    # A later user choice to disable the newly selected method still survives setup.
+    sed -i 's/^Hidden=false$/Hidden=true/' "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
+    input_method_setup
+    assert_file_contains "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" '^Hidden=true$'
+}
+it 'a selection changed in the config file enables its autostart on the next setup' _review_config_change_follows_selection
+
 _review_nimf_guard() {
     _review_sandbox
     input_method_select nimf
