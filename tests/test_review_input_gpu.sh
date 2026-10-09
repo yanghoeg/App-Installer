@@ -187,6 +187,7 @@ PROFILE
     _gpu_proot_has_kgsl() { return 0; }
     proot_pkg_install_wine_mesa() { return 0; }
     proot_pkg_install_gpu_tools() { return 0; }
+    _gpu_proot_install_termux_turnip() { : > "$rootfs$GPU_PROOT_TURNIP_ICD"; }
     proot_exec() {
         printf '%s\n' "$*" > "$_REVIEW_SANDBOX/probe-args"
         printf 'driverName = turnip\n'
@@ -198,7 +199,7 @@ PROFILE
     app_install_gpu_proot > /dev/null
     app_is_installed_gpu_proot
     assert_file_contains "$_REVIEW_SANDBOX/probe-args" 'TURNIP_KMD=kgsl vulkaninfo --summary'
-    assert_file_contains "$rootfs/etc/profile.d/gpu-accel.sh" '^export VK_DRIVER_FILES="/usr/share/vulkan/icd.d/'
+    assert_file_contains "$rootfs/etc/profile.d/gpu-accel.sh" "^export VK_DRIVER_FILES=\"$GPU_PROOT_TURNIP_ICD\""
     if grep -Eq '^export (MESA_|VK_)' "$rootfs/etc/profile.d/termux-xfce-env.sh"; then
         echo '[ASSERT] legacy GPU exports remain after successful migration' >&2
         return 1
@@ -208,6 +209,59 @@ PROFILE
     if app_is_installed_gpu_proot; then return 1; fi
 }
 it 'legacy GPU exports allow a fresh container Turnip probe and profile migration' _review_gpu_legacy_install
+
+# 배포판 Turnip은 KGSL이 없어 Android에서 GPU를 못 찾는다 — Termux glibc-repo 드라이버를 넣는다
+_review_gpu_turnip_fixture_deb() {
+    local pkg="$_REVIEW_SANDBOX/pkg"
+    mkdir -p "$pkg/DEBIAN" "$pkg/data/data/com.termux/files/usr/glibc/lib"
+    chmod 755 "$pkg/DEBIAN"
+    printf 'Package: fixture\nVersion: 1\nArchitecture: aarch64\nMaintainer: t\nDescription: t\n' \
+        > "$pkg/DEBIAN/control"
+    echo turnip-fixture > "$pkg/data/data/com.termux/files/usr/glibc/lib/libvulkan_freedreno.so"
+    dpkg-deb -b "$pkg" "$_REVIEW_SANDBOX/turnip.deb" > /dev/null
+}
+
+_review_gpu_turnip_extract() {
+    _review_sandbox
+    export PROOT_DISTRO=archlinux
+    local rootfs="$PROOT_ROOTFS_BASE/containers/archlinux/rootfs"
+    mkdir -p "$rootfs"
+    _review_gpu_turnip_fixture_deb
+    fetch_verified() {
+        [ "$3" = "$GPU_PROOT_TURNIP_SHA256" ] || { echo "[ASSERT] sha256 고정값을 넘기지 않음: $3" >&2; return 1; }
+        cp "$_REVIEW_SANDBOX/turnip.deb" "$2"
+    }
+    _gpu_proot_install_termux_turnip || return 1
+    assert_eq turnip-fixture "$(cat "$rootfs$GPU_PROOT_TURNIP_LIB")"
+    assert_file_contains "$rootfs$GPU_PROOT_TURNIP_ICD" "\"library_path\": \"$GPU_PROOT_TURNIP_LIB\""
+    if grep -q '/data/data/' "$rootfs$GPU_PROOT_TURNIP_ICD"; then
+        echo '[ASSERT] the ICD must name the guest path, not a host path' >&2
+        return 1
+    fi
+}
+it 'the pinned Termux KGSL Turnip is unpacked into the rootfs with a guest-path ICD' _review_gpu_turnip_extract
+
+_review_gpu_turnip_fetch_failure() {
+    _review_sandbox
+    export PROOT_DISTRO=archlinux
+    local rootfs="$PROOT_ROOTFS_BASE/containers/archlinux/rootfs"
+    mkdir -p "$rootfs/etc/profile.d"
+    has_proot_distro() { [ -n "${PROOT_DISTRO:-}" ]; }
+    _gpu_proot_has_kgsl() { return 0; }
+    proot_pkg_install_wine_mesa() { return 0; }
+    proot_pkg_install_gpu_tools() { return 0; }
+    proot_exec() { printf 'driverName = turnip\n'; }
+    fetch_verified() { return 1; }
+    if app_install_gpu_proot > /dev/null 2>&1; then
+        echo '[ASSERT] driver download failure must fail the install' >&2
+        return 1
+    fi
+    if [ -e "$rootfs$GPU_PROOT_TURNIP_LIB" ] || [ -e "$(_gpu_proot_profile_path)" ]; then
+        echo '[ASSERT] a failed download must not leave a driver or activate the profile' >&2
+        return 1
+    fi
+}
+it 'a failed Turnip download leaves no driver and does not activate GPU settings' _review_gpu_turnip_fetch_failure
 
 _review_fcitx_keeps_nimf() {
     _review_sandbox
