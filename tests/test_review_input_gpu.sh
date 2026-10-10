@@ -263,6 +263,91 @@ _review_gpu_turnip_fetch_failure() {
 }
 it 'a failed Turnip download leaves no driver and does not activate GPU settings' _review_gpu_turnip_fetch_failure
 
+# Ubuntu는 고정 lfdevs Mesa 묶음을 별도 경로에 풀고, 화면 없는 EGL 검증이 통과해야 OpenGL을 KGSL로 바꾼다
+_review_gpu_mesa_rootfs() {
+    _review_sandbox
+    export PROOT_DISTRO=ubuntu
+    _REVIEW_ROOTFS="$PROOT_ROOTFS_BASE/containers/ubuntu/rootfs"
+    mkdir -p "$_REVIEW_ROOTFS/etc/profile.d" "$_REVIEW_ROOTFS/usr/share/vulkan/icd.d"
+    printf 'ID=ubuntu\nVERSION_CODENAME=%s\n' "$1" > "$_REVIEW_ROOTFS/etc/os-release"
+    has_proot_distro() { [ -n "${PROOT_DISTRO:-}" ]; }
+    _gpu_proot_has_kgsl() { return 0; }
+    proot_pkg_install_wine_mesa() { return 0; }
+    proot_pkg_install_gpu_tools() { return 0; }
+    _gpu_proot_install_termux_turnip() { : > "$_REVIEW_ROOTFS$GPU_PROOT_TURNIP_ICD"; }
+    # 실제 묶음처럼 ./usr/... 경로를 담는다
+    local pkg="$_REVIEW_SANDBOX/mesa-pkg"
+    mkdir -p "$pkg/usr/lib/aarch64-linux-gnu/dri" "$pkg/usr/share/glvnd/egl_vendor.d"
+    echo kgsl > "$pkg/usr/lib/aarch64-linux-gnu/dri/kgsl_dri.so"
+    echo '{}' > "$pkg/usr/share/glvnd/egl_vendor.d/50_mesa.json"
+    tar -czf "$_REVIEW_SANDBOX/mesa.tar.gz" -C "$pkg" ./usr
+    fetch_verified() {
+        printf '%s %s\n' "$1" "$3" >> "$_REVIEW_SANDBOX/fetches"
+        cp "$_REVIEW_SANDBOX/mesa.tar.gz" "$2"
+    }
+}
+
+_review_gpu_mesa_kgsl() {
+    _review_gpu_mesa_rootfs questing
+    proot_exec() {
+        case "$*" in
+            *eglinfo*) printf '%s\n' "$*" > "$_REVIEW_SANDBOX/egl-args"
+                echo 'OpenGL core profile renderer: FD750' ;;
+            *) echo 'driverName = turnip' ;;
+        esac
+    }
+    app_install_gpu_proot > /dev/null || return 1
+    local profile lib="$GPU_PROOT_MESA_DIR/usr/lib/aarch64-linux-gnu"
+    profile=$(_gpu_proot_profile_path)
+    assert_file_contains "$_REVIEW_SANDBOX/fetches" "ubuntu_questing_arm64.tar.gz $(_gpu_proot_mesa_sha256 questing)$" || return 1
+    assert_file_exists "$_REVIEW_ROOTFS$lib/dri/kgsl_dri.so" || return 1
+    assert_file_contains "$profile" '^export MESA_LOADER_DRIVER_OVERRIDE=kgsl$' || return 1
+    assert_file_contains "$profile" "^export LD_LIBRARY_PATH=\"$lib" || return 1
+    assert_file_contains "$profile" "^export VK_DRIVER_FILES=\"$GPU_PROOT_TURNIP_ICD\"" || return 1
+    if grep -q zink "$profile"; then
+        echo '[ASSERT] KGSL OpenGL 설정에 Zink가 남았다' >&2
+        return 1
+    fi
+    # 검증은 profile과 같은 경로로, 화면 없이 한다
+    assert_file_contains "$_REVIEW_SANDBOX/egl-args" "LIBGL_DRIVERS_PATH=$lib/dri" || return 1
+    assert_file_contains "$_REVIEW_SANDBOX/egl-args" 'eglinfo -B -p surfaceless' || return 1
+    app_remove_gpu_proot > /dev/null || return 1
+    if [ -e "$_REVIEW_ROOTFS$GPU_PROOT_MESA_DIR" ]; then
+        echo '[ASSERT] 제거 뒤 Mesa 묶음이 남았다' >&2
+        return 1
+    fi
+}
+it 'Ubuntu gets the pinned Freedreno KGSL OpenGL bundle in its own directory after a headless EGL probe' _review_gpu_mesa_kgsl
+
+_review_gpu_mesa_probe_fallback() {
+    _review_gpu_mesa_rootfs questing
+    proot_exec() {
+        case "$*" in
+            *eglinfo*) echo 'OpenGL core profile renderer: llvmpipe' ;;
+            *) echo 'driverName = turnip' ;;
+        esac
+    }
+    app_install_gpu_proot > /dev/null 2>&1 || return 1
+    assert_file_contains "$(_gpu_proot_profile_path)" '^export MESA_LOADER_DRIVER_OVERRIDE=zink$' || return 1
+    if [ -e "$_REVIEW_ROOTFS$GPU_PROOT_MESA_DIR" ]; then
+        echo '[ASSERT] 검증에 실패한 Mesa 묶음이 남았다' >&2
+        return 1
+    fi
+}
+it 'a failed KGSL OpenGL probe removes the bundle and keeps Zink' _review_gpu_mesa_probe_fallback
+
+_review_gpu_mesa_unpinned_release() {
+    _review_gpu_mesa_rootfs plucky
+    proot_exec() { echo 'driverName = turnip'; }
+    app_install_gpu_proot > /dev/null || return 1
+    if [ -e "$_REVIEW_SANDBOX/fetches" ]; then
+        echo '[ASSERT] 고정값이 없는 Ubuntu 버전에서 묶음을 받았다' >&2
+        return 1
+    fi
+    assert_file_contains "$(_gpu_proot_profile_path)" '^export MESA_LOADER_DRIVER_OVERRIDE=zink$'
+}
+it 'an Ubuntu release without a pinned bundle keeps Zink and downloads nothing' _review_gpu_mesa_unpinned_release
+
 _review_fcitx_keeps_nimf() {
     _review_sandbox
     source "$_REVIEW_APP_DIR/domain/installers/korean_input.sh"
