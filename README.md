@@ -5,13 +5,13 @@
 **[English](README.md)** &nbsp;|&nbsp; [한국어](README.ko.md)
 
 [![Android](https://img.shields.io/badge/Android-Termux-3DDC84?logo=android)](https://termux.dev)
-[![Termux XFCE](https://img.shields.io/badge/Termux__XFCE-submodule-blue)](https://github.com/yanghoeg/Termux_XFCE)
+[![usix-termux](https://img.shields.io/badge/usix--termux-submodule-blue)](https://github.com/yanghoeg/usix-termux)
 
 </div>
 
 ---
 
-A **GUI tool for installing and removing extra apps** in the [Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) environment.  
+A **GUI tool for installing and removing extra apps** in the [usix-termux](https://github.com/yanghoeg/usix-termux) environment.  
 Select an app from the yad notebook tabbed GUI (zenity fallback) and it installs automatically into proot (Ubuntu/Arch) or Termux native.
 
 **Tested devices**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
@@ -19,7 +19,7 @@ Select an app from the yad notebook tabbed GUI (zenity fallback) and it installs
 ## Usage
 
 ```bash
-# From Termux terminal after Termux_XFCE is installed
+# From Termux terminal after usix-termux is installed
 app-installer
 
 # From XFCE desktop
@@ -119,7 +119,7 @@ detected; the CLI list still includes it.
 | `chroot_ng` | **proot Accelerated Runtime (chroot-ng)** | ptrace-free `prun` engine (experimental) | Termux native (source build) | Pinned-commit build; installs only after the device probe and a rootfs run pass. Used only with `PRUN_RUNTIME=chroot-ng` |
 | `korean_input` | **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | selects fcitx5 for X11; restart XFCE |
 | `korean_proot` | **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
-| `korean_locale` | **Korean Locale** | force_gettext.so-based UI localization | Termux native | requires the parent Termux_XFCE checkout and a catalog ZIP |
+| `korean_locale` | **Korean Locale** | force_gettext.so-based UI localization | Termux native | requires the parent usix-termux checkout and a catalog ZIP |
 | `nimf` | **Korean Input (nimf)** | nimf Korean input | Termux native | community build |
 
 ## Termux API Apps (Termux API tab)
@@ -196,7 +196,7 @@ is not a guarantee that an application will work.
 
 Explicit `PROOT_DISTRO` and `PROOT_USER` environment variables take priority over
 `~/.config/termux-xfce/config` in both the CLI and GUI. Unset values come from the config.
-This file is created automatically by the Termux_XFCE installer.
+This file is created automatically by the usix-termux installer.
 
 ```
 PROOT_DISTRO=ubuntu
@@ -235,7 +235,7 @@ the selection; removing the selected IME resets it to `none`. Restart XFCE to ap
 The Wayland path clears X11 IME module variables and excludes these autostart entries
 from KDE, leaving Android keyboard input to Anland.
 
-`korean_locale` is separate from input. It requires the parent Termux_XFCE checkout
+`korean_locale` is separate from input. It requires the parent usix-termux checkout
 and a ZIP containing `ko/LC_MESSAGES/*.mo`. The GUI prompts for the file; the CLI uses:
 
 ```bash
@@ -314,7 +314,7 @@ These suites cover the domain, adapters, ports, downloads, rootfs paths, CLI,
 Wine execution, input method dependencies, removal, and upgrade failure handling.
 On a PC they use mocks and static checks; CLI tests run the real entry point with
 isolated package/download commands. Parent locale integration tests require the
-Termux_XFCE checkout. `tests/test_nimf_*_real.sh` are run from Termux on a real device and enter proot
+usix-termux checkout. `tests/test_nimf_*_real.sh` are run from Termux on a real device and enter proot
 themselves; they install packages. Keep them outside host test loops. The parent
 `modern_install` suite also covers shared IME/GPU/launcher behavior. Use
 [TEST_LOG.md](TEST_LOG.md) as the device checklist, not as proof of a passing run.
@@ -330,4 +330,4 @@ themselves; they install packages. Keep them outside host test loops. The parent
 
 ## Related
 
-- [yanghoeg/Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) — main installer (includes this repo as a Git Submodule)
+- [yanghoeg/usix-termux](https://github.com/yanghoeg/usix-termux) — main installer (includes this repo as a Git Submodule)

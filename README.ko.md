@@ -5,13 +5,13 @@
 [English](README.md) &nbsp;|&nbsp; **[한국어](README.ko.md)**
 
 [![Android](https://img.shields.io/badge/Android-Termux-3DDC84?logo=android)](https://termux.dev)
-[![Termux XFCE](https://img.shields.io/badge/Termux__XFCE-submodule-blue)](https://github.com/yanghoeg/Termux_XFCE)
+[![usix-termux](https://img.shields.io/badge/usix--termux-submodule-blue)](https://github.com/yanghoeg/usix-termux)
 
 </div>
 
 ---
 
-[Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) 환경에서 동작하는 **앱 추가 설치/제거 GUI** 도구입니다.  
+[usix-termux](https://github.com/yanghoeg/usix-termux) 환경에서 동작하는 **앱 추가 설치/제거 GUI** 도구입니다.  
 yad notebook 탭 GUI(zenity 폴백)로 앱을 선택하면 proot(Ubuntu/Arch) 또는 Termux native에 자동으로 설치합니다.
 
 **테스트 기기**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
@@ -19,7 +19,7 @@ yad notebook 탭 GUI(zenity 폴백)로 앱을 선택하면 proot(Ubuntu/Arch) �
 ## 사용법
 
 ```bash
-# Termux_XFCE 설치 후 터미널에서
+# usix-termux 설치 후 터미널에서
 app-installer
 
 # XFCE 데스크탑에서
@@ -117,7 +117,7 @@ GUI에서는 기존 설치가 감지될 때만 표시합니다. CLI 목록에는
 | `chroot_ng` | **proot 가속 런타임 (chroot-ng)** | ptrace 없는 `prun` 실행 엔진 (실험적) | Termux native (소스 빌드) | 고정 커밋 빌드, 기기 판정·rootfs 실행 검사 통과 시 설치. `PRUN_RUNTIME=chroot-ng`일 때만 사용 |
 | `korean_input` | **한글 입력기 (fcitx5)** | fcitx5-hangul 한글 입력 | Termux native | X11 입력기로 선택; XFCE 재시작 필요 |
 | `korean_proot` | **한글 입력기 (proot)** | proot 내부 한글 로케일 + nimf/fcitx5 입력기 | proot | Ubuntu=nimf .deb, Arch=nimf AUR→fcitx5 폴백 |
-| `korean_locale` | **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | 부모 Termux_XFCE 저장소와 번역 카탈로그 ZIP 필요 |
+| `korean_locale` | **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | 부모 usix-termux 저장소와 번역 카탈로그 ZIP 필요 |
 | `nimf` | **한글 입력기 (nimf)** | nimf 한글 입력 | Termux native | 흡혈귀왕 빌드 |
 
 ## Termux API 앱 (Termux API 탭)
@@ -191,7 +191,7 @@ prefix에 적용됩니다.
 
 CLI와 GUI 모두 명시한 `PROOT_DISTRO`, `PROOT_USER` 환경변수를 우선 사용하고,
 지정하지 않은 값은 `~/.config/termux-xfce/config`에서 읽습니다.
-Termux_XFCE 설치 시 자동 생성됩니다.
+usix-termux 설치 시 자동 생성됩니다.
 
 ```
 PROOT_DISTRO=ubuntu
@@ -229,7 +229,7 @@ native `korean_input`(fcitx5)과 `nimf`는 `~/.config/termux-xfce/input-method`�
 변수를 지우고 KDE에서 해당 자동 시작 항목을 제외해 Anland가 Android 키보드 입력을
 처리하도록 합니다.
 
-`korean_locale`는 입력기와 별개입니다. 부모 Termux_XFCE 저장소와
+`korean_locale`는 입력기와 별개입니다. 부모 usix-termux 저장소와
 `ko/LC_MESSAGES/*.mo`가 포함된 ZIP이 필요합니다. GUI에서는 파일을 선택하고
 CLI에서는 다음과 같이 지정합니다.
 
@@ -307,7 +307,7 @@ done
 도메인, 어댑터, 포트, 다운로드, rootfs 경로, CLI, Wine 실행, 입력기 의존성,
 제거 및 업그레이드 실패 처리를 검사합니다. PC에서는 mock과 정적
 검사를 사용하며, CLI 테스트는 패키지·다운로드 명령을 격리한 상태에서 실제 진입점을
-실행합니다. 부모 로케일 통합 테스트에는 Termux_XFCE 저장소가 필요합니다.
+실행합니다. 부모 로케일 통합 테스트에는 usix-termux 저장소가 필요합니다.
 `tests/test_nimf_*_real.sh`는 실기기의 Termux에서 실행하며 스크립트가 직접 proot에
 진입해 패키지를 설치합니다. 호스트 테스트 반복문에는 포함하지 마세요. 부모 저장소의
 `modern_install` 스위트도 공통 입력기·GPU·런처 동작을 검사합니다.
@@ -324,4 +324,4 @@ done
 
 ## 관련 링크
 
-- [yanghoeg/Termux_XFCE](https://github.com/yanghoeg/Termux_XFCE) — 메인 설치 스크립트 (이 repo를 Git Submodule로 포함)
+- [yanghoeg/usix-termux](https://github.com/yanghoeg/usix-termux) — 메인 설치 스크립트 (이 repo를 Git Submodule로 포함)

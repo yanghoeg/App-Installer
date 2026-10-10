@@ -6,7 +6,7 @@ app_install_korean_locale() (
     local main_dir
     main_dir="$(cd "${BASH_SOURCE[0]%/*}/../../.." && pwd)" || return 1
     if [ ! -f "$main_dir/domain/locale_ko.sh" ]; then
-        echo "[ERROR] 메인 프로젝트(Termux_XFCE)의 locale_ko.sh가 필요합니다." >&2
+        echo "[ERROR] 메인 프로젝트(usix-termux)의 locale_ko.sh가 필요합니다." >&2
         return 1
     fi
 
