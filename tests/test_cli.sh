@@ -345,7 +345,7 @@ if [ -f "$APP_DIR/../domain/locale_ko.sh" ]; then
     it 'locale upgrade rebuilds once without a ZIP and removal deletes its hash marker' _test_locale_upgrade_rebuilds_and_remove_cleans_stamp
     it 'failed locale upgrade preserves the existing library and source hash' _test_locale_upgrade_failure_preserves_old_library
 else
-    skip 'parent locale integration requires the Termux_XFCE checkout'
+    skip 'parent locale integration requires the usix-termux checkout'
 fi
 
 print_results

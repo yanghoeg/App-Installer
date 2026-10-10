@@ -1497,7 +1497,7 @@ _test_contract_install_success_for_all_ids() {
                 skip "GPU activation is covered by the root project's modern_install suite"
                 continue ;;
             korean_locale)
-                skip "app_install_korean_locale — 메인 프로젝트(Termux_XFCE) domain/locale_ko.sh + ports/ui.sh(ui_warn 등) 의존, app-installer 단독 테스트 불가"
+                skip "app_install_korean_locale — 메인 프로젝트(usix-termux) domain/locale_ko.sh + ports/ui.sh(ui_warn 등) 의존, app-installer 단독 테스트 불가"
                 continue ;;
         esac
 
