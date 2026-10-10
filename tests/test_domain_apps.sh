@@ -33,6 +33,16 @@ _fixture_libreoffice_desktop() {
     printf '[Desktop Entry]\nName=LibreOffice Writer\nExec=libreoffice --writer %%U\n' > "$apps/libreoffice-writer.desktop"
 }
 
+# chroot-ng 실빌드(git/make) 대신, 판정·rootfs 실행 결과를 env로 조절하는 가짜 바이너리를 만든다
+_fixture_chroot_ng_build() {
+    _chroot_ng_build() {
+        mkdir -p "$1/build" || return 1
+        printf '#!%s\n%s\n' "$_DOMAIN_BASH" \
+            '[ "$1" = --probe ] && { echo "verdict: ${CNG_FAKE_PROBE:-LIKELY VIABLE}"; exit 0; }; exit "${CNG_FAKE_RUN_RC:-0}"' \
+            > "$1/build/chroot-ng" && chmod +x "$1/build/chroot-ng"
+    }
+}
+
 # 공통 설정: sandbox + mock 어댑터 + 도메인 로드
 _setup() {
     local sb="$1"
@@ -1334,6 +1344,53 @@ _test_korean_proot_remove_strips_block() {
 it "remove → 로케일 파일 삭제 + rc 0 + is_installed false" _test_korean_proot_remove_strips_block
 
 # =============================================================================
+# chroot-ng — ptrace 없는 proot 대체 런타임 (판정을 통과할 때만 설치)
+# =============================================================================
+describe "chroot-ng — 기기 판정과 rootfs 실행을 통과할 때만 설치"
+
+_test_chroot_ng_install_success() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _fixture_chroot_ng_build
+    local rc=0
+    app_install_chroot_ng >/dev/null 2>&1 || rc=$?
+    assert_zero "$rc" "판정·실행 통과 시 설치 성공" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "termux_pkg_install clang make git" || { cleanup_sandbox "$sb"; return 1; }
+    app_is_installed_chroot_ng || { echo "[ASSERT] \$PREFIX/bin/chroot-ng 미설치" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "install → 빌드 도구 설치 후 \$PREFIX/bin/chroot-ng 설치" _test_chroot_ng_install_success
+
+_test_chroot_ng_rejects_failed_checks() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _fixture_chroot_ng_build
+    local failed=0 rc
+    for check in "CNG_FAKE_PROBE=NOT VIABLE" "CNG_FAKE_RUN_RC=1"; do
+        rc=0
+        export "$check"
+        app_install_chroot_ng >/dev/null 2>&1 || rc=$?
+        unset CNG_FAKE_PROBE CNG_FAKE_RUN_RC
+        if [ "$rc" -eq 0 ] || app_is_installed_chroot_ng; then
+            echo "[ASSERT] ${check} — 실패해야 하고 바이너리를 설치하지 않아야 함 (rc=${rc})" >&2
+            failed=1
+        fi
+    done
+    cleanup_sandbox "$sb"
+    return "$failed"
+}
+it "install → 기기 판정 실패나 rootfs 실행 실패 시 설치하지 않고 실패 반환" _test_chroot_ng_rejects_failed_checks
+
+_test_chroot_ng_remove() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    : > "${PREFIX}/bin/chroot-ng"; chmod +x "${PREFIX}/bin/chroot-ng"
+    app_remove_chroot_ng || { cleanup_sandbox "$sb"; return 1; }
+    if app_is_installed_chroot_ng; then
+        echo "[ASSERT] remove 후에도 설치 상태" >&2; cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "remove → 바이너리 삭제 + is_installed false" _test_chroot_ng_remove
+
+# =============================================================================
 # 설치기 계약 — 전체 APP_REGISTRY 파라메트릭 테스트
 # domain/apps.sh app_install() 위의 계약 주석 참조:
 #   app_install_<id>는 critical 명령(pkg install/curl/proot_exec 등) 실패 시
@@ -1480,6 +1537,7 @@ _test_contract_install_success_for_all_ids() {
                 fetch_verified() { printf 'tgz\n' > "$2"; }
                 tar() { printf 'native binary fixture\n'; }
                 ;;
+            chroot_ng) _fixture_chroot_ng_build ;;
         esac
 
         local rc=0

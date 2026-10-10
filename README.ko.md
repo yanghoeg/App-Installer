@@ -113,7 +113,8 @@ GUI에서는 기존 설치가 감지될 때만 표시합니다. CLI 목록에는
 |----|----|------|-----------|------|
 | `gpu_native` | **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | X11 런처에서 가속 또는 소프트웨어 폴백 선택 |
 | `gpu_dev` | **GPU 개발 도구** | clvk, clinfo 등 | Termux native | |
-| `gpu_proot` | **GPU 가속 (proot)** | 컨테이너 Turnip + Zink | proot | KGSL 드라이버 검증 후 활성화 |
+| `gpu_proot` | **GPU 가속 (proot)** | 컨테이너 Turnip + Zink | proot | Termux glibc KGSL Turnip(버전·sha256 고정)을 넣고 검증 후 활성화 |
+| `chroot_ng` | **proot 가속 런타임 (chroot-ng)** | ptrace 없는 `prun` 실행 엔진 (실험적) | Termux native (소스 빌드) | 고정 커밋 빌드, 기기 판정·rootfs 실행 검사 통과 시 설치. `PRUN_RUNTIME=chroot-ng`일 때만 사용 |
 | `korean_input` | **한글 입력기 (fcitx5)** | fcitx5-hangul 한글 입력 | Termux native | X11 입력기로 선택; XFCE 재시작 필요 |
 | `korean_proot` | **한글 입력기 (proot)** | proot 내부 한글 로케일 + nimf/fcitx5 입력기 | proot | Ubuntu=nimf .deb, Arch=nimf AUR→fcitx5 폴백 |
 | `korean_locale` | **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | 부모 Termux_XFCE 저장소와 번역 카탈로그 ZIP 필요 |

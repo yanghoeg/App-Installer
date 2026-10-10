@@ -115,7 +115,8 @@ detected; the CLI list still includes it.
 |----|-----|-------------|----------------|-------|
 | `gpu_native` | **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | X11 launcher selects acceleration or software fallback |
 | `gpu_dev` | **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
-| `gpu_proot` | **GPU Acceleration (proot)** | Container Turnip + Zink | proot | Requires a passing KGSL driver probe |
+| `gpu_proot` | **GPU Acceleration (proot)** | Container Turnip + Zink | proot | Adds the pinned Termux glibc KGSL Turnip; activates only after the driver probe passes |
+| `chroot_ng` | **proot Accelerated Runtime (chroot-ng)** | ptrace-free `prun` engine (experimental) | Termux native (source build) | Pinned-commit build; installs only after the device probe and a rootfs run pass. Used only with `PRUN_RUNTIME=chroot-ng` |
 | `korean_input` | **Korean Input (fcitx5)** | fcitx5-hangul Korean input | Termux native | selects fcitx5 for X11; restart XFCE |
 | `korean_proot` | **Korean Input (proot)** | Korean locale + nimf/fcitx5 IME inside the proot distro | proot | Ubuntu = nimf .deb, Arch = nimf AUR → fcitx5 fallback |
 | `korean_locale` | **Korean Locale** | force_gettext.so-based UI localization | Termux native | requires the parent Termux_XFCE checkout and a catalog ZIP |

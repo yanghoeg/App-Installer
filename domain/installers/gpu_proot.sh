@@ -1,9 +1,42 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Optional container GPU setup. Its glibc Vulkan loader needs a container driver,
 # not the host's Bionic library. Activate Zink only after Turnip passes a probe.
+# 배포판 Turnip은 msm(DRM) 전용이라 Android KGSL에서 GPU를 못 찾는다 → Termux glibc-repo의
+# KGSL Turnip 드라이버만 rootfs에 넣는다. RUNPATH가 없어 의존 라이브러리는 배포판 것을 쓴다.
+
+GPU_PROOT_TURNIP_VERSION='24.2.6'
+GPU_PROOT_TURNIP_SHA256='f45523463ae7a6b19c5c4e77bf42eff38124dfe13cc97fce34fc2bf820f41c6a'
+GPU_PROOT_TURNIP_URL="https://packages-cf.termux.dev/apt/termux-glibc/pool/stable/m/mesa-vulkan-icd-freedreno-glibc/mesa-vulkan-icd-freedreno-glibc_${GPU_PROOT_TURNIP_VERSION}_aarch64.deb"
+GPU_PROOT_TURNIP_LIB='/usr/local/lib/termux-turnip/libvulkan_freedreno.so'
+GPU_PROOT_TURNIP_ICD='/usr/share/vulkan/icd.d/termux_freedreno_icd.aarch64.json'
 
 _gpu_proot_profile_path() {
     printf '%s/etc/profile.d/gpu-accel.sh\n' "$(_proot_rootfs)"
+}
+
+# 고정 버전 .deb에서 드라이버 하나만 꺼내 rootfs에 넣고 게스트 경로 ICD를 쓴다
+_gpu_proot_install_termux_turnip() {
+    local rootfs tmp
+    rootfs="$(_proot_rootfs)"
+    tmp=$(mktemp -d "${TMPDIR:-$PREFIX/tmp}/turnip.XXXXXX") || return 1
+    if ! fetch_verified "$GPU_PROOT_TURNIP_URL" "$tmp/turnip.deb" "$GPU_PROOT_TURNIP_SHA256" ||
+        ! dpkg-deb -x "$tmp/turnip.deb" "$tmp/x" ||
+        ! install -D -m 644 "$tmp/x/data/data/com.termux/files/usr/glibc/lib/libvulkan_freedreno.so" \
+            "$rootfs$GPU_PROOT_TURNIP_LIB"; then
+        rm -rf "$tmp"
+        return 1
+    fi
+    rm -rf "$tmp"
+    mkdir -p "$(dirname "$rootfs$GPU_PROOT_TURNIP_ICD")" || return 1
+    cat > "$rootfs$GPU_PROOT_TURNIP_ICD" <<ICD
+{
+    "ICD": {
+        "api_version": "1.1.289",
+        "library_path": "$GPU_PROOT_TURNIP_LIB"
+    },
+    "file_format_version": "1.0.0"
+}
+ICD
 }
 
 _gpu_proot_has_kgsl() { [ -r /dev/kgsl-3d0 ]; }
@@ -20,15 +53,9 @@ app_install_gpu_proot() {
 
     proot_pkg_install_wine_mesa || return 1
     proot_pkg_install_gpu_tools || return 1
-    local rootfs icd='' file probe profile
-    rootfs="$(_proot_rootfs)"
-    for file in "$rootfs"/usr/share/vulkan/icd.d/freedreno_icd*.json; do
-        [ -f "$file" ] || continue
-        icd="${file#"$rootfs"}"
-        break
-    done
-    if [ -z "$icd" ]; then
-        echo '[ERROR] 컨테이너용 Turnip ICD가 없습니다. 배포판에 맞는 glibc/KGSL Mesa가 필요합니다.' >&2
+    local icd="$GPU_PROOT_TURNIP_ICD" probe profile
+    if ! _gpu_proot_install_termux_turnip; then
+        echo '[ERROR] KGSL Turnip 드라이버(Termux glibc-repo)를 받지 못했습니다.' >&2
         return 1
     fi
     if ! probe=$(proot_exec env VK_DRIVER_FILES="$icd" VK_ICD_FILENAMES="$icd" \
@@ -55,7 +82,8 @@ PROFILE
 
 app_remove_gpu_proot() {
     has_proot_distro || { echo '[ERROR] proot 환경이 필요합니다.' >&2; return 1; }
-    rm -f "$(_gpu_proot_profile_path)" || return 1
+    local rootfs; rootfs="$(_proot_rootfs)"
+    rm -f "$(_gpu_proot_profile_path)" "$rootfs$GPU_PROOT_TURNIP_ICD" "$rootfs$GPU_PROOT_TURNIP_LIB" || return 1
     _gpu_proot_clean_base_profile || return 1
     echo '[OK] GPU proot 설정 제거 완료. 실행 중인 proot 앱은 다시 시작하세요.'
 }
