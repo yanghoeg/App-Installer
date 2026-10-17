@@ -1728,19 +1728,32 @@ describe "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑"
 _test_claude_wrapper_drops_ld_preload() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     _claude_code_install_wrapper
+    mkdir -p "$PREFIX/glibc/bin"
     {
         printf '#!%s\n' "$_DOMAIN_BASH"
         printf '[ -z "${LD_PRELOAD+x}" ] || exit 42\nprintf "%%s\\n" "$@"\n'
-    } > "$PREFIX/bin/grun"
-    chmod +x "$PREFIX/bin/grun"
+    } > "$PREFIX/glibc/bin/ld.so"
+    chmod +x "$PREFIX/glibc/bin/ld.so"
     local out
     # Set the preload only inside an existing shell, so no host binary ever
-    # starts with it. The generated wrapper then execs this sandbox grun.
+    # starts with it. The generated wrapper then execs this sandbox ld.so.
     out=$(export LD_PRELOAD=mock-only; source "$CLAUDE_CODE_BIN_PATH" 'space value' '%literal')
     assert_eq "$CLAUDE_CODE_PREFIX/claude"$'\nspace value\n%literal' "$out"
     cleanup_sandbox "$sb"
 }
-it "래퍼는 grun 앞에서 LD_PRELOAD를 떼어낸다" _test_claude_wrapper_drops_ld_preload
+it "래퍼는 LD_PRELOAD를 떼고 공백 든 인자를 쪼개지 않고 ld.so에 넘긴다" _test_claude_wrapper_drops_ld_preload
+
+# grun(glibc-runner 2.0)은 $@를 따옴표 없이 넘겨 공백 든 인자를 쪼갠다 → 래퍼가 거치면 안 된다
+_test_claude_wrapper_bypasses_grun() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_code_install_wrapper
+    if grep -q 'grun' "$CLAUDE_CODE_BIN_PATH"; then
+        echo "[ASSERT] 래퍼가 grun을 거친다 — claude -p \"여러 단어\"가 첫 단어만 받는다" >&2
+        cleanup_sandbox "$sb"; return 1
+    fi
+    cleanup_sandbox "$sb"
+}
+it "래퍼는 인자를 쪼개는 grun을 거치지 않는다" _test_claude_wrapper_bypasses_grun
 
 # 실행 중인 claude 는 ld.so 가 mmap 으로 올려 deny-write가 걸리지 않는다 → 제자리 덮어쓰기는
 # 실행 중 세션을 SIGBUS로 죽인다. inode가 바뀌었는지로 rename 스왑을 검증한다.
