@@ -75,12 +75,17 @@ _claude_code_remove_npm_wrapper() {
 }
 
 # RC 전역 LD_PRELOAD(부모 domain/termux_env.sh 가 넣는 bionic force_gettext.so)는
-# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → grun 실행 전에 셸 내장 unset으로 떼어낸다.
+# glibc 바이너리의 libdl.so 로딩을 깨뜨린다 → 셸 내장 unset으로 떼어낸다.
+# grun(glibc-runner 2.0)은 인자를 따옴표 없이 넘겨(source glibc-runner.sh $@, exec ld.so $@)
+# `claude -p "여러 단어"`가 첫 단어만 받는다 → grun이 하는 준비(glibc PATH·locale)만 직접 하고
+# ld.so에 "$@"를 그대로 넘긴다.
 _claude_code_install_wrapper() {
     cat > "${CLAUDE_CODE_BIN_PATH}" << EOF
 #!${PREFIX}/bin/bash
 unset LD_PRELOAD
-exec "${PREFIX}/bin/grun" "${CLAUDE_CODE_PREFIX}/claude" "\$@"
+export PATH="${PREFIX}/glibc/bin:\$PATH"
+[ -f "${PREFIX}/glibc/etc/locale.conf" ] && . "${PREFIX}/glibc/etc/locale.conf"
+exec "${PREFIX}/glibc/bin/ld.so" "${CLAUDE_CODE_PREFIX}/claude" "\$@"
 EOF
     chmod +x "${CLAUDE_CODE_BIN_PATH}"
 }
