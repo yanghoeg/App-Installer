@@ -1315,6 +1315,44 @@ _test_korean_proot_locale_file_nimf_autostart() {
 }
 it "profile nimf 기동 — command -v / pgrep -x / disown 가드 포함" _test_korean_proot_locale_file_nimf_autostart
 
+# 생성된 profile을 stub PATH로 실행해 다른 입력기 데몬이 떠 있으면 기동하지 않는지 확인
+_korean_proot_profile_launches() {
+    local profile="$1" running="$2" bin sh i
+    sh=$(command -v sh)
+    bin=$(mktemp -d "$(_test_tmp_base)/imbin_XXXXXX")
+    printf '#!%s\n[ "$2" = "%s" ]\n' "$sh" "$running" > "$bin/pgrep"
+    printf '#!%s\necho nimf >> "%s/launched"\n' "$sh" "$bin" > "$bin/nimf"
+    printf '#!%s\necho fcitx5 >> "%s/launched"\n' "$sh" "$bin" > "$bin/fcitx5"
+    chmod +x "$bin/pgrep" "$bin/nimf" "$bin/fcitx5"
+    PATH="$bin:$PATH" bash -c ". '$profile'" >/dev/null 2>&1
+    # 데몬은 disown된 백그라운드로 뜨므로 기록이 남을 때까지 잠깐 기다린다
+    for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$bin/launched" ] && break; sleep 0.1; done
+    cat "$bin/launched" 2>/dev/null
+    rm -rf "$bin"
+}
+
+_test_korean_proot_skips_daemon_when_other_im_running() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    PROOT_DISTRO="archlinux"
+    setup_fs_sandbox "$sb"
+    proot_pkg_install_aur() { return 1; }   # fcitx5 폴백 profile
+    app_install_korean_proot >/dev/null 2>&1
+    local profile; profile="$(_korean_proot_locale_file)"
+    assert_eq "" "$(_korean_proot_profile_launches "$profile" nimf)" "nimf가 떠 있는데 fcitx5를 띄움" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "fcitx5" "$(_korean_proot_profile_launches "$profile" none)" "입력기가 없을 때는 fcitx5를 띄워야 함" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "profile — 다른 입력기 데몬(nimf)이 떠 있으면 fcitx5를 띄우지 않는다" _test_korean_proot_skips_daemon_when_other_im_running
+
+_test_korean_proot_nimf_skips_when_fcitx5_running() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    app_install_korean_proot >/dev/null
+    local profile; profile="$(_korean_proot_locale_file)"
+    assert_eq "" "$(_korean_proot_profile_launches "$profile" fcitx5)" "fcitx5가 떠 있는데 nimf를 띄움" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "profile — fcitx5가 떠 있으면 nimf를 띄우지 않는다" _test_korean_proot_nimf_skips_when_fcitx5_running
+
 _test_korean_proot_remove_strips_block() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local lf; lf="$(_korean_proot_locale_file)"

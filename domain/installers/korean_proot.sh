@@ -98,19 +98,21 @@ export LANGUAGE=ko_KR.UTF-8
 export LC_ALL=ko_KR.UTF-8
 EOF
 
+    # 같은 X 디스플레이에 입력기 데몬이 둘 붙으면 글자가 중복 입력된다. proot는 호스트와
+    # /proc을 공유하므로 Termux native든 proot든 이미 떠 있는 데몬이 있으면 새로 띄우지 않는다.
     if [ "$im" = "nimf" ]; then
         cat >> "$profile" << 'EOF' || return 1
 export GTK_IM_MODULE=nimf
 export QT_IM_MODULE=nimf
 export XMODIFIERS="@im=nimf"
-command -v nimf >/dev/null 2>&1 && ! pgrep -x nimf >/dev/null 2>&1 && { nimf & disown; } 2>/dev/null || true
+command -v nimf >/dev/null 2>&1 && ! pgrep -x nimf >/dev/null 2>&1 && ! pgrep -x fcitx5 >/dev/null 2>&1 && { nimf & disown; } 2>/dev/null || true
 EOF
     else
         cat >> "$profile" << 'EOF' || return 1
 export GTK_IM_MODULE=fcitx
 export QT_IM_MODULE=fcitx
 export XMODIFIERS="@im=fcitx"
-command -v fcitx5 >/dev/null 2>&1 && ! pgrep -x fcitx5 >/dev/null 2>&1 && { fcitx5 -d 2>/dev/null & disown; } 2>/dev/null || true
+command -v fcitx5 >/dev/null 2>&1 && ! pgrep -x fcitx5 >/dev/null 2>&1 && ! pgrep -x nimf >/dev/null 2>&1 && { fcitx5 -d 2>/dev/null & disown; } 2>/dev/null || true
 EOF
     fi
 
