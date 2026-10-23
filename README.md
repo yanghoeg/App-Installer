@@ -235,13 +235,6 @@ the selection; removing the selected IME resets it to `none`. Restart XFCE to ap
 The Wayland path clears X11 IME module variables and excludes these autostart entries
 from KDE, leaving Android keyboard input to Anland.
 
-Termux:X11 only imitates composition for the Android keyboard's Korean layout, so
-Backspace removes a whole composing syllable. With nimf, keep the Android keyboard on
-its English layout and let nimf compose inside X11; Backspace then removes the last
-jamo. Installing `nimf` adds a `한/영` key (`{macro: 'SHIFT SPACE', display: '한/영'}`,
-nimf's default Shift+Space toggle) to the Termux:X11 extra keys bar, and removing it
-takes that key out again.
-
 `korean_locale` is separate from input. It requires the parent usix-termux checkout
 and a ZIP containing `ko/LC_MESSAGES/*.mo`. The GUI prompts for the file; the CLI uses:
 
