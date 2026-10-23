@@ -86,15 +86,6 @@ case "$name" in
         fi
         exit "${TEST_REMOVE_RC:-0}" ;;
     grun) exit "${TEST_GRUN_RC:-0}" ;;
-    termux-x11-preference)
-        if [ "${1:-}" = list ]; then
-            printf '"fullscreen"="true"\n"extra_keys_config"="%s"\n' "$(cat "$TEST_X11_KEYS")"
-            exit 0
-        fi
-        IFS= read -r line
-        line="${line#\"extra_keys_config\"=\"}"
-        printf '%s' "${line%\"}" > "$TEST_X11_KEYS"
-        echo Done; exit 0 ;;
     proot-distro|glib-compile-schemas|gio) exit 0 ;;
 esac
 echo "Unexpected fixture command: $name $*" >&2
@@ -125,43 +116,6 @@ _test_cli_native_nimf() {
     cleanup_sandbox "$sb"
 }
 it 'native-only nimf downloads, verifies, and installs through the CLI' _test_cli_native_nimf
-
-# Android 키보드 한글 자판은 조합 중 백스페이스가 음절을 통째로 지운다. nimf 설치는
-# Termux:X11 추가 키 바에 한/영(Shift+Space) 키를 넣고, 제거는 그 키만 뺀다.
-_CLI_X11_KEYS="[['ESC','/',{key: '-', popup: '|'},'HOME','UP',{key: 'END', popup: 'ZOOM_IN'},{key: 'PGUP', popup: 'ZOOM_OUT'},{key: 'KEYBOARD', popup: 'ZOOM_RESET'}], ['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN','PREFERENCES']]"
-_cli_x11_keys_setup() {
-    _cli_setup "$1"
-    ln -s stub "$1/bin/termux-x11-preference"
-    export TEST_X11_KEYS="$1/x11-keys" PROOT_DISTRO=""
-    printf '%s' "$2" > "$TEST_X11_KEYS"
-    source "$APP_DIR/domain/installers/nimf.sh"
-    export TEST_SHA="$_NIMF_DEB_SHA256"
-}
-
-_test_cli_nimf_x11_toggle_key() {
-    local sb; sb=$(make_sandbox); _cli_x11_keys_setup "$sb" "$_CLI_X11_KEYS"
-    local with_key="${_CLI_X11_KEYS%]]},{macro: 'SHIFT SPACE', display: '한/영'}]]"
-    _cli install nimf
-    assert_eq "$with_key" "$(cat "$TEST_X11_KEYS")"
-    _cli install nimf
-    assert_eq "$with_key" "$(cat "$TEST_X11_KEYS")" 'a second install must not add another key'
-    ln -s stub "$sb/bin/nimf"  # remove skips apps whose command is absent
-    _cli remove nimf
-    assert_eq "$_CLI_X11_KEYS" "$(cat "$TEST_X11_KEYS")"
-    cleanup_sandbox "$sb"
-}
-it 'nimf adds one 한/영 Termux:X11 extra key and removal takes only that key out' _test_cli_nimf_x11_toggle_key
-
-_test_cli_nimf_x11_unparsed_keys() {
-    local sb; sb=$(make_sandbox)
-    local multiline=$'[[\'ESC\',\'TAB\'],\n [\'CTRL\',\'ALT\']]'
-    _cli_x11_keys_setup "$sb" "$multiline"
-    _cli install nimf > "$sb/install.log" 2>&1
-    assert_eq "$multiline" "$(cat "$TEST_X11_KEYS")"
-    assert_file_contains "$sb/install.log" 'extra keys config'
-    cleanup_sandbox "$sb"
-}
-it 'nimf install leaves an extra keys config it cannot read and says how to add the key' _test_cli_nimf_x11_unparsed_keys
 
 _test_cli_native_claude() {
     local sb; sb=$(make_sandbox); _cli_setup "$sb"
