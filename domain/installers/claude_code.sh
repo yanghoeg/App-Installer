@@ -80,14 +80,25 @@ _claude_code_remove_npm_wrapper() {
 # `claude -p "여러 단어"`가 첫 단어만 받는다 → grun이 하는 준비(glibc PATH·locale)만 직접 하고
 # ld.so에 "$@"를 그대로 넘긴다.
 _claude_code_install_wrapper() {
-    cat > "${CLAUDE_CODE_BIN_PATH}" << EOF
+    local stage
+    # Write beside the live wrapper so rename publishes a complete executable.
+    # Failed writes/chmod must leave an existing launcher usable.
+    stage=$(mktemp "${CLAUDE_CODE_BIN_PATH}.XXXXXX") || return 1
+    if ! cat > "$stage" << EOF
 #!${PREFIX}/bin/bash
 unset LD_PRELOAD
 export PATH="${PREFIX}/glibc/bin:\$PATH"
 [ -f "${PREFIX}/glibc/etc/locale.conf" ] && . "${PREFIX}/glibc/etc/locale.conf"
 exec "${PREFIX}/glibc/bin/ld.so" "${CLAUDE_CODE_PREFIX}/claude" "\$@"
 EOF
-    chmod +x "${CLAUDE_CODE_BIN_PATH}"
+    then
+        rm -f "$stage"
+        return 1
+    fi
+    chmod 755 "$stage" && mv -f "$stage" "${CLAUDE_CODE_BIN_PATH}" || {
+        rm -f "$stage"
+        return 1
+    }
 }
 
 # settings.json에 self-updater 차단 env var 주입.
@@ -147,11 +158,11 @@ _claude_code_backup_current() {
 
 # 새 binary가 최소한 실행되는지만 확인 — 로그인/기능 회귀는 여기서 못 잡음.
 # 부팅 자체가 깨진 회귀(예: 잘못된 dynamic linker 요구)만 감지.
-_claude_code_smoke_check() {
-    local LD_PRELOAD
+_claude_code_smoke_check() (
     unset LD_PRELOAD
-    grun "${CLAUDE_CODE_PREFIX}/claude" --version >/dev/null 2>&1
-}
+    # Verify the path users actually launch, including the wrapper and linker.
+    "${CLAUDE_CODE_BIN_PATH}" --version >/dev/null 2>&1
+)
 
 # 백업된 이전 버전으로 되돌림 — 로그인 회귀 등 수동 롤백에 사용.
 # 사용: app_rollback_claude_code            → 사용 가능한 최신 백업으로
@@ -174,11 +185,13 @@ app_rollback_claude_code() {
     # "file too short" 로 깨진다. staging + rename 이면 옛 inode 가 살아남는다.
     stage="${CLAUDE_CODE_PREFIX}/claude.restore"
     cp -f "$bak_bin" "$stage" || { rm -f "$stage"; return 1; }
-    chmod +x "$stage"
+    chmod +x "$stage" || { rm -f "$stage"; return 1; }
     mv -f "$stage" "${CLAUDE_CODE_PREFIX}/claude" || { rm -f "$stage"; return 1; }
-    [ -f "$bak_pkg" ] && cp -f "$bak_pkg" "${CLAUDE_CODE_PREFIX}/package.json"
-    printf '%s\n' "$target" > "${CLAUDE_CODE_VERSION_FILE}"
-    _claude_code_install_wrapper
+    if [ -f "$bak_pkg" ]; then
+        cp -f "$bak_pkg" "${CLAUDE_CODE_PREFIX}/package.json" || return 1
+    fi
+    printf '%s\n' "$target" > "${CLAUDE_CODE_VERSION_FILE}" || return 1
+    _claude_code_install_wrapper || return 1
     echo "[INFO] v${target}으로 롤백 완료"
 }
 
@@ -207,7 +220,11 @@ app_upgrade_claude_code() {
         [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
         return 1
     }
-    _claude_code_install_wrapper
+    if ! _claude_code_install_wrapper; then
+        echo "[ERROR] Claude Code 실행 래퍼 설치 실패 — v${current}으로 롤백" >&2
+        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        return 1
+    fi
     if ! _claude_code_smoke_check; then
         echo "[ERROR] v${latest} 스모크 실패 — v${current}으로 롤백" >&2
         [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1

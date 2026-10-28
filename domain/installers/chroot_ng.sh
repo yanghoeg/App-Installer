@@ -49,8 +49,30 @@ app_install_chroot_ng() {
     echo '     메뉴 앱까지 쓰려면 ~/.config/termux-xfce/config에 PRUN_RUNTIME="chroot-ng"을 추가하세요.'
 }
 
+_chroot_ng_reset_runtime() {
+    local config="$HOME/.config/termux-xfce/config" stage
+    [ -f "$config" ] || return 0
+    # Match only a literal runtime selection; leave other settings and comments.
+    local selection="^([[:space:]]*(export[[:space:]]+)?PRUN_RUNTIME[[:space:]]*=[[:space:]]*)(\"chroot-ng\"|'chroot-ng'|chroot-ng)([[:space:]]*(#.*)?)$"
+    local matched=0
+    grep -Eq "$selection" "$config" || matched=$?
+    [ "$matched" -ne 1 ] || return 0
+    [ "$matched" -eq 0 ] || return 1
+    stage=$(mktemp "${config}.XXXXXX") || return 1
+    if ! sed -E "s/${selection}/\\1\"proot\"\\4/" "$config" > "$stage" ||
+       ! chmod --reference="$config" "$stage" || ! mv -f "$stage" "$config"; then
+        rm -f "$stage"
+        return 1
+    fi
+}
+
 app_remove_chroot_ng() {
-    rm -f "$(_chroot_ng_bin)"
+    # Keep prun usable before removing the selected optional runtime.
+    _chroot_ng_reset_runtime || return 1
+    rm -f "$(_chroot_ng_bin)" || return 1
+    if [ "${PRUN_RUNTIME:-}" = chroot-ng ]; then
+        PRUN_RUNTIME=proot
+    fi
 }
 
 app_is_installed_chroot_ng() {

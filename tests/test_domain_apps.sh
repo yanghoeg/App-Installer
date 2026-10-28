@@ -731,14 +731,15 @@ it "korean_input 제거: 마지막 패키지가 이미 없어도 rc 0" _test_kor
 # =============================================================================
 describe "llama.cpp — 모델 다운로드 헬퍼"
 
-_test_llama_model_get_uses_curl_f_and_cleans_up() {
+_test_llama_model_get_uses_curl_f_and_part_file() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     app_install_llama_cpp >/dev/null 2>&1
     assert_file_contains "$_LLAMA_MODEL_GET_BIN" "curl -fL -C -" "curl -f로 HTTP 오류를 감지해야 함"
-    assert_file_contains "$_LLAMA_MODEL_GET_BIN" 'rm -f "$OUT"' "실패 시 손상된 부분 파일을 지워야 함"
+    assert_file_contains "$_LLAMA_MODEL_GET_BIN" 'curl -fL -C - -o "$PART"' "부분 파일로 이어받아야 함"
+    assert_file_contains "$_LLAMA_MODEL_GET_BIN" 'mv "$PART" "$OUT"' "완료된 모델만 최종 이름으로 옮겨야 함"
     cleanup_sandbox "$sb"
 }
-it "llama-model-get 헬퍼가 curl -f로 실패를 감지하고 부분 파일을 지운다" _test_llama_model_get_uses_curl_f_and_cleans_up
+it "llama-model-get 헬퍼가 curl -f로 실패를 감지하고 .part에서 이어받는다" _test_llama_model_get_uses_curl_f_and_part_file
 
 # =============================================================================
 # Claude Code — 업그레이드 지원

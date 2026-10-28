@@ -16,7 +16,9 @@ _LLAMA_MODEL_GET_BIN="$PREFIX/bin/llama-model-get"
 
 # GPU 런처 — 네이티브 Qualcomm OpenCL을 강제해 Turnip/clvk(Vulkan) garbage를 우회한다.
 _llama_write_gpu_launcher() {
-    cat > "$_LLAMA_GPU_BIN" << 'GEOF'
+    local staged
+    staged=$(mktemp "$_LLAMA_GPU_BIN.tmp.XXXXXX") || return 1
+    if ! cat > "$staged" << 'GEOF'; then
 #!/data/data/com.termux/files/usr/bin/bash
 # llama-gpu — Adreno GPU 추론 (네이티브 Qualcomm OpenCL 강제)
 # 이 기기의 Vulkan(Turnip/clvk) 경로는 KGSL 버그로 garbage → 벤더 OpenCL로 우회.
@@ -58,12 +60,20 @@ esac
 
 exec "${LLAMA_GPU_BIN:-llama-cli}" -ngl 99 "${_ctx[@]}" "$@"
 GEOF
-    chmod +x "$_LLAMA_GPU_BIN"
+        rm -f "$staged"
+        return 1
+    fi
+    if ! chmod 755 "$staged" || ! mv -f "$staged" "$_LLAMA_GPU_BIN"; then
+        rm -f "$staged"
+        return 1
+    fi
 }
 
 # 모델 다운로드 헬퍼 — Qwen2.5-Instruct Q5_K_M GGUF (Adreno GPU 에 적당한 크기).
 _llama_write_model_get() {
-    cat > "$_LLAMA_MODEL_GET_BIN" << 'MEOF'
+    local staged
+    staged=$(mktemp "$_LLAMA_MODEL_GET_BIN.tmp.XXXXXX") || return 1
+    if ! cat > "$staged" << 'MEOF'; then
 #!/data/data/com.termux/files/usr/bin/bash
 # llama-model-get — 로컬 LLM GGUF 다운로드 (~/models)
 # 사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]   (기본 1.5b)
@@ -82,23 +92,132 @@ case "${1:-1.5b}" in
     *) echo "사용법: llama-model-get [0.5b|1.5b|3b|3.5-2b|3.5-4b|hammer]" >&2; exit 2 ;;
 esac
 OUT="$DIR/$F"
+PART="$OUT.part"
+COMPLETE="$OUT.complete"
+URL="https://huggingface.co/$REPO/resolve/main/$F"
+
+# 같은 디렉터리에서 완성한 뒤 교체해 중단된 marker를 완료 증거로 쓰지 않는다.
+write_complete() {
+    local marker_tmp
+    marker_tmp=$(mktemp "$COMPLETE.tmp.XXXXXX") || return 1
+    if ! printf '%s\n%s\n%s\n' "$URL" "$1" "$2" > "$marker_tmp" || ! mv "$marker_tmp" "$COMPLETE"; then
+        rm -f "$marker_tmp"
+        return 1
+    fi
+}
+
+file_sha256() {
+    local digest
+    digest=$(sha256sum < "$1") || return 1
+    printf '%s\n' "${digest%% *}"
+}
+
+show_complete() {
+    echo "완료: $OUT"
+    echo "실행 예: llama-gpu -m \"$OUT\" -st -p \"대한민국의 수도는?\""
+}
+
 if [ -f "$OUT" ]; then
-    echo "이미 있음: $OUT"
-else
-    echo "다운로드: $F"
-    curl -fL -C - -o "$OUT" "https://huggingface.co/$REPO/resolve/main/$F" \
-        || { rm -f "$OUT"; echo "다운로드 실패: $F" >&2; exit 1; }
+    local_size=$(wc -c < "$OUT" | tr -d '[:space:]')
+    if [ -f "$COMPLETE" ]; then
+        mapfile -t completion < "$COMPLETE"
+        if [ "${#completion[@]}" -eq 3 ] && [ "${completion[0]}" = "$URL" ] && \
+            [[ "${completion[2]}" =~ ^[[:xdigit:]]{64}$ ]]; then
+            # 검증된 모델은 네트워크 없이 재사용하며 같은 크기의 사후 변경도 탐지한다.
+            if [ "${completion[1]}" != "$local_size" ] || [ "$local_size" -eq 0 ] || \
+                [ "$(file_sha256 "$OUT")" != "${completion[2],,}" ]; then
+                echo "완료 기록과 모델이 일치하지 않습니다 (파일 유지): $OUT" >&2
+                exit 1
+            fi
+            echo "이미 있음: $OUT"
+            show_complete
+            exit 0
+        fi
+        # 이전의 URL+크기 2줄 기록은 해시 검증 전 legacy 파일로 취급한다.
+    fi
 fi
-echo "완료: $OUT"
-echo "실행 예: llama-gpu -m \"$OUT\" -st -p \"대한민국의 수도는?\""
+
+# HuggingFace LFS의 X-Linked-Etag는 원본 전체 SHA256이다. 최초 redirect의
+# X-Linked-Size를 우선해 CDN이 Content-Length를 생략해도 검증할 수 있게 한다.
+headers=$(curl -fsIL "$URL") || {
+    echo "모델 검증 정보를 가져올 수 없습니다 (파일 유지): $OUT" >&2
+    exit 1
+}
+metadata=$(printf '%s\n' "$headers" | awk '
+    /^HTTP\// { size = "" }
+    tolower($1) == "content-length:" { size = $2; sub(/\r$/, "", size) }
+    tolower($1) == "x-linked-size:" { linked_size = $2; sub(/\r$/, "", linked_size) }
+    tolower($1) == "x-linked-etag:" { sha = $2; gsub(/["\r]/, "", sha) }
+    END { print linked_size != "" ? linked_size : size; print sha }
+')
+mapfile -t remote <<< "$metadata"
+remote_size=${remote[0]:-}
+remote_sha=${remote[1]:-}
+case "$remote_size" in
+    ''|*[!0-9]*|0)
+        echo "원격 모델 크기를 확인할 수 없습니다 (파일 유지): $OUT" >&2
+        exit 1 ;;
+esac
+if ! [[ "$remote_sha" =~ ^[[:xdigit:]]{64}$ ]]; then
+    echo "원격 모델 SHA256을 확인할 수 없습니다 (파일 유지): $OUT" >&2
+    exit 1
+fi
+remote_sha=${remote_sha,,}
+
+if [ -f "$OUT" ]; then
+    if [ "$local_size" -eq "$remote_size" ]; then
+        if [ "$(file_sha256 "$OUT")" != "$remote_sha" ]; then
+            echo "기존 모델 SHA256이 원격 모델과 다릅니다 (파일 유지): $OUT" >&2
+            exit 1
+        fi
+        write_complete "$local_size" "$remote_sha"
+        echo "이미 있음: $OUT"
+        show_complete
+        exit 0
+    elif [ "$local_size" -gt "$remote_size" ]; then
+        echo "기존 모델이 원격 모델보다 큽니다 (파일 유지): $OUT" >&2
+        exit 1
+    elif [ ! -e "$PART" ]; then
+        # 이어받기나 복사 중 실패하더라도 기존 OUT는 검증 성공 전까지 보존한다.
+        cp "$OUT" "$PART" || {
+            echo "이어받을 파일을 복사할 수 없습니다 (기존 파일 유지): $OUT" >&2
+            exit 1
+        }
+    fi
+fi
+
+# 다운로드가 끝났지만 rename 전에 중단된 .part는 검증 후 바로 게시한다.
+part_size=0
+if [ -f "$PART" ]; then part_size=$(wc -c < "$PART" | tr -d '[:space:]'); fi
+if [ "$part_size" -ne "$remote_size" ]; then
+    echo "다운로드: $F"
+    curl -fL -C - -o "$PART" "$URL" || {
+        echo "다운로드 실패 (다음 실행 시 이어받음): $PART" >&2
+        exit 1
+    }
+fi
+if [ ! -f "$PART" ] || [ "$(wc -c < "$PART" | tr -d '[:space:]')" -ne "$remote_size" ] || \
+    [ "$(file_sha256 "$PART")" != "$remote_sha" ]; then
+    echo "모델 크기 또는 SHA256 불일치 (파일 유지): $PART" >&2
+    exit 1
+fi
+mv "$PART" "$OUT"
+write_complete "$remote_size" "$remote_sha"
+show_complete
 MEOF
-    chmod +x "$_LLAMA_MODEL_GET_BIN"
+        rm -f "$staged"
+        return 1
+    fi
+    if ! chmod 755 "$staged" || ! mv -f "$staged" "$_LLAMA_MODEL_GET_BIN"; then
+        rm -f "$staged"
+        return 1
+    fi
 }
 
 app_install_llama_cpp() {
     termux_pkg_install "${_PKGS_LLAMA_CPP[@]}" || return 1
-    _llama_write_gpu_launcher
-    _llama_write_model_get
+    _llama_write_gpu_launcher || return 1
+    _llama_write_model_get || return 1
 
     if ! app_is_installed_gpu_native 2>/dev/null; then
         echo "[llama.cpp] 힌트: GPU 추론을 쓰려면 '시스템 → GPU 가속'을 먼저 설치하세요."

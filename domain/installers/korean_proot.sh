@@ -120,6 +120,33 @@ EOF
     _korean_proot_clean_legacy_profile
 }
 
+# v1.4.17 ARM64 .deb는 Qt6 플러그인만 x86_64 multiarch 디렉터리에 담았다.
+# 원본은 dpkg 소유로 남기고 ARM64 Qt6 검색 경로에 상대 링크를 관리한다.
+_korean_proot_fix_ubuntu_qt6() {
+    local arch rootfs src dst
+    arch=$(proot_exec dpkg --print-architecture) || return 1
+    [ "$arch" = arm64 ] || return 0
+    rootfs="$(_proot_rootfs)"
+    src="$rootfs/usr/lib/x86_64-linux-gnu/qt6/plugins/platforminputcontexts/libqt6im-nimf.so"
+    dst="$rootfs/usr/lib/aarch64-linux-gnu/qt6/plugins/platforminputcontexts/libqt6im-nimf.so"
+    [ -f "$src" ] || return 0
+    # 정상 플러그인(향후 수정된 패키지 포함)은 덮어쓰지 않는다.
+    [ ! -e "$dst" ] || return 0
+    if [ -L "$dst" ]; then
+        echo "[ERROR] Nimf Qt6 플러그인 경로에 끊어진 링크가 있습니다: $dst" >&2
+        return 1
+    fi
+    mkdir -p "${dst%/*}" || return 1
+    ln -s ../../../../x86_64-linux-gnu/qt6/plugins/platforminputcontexts/libqt6im-nimf.so "$dst"
+}
+
+_korean_proot_remove_ubuntu_qt6_link() {
+    local dst="$(_proot_rootfs)/usr/lib/aarch64-linux-gnu/qt6/plugins/platforminputcontexts/libqt6im-nimf.so"
+    [ -L "$dst" ] || return 0
+    [ "$(readlink "$dst")" = ../../../../x86_64-linux-gnu/qt6/plugins/platforminputcontexts/libqt6im-nimf.so ] || return 0
+    rm -f "$dst"
+}
+
 _korean_proot_install_ubuntu() {
     _korean_proot_install_pkgs "${_KOREAN_PROOT_PKGS_UBUNTU[@]}" || return 1
 
@@ -136,6 +163,8 @@ _korean_proot_install_ubuntu() {
         done
         proot_pkg_install_deb_url "${urls[@]}" || return 1
     fi
+    # 이미 설치된 Nimf도 재실행 시 동일하게 보정한다.
+    _korean_proot_fix_ubuntu_qt6 || return 1
 
     local locale_file
     locale_file="$(_proot_rootfs)/etc/default/locale"
@@ -217,6 +246,9 @@ app_remove_korean_proot() {
     done
     if [ "${#installed[@]}" -gt 0 ]; then
         proot_pkg_remove "${installed[@]}" || return 1
+    fi
+    if [ "${PROOT_DISTRO:-}" = ubuntu ]; then
+        _korean_proot_remove_ubuntu_qt6_link || return 1
     fi
     rm -f "$(_korean_proot_locale_file)" || return 1
     _korean_proot_clean_legacy_profile || return 1

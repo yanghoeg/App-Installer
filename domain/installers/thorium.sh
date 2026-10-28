@@ -7,27 +7,28 @@ _THORIUM_DEB_SHA256="c6eba5536cde23659e2a7f60ae003d2cc29ac456fbb804ad18a602f5d0d
 
 app_install_thorium() {
     has_proot_distro || { echo "[ERROR] proot 환경이 필요합니다" >&2; return 1; }
-    # arm64 .deb에서 바이너리 직접 추출 — distro 무관하게 동작
-    # Ubuntu 25.10: coreutils-from-uutils 충돌로 apt 불가 → dpkg --force-depends 폴백
-    # Arch: pacman에 등록 안 됨 → ar로 수동 추출
+    # Extract without registering a package: this avoids Ubuntu dependency conflicts
+    # and works with dpkg-deb even when binutils/ar is absent.
     proot_exec sudo bash -c "$(fetch_verified_src)"$'\n''
         set -e
-        fetch_verified "$1" /tmp/thorium.deb "$2"
+        stage=$(mktemp -d /tmp/thorium.XXXXXX)
+        trap '"'"'rm -rf "$stage"'"'"' EXIT
+        fetch_verified "$1" "$stage/thorium.deb" "$2"
 
-        # ar 방식 시도 (binutils 필요)
-        if command -v ar &>/dev/null; then
-            mkdir -p /tmp/thorium-extract
-            cd /tmp/thorium-extract
-            ar x /tmp/thorium.deb
-            data_tar=$(ls data.tar.* 2>/dev/null | head -1)
+        if command -v dpkg-deb >/dev/null 2>&1; then
+            dpkg-deb -x "$stage/thorium.deb" /
+        elif command -v ar >/dev/null 2>&1; then
+            mkdir "$stage/extract"
+            cd "$stage/extract"
+            ar x "$stage/thorium.deb"
+            data_tar=$(find . -maxdepth 1 -name "data.tar.*" -print -quit)
             test -n "$data_tar"
             tar -xf "$data_tar" -C /
-            cd / && rm -rf /tmp/thorium-extract
+            cd /
         else
-            # ar 없으면 dpkg --force-depends (Ubuntu 전용)
-            dpkg --force-depends -i /tmp/thorium.deb
+            echo "[ERROR] Thorium 압축 해제에 dpkg-deb 또는 ar이 필요합니다." >&2
+            exit 1
         fi
-        rm -f /tmp/thorium.deb
         command -v thorium-browser >/dev/null
     ' _ "$_THORIUM_DEB_URL" "$_THORIUM_DEB_SHA256" || { echo "[ERROR] Thorium 다운로드/설치 실패" >&2; return 1; }
 
@@ -37,15 +38,28 @@ app_install_thorium() {
 }
 
 app_remove_thorium() {
-    # .deb 추출 방식으로 설치했으므로 파일 직접 삭제 (pacman/apt 미등록)
+    # Older installers used dpkg -i when ar was absent. Remove that registration
+    # before cleaning files from both the registered and extraction-only installs.
     if has_proot_distro; then
-        proot_exec sudo bash -c "
+        proot_exec sudo bash -c '
         set -e
+        if command -v dpkg-query >/dev/null 2>&1; then
+            query_rc=0
+            state=$(dpkg-query -W -f="\${db:Status-Status}" thorium-browser 2>/dev/null) || query_rc=$?
+            case "$query_rc" in
+                0) ;;
+                1) state= ;; # package absent
+                *) echo "[ERROR] Thorium 패키지 상태 조회 실패" >&2; exit "$query_rc" ;;
+            esac
+            if [ -n "$state" ] && [ "$state" != not-installed ]; then
+                dpkg --purge thorium-browser
+            fi
+        fi
         rm -rf /opt/chromium.org/thorium
         rm -f /usr/bin/thorium-browser /usr/sbin/thorium-browser
         rm -f /usr/share/applications/thorium-browser.desktop
         rm -f /usr/share/icons/hicolor/*/apps/thorium-browser.png
-        " || return 1
+        ' || return 1
     fi
     desktop_remove "thorium-browser"
 }

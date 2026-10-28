@@ -26,6 +26,7 @@ _cli_setup() {
         "$PREFIX/lib" "$PREFIX/etc" "$PREFIX/bin" "$PREFIX/share/applications"
     touch "$PREFIX/etc/bash.bashrc" "$HOME/.zshrc" "$TEST_TRACE"
     ln -sf "$_CLI_BASH" "$sb/bin/bash"
+    ln -sf "$_CLI_BASH" "$PREFIX/bin/bash"
     # shebang 은 실행 중인 bash 경로로 — Termux 에는 /usr/bin/env 가 없다
     { printf '#!%s\n' "$_CLI_BASH"; cat <<'STUB'
 set -eu
@@ -85,7 +86,7 @@ case "$name" in
             exit 0
         fi
         exit "${TEST_REMOVE_RC:-0}" ;;
-    grun) exit "${TEST_GRUN_RC:-0}" ;;
+    grun|ld.so) exit "${TEST_GRUN_RC:-0}" ;;
     proot-distro|glib-compile-schemas|gio) exit 0 ;;
 esac
 echo "Unexpected fixture command: $name $*" >&2
@@ -139,7 +140,9 @@ _test_cli_install_repairs_broken_claude() {
     export TEST_SHA="${CLAUDE_CODE_TARBALL_SHA256[$CLAUDE_CODE_PIN_VERSION]}"
     mkdir -p "$PREFIX/share/claude-code"
     : > "$PREFIX/share/claude-code/claude"; chmod +x "$PREFIX/share/claude-code/claude"
-    printf '#!/bin/sh\n' > "$PREFIX/bin/claude"; chmod +x "$PREFIX/bin/claude"
+    _claude_code_install_wrapper
+    mkdir -p "$PREFIX/glibc/bin"
+    ln -s "$sb/bin/stub" "$PREFIX/glibc/bin/ld.so"
     export TEST_GRUN_RC=1   # ld.so 가 로드를 거부하는 상태
     _cli install claude_code > "$sb/install.log" 2>&1
     assert_file_contains "$sb/install.log" '손상'
@@ -155,7 +158,10 @@ _test_cli_install_keeps_healthy_claude() {
     mkdir -p "$PREFIX/share/claude-code"
     printf 'native binary fixture\n' > "$PREFIX/share/claude-code/claude"
     chmod +x "$PREFIX/share/claude-code/claude"
-    printf '#!/bin/sh\n' > "$PREFIX/bin/claude"; chmod +x "$PREFIX/bin/claude"
+    source "$APP_DIR/domain/installers/claude_code.sh"
+    _claude_code_install_wrapper
+    mkdir -p "$PREFIX/glibc/bin"
+    ln -s "$sb/bin/stub" "$PREFIX/glibc/bin/ld.so"
     export TEST_GRUN_RC=0   # 정상 로드
     _cli install claude_code > "$sb/install.log" 2>&1
     assert_file_contains "$sb/install.log" '이미 설치'
