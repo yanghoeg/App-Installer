@@ -39,16 +39,18 @@ CODEX_CMH_TARBALL_MEMBER="codex-code-mode-host-aarch64-unknown-linux-musl"
 # 핀 버전 — 올릴 때 아래 sha256 둘도 함께 갱신할 것
 # (sha256sum codex-aarch64-unknown-linux-musl.tar.gz
 #            codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz)
-CODEX_PIN_VERSION="0.159.3"
+CODEX_PIN_VERSION="0.167.0"
 
 declare -gA CODEX_TARBALL_SHA256=(
     ["0.153.4"]="5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde"
     ["0.159.3"]="cd5f307b3fcd6080773e684b86c3114a67d4f1c61dc447be09876b552eb4bea7"
+    ["0.167.0"]="843489acb4d4b1079745c36b03c5963b887b83155af208fd53584e33ee8eb281"
 )
 
 # code-mode 헬퍼 tarball sha256 — codex 본체와 같은 릴리스 태그에서 받는다.
 declare -gA CODEX_CMH_SHA256=(
     ["0.159.3"]="7cbb47c472c2dc115abfeebf52ff11bf66eb364bf8f5d14659742615919b8e6f"
+    ["0.167.0"]="6e99948fa20ca816a01f222a56afa261b321e00cbed611d76bb92c765fd11ec6"
 )
 
 # 설치된 버전 조회 — 미설치면 빈 문자열 ("codex-cli 0.153.4" → "0.153.4")
