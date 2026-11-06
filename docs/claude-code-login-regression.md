@@ -1,12 +1,12 @@
 # Claude Code 버전 핀과 로그인 복구
 
 설치 방식과 버전의 기준은 [claude_code.sh](../domain/installers/claude_code.sh)입니다.
-현재 `CLAUDE_CODE_PIN_VERSION`은 **2.1.286**이고 해당 tarball의 SHA-256이
-`CLAUDE_CODE_TARBALL_SHA256`에 등록되어 있습니다(직전 핀 2.1.261의 해시도 롤백 재설치
+현재 `CLAUDE_CODE_PIN_VERSION`은 **2.1.311**이고 해당 tarball의 SHA-256이
+`CLAUDE_CODE_TARBALL_SHA256`에 등록되어 있습니다(이전 핀 2.1.286·2.1.261의 해시도 롤백 재설치
 검증용으로 남겨 둡니다). 설치기는 npm 전역 패키지 대신 ARM64 바이너리를 받아
 `$PREFIX/share/claude-code`에 배치하고 `grun` 래퍼로 실행합니다.
 
-현재 핀 2.1.286은 **실기기 `/login`을 2026-10-01 에 확인했습니다**(아래 변경 이력).
+현재 핀 2.1.311은 **실기기 `/login`을 2026-11-06 에 확인했습니다**(아래 변경 이력).
 이 기록은 해당 기기·해당 버전에 한합니다 — 새 버전이나 다른 기기에서의 로그인 검증을
 대신하지 않으며 자동 스모크 검사와도 구분해야 합니다.
 
@@ -98,6 +98,19 @@ claude
 토큰 값은 테스트 로그나 이 문서에 기록하지 않습니다.
 
 ## 변경 이력
+
+### 2026-11-06 — 핀 2.1.286 → 2.1.311
+
+- npm `@anthropic-ai/claude-code-linux-arm64`의 `stable` 채널을 따랐습니다(같은 날
+  `latest`는 2.1.318, `next`는 2.1.319). **보안 상향은 아닙니다** — GitHub advisory DB 기준
+  가장 최근 권고 GHSA-pq7j-f95f-qfcv의 하한이 2.1.179라 직전 핀도 이미 그 위였습니다.
+- tarball SHA-256을 npm `integrity`(sha512)·`shasum`(sha1) 양쪽과 교차 대조해 등록했습니다.
+- 2.1.287~2.1.311 CHANGELOG에 런처/네이티브 바이너리/glibc 관련 회귀 항목은 없습니다.
+  로그인 관련은 오류 문구 개선과 토큰 갱신 수정(2.1.301·2.1.307·2.1.311)뿐입니다.
+- 실기기(SM-F956N): `grun` 경로의 `--version` 확인, 환경 토큰 없이 저장된 로그인으로
+  `claude -p` 실제 요청 성공. 이어서 2.1.311 세션에서 `/login` 재인증 →
+  "Login successful", 자격 증명 파일 갱신 확인.
+  회귀 시 롤백: `app_rollback_claude_code 2.1.286`
 
 ### 2026-10-01 (2) — 손상된 설치본 복구 경로, 롤백 스왑
 

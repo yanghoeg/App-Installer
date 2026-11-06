@@ -16,15 +16,20 @@ CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # npm latest 추종이 근거. 2.1.262~2.1.286 CHANGELOG에 런처/네이티브 바이너리 회귀 항목 없음.
 # 실기기 /login 2026-10-01 검증 완료 (사인인 URL → 브라우저 인증 → 터미널 복귀 →
 # 인증 후 실제 요청까지. 환경 토큰 미설정 상태라 결과가 가려지지 않았다).
+# 2026-11-06: 2.1.286 → 2.1.311 상향. npm `stable` 채널 추종(latest 2.1.318보다 보수적).
+# 신규 advisory 없음(최신 GHSA-pq7j-f95f-qfcv 하한 2.1.179). 2.1.287~2.1.311 CHANGELOG에
+# 런처/네이티브 바이너리 회귀 항목 없음. 실기기에서 저장된 로그인으로 실제 요청 확인,
+# /login 재인증 2026-11-06 확인.
 # 회귀 시 롤백 절차는 위 문서 참조.
 # 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
-CLAUDE_CODE_PIN_VERSION="2.1.286"
+CLAUDE_CODE_PIN_VERSION="2.1.311"
 
 # 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
 # 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
 declare -gA CLAUDE_CODE_TARBALL_SHA256=(
     ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
     ["2.1.286"]="ab87947d331c045aa6fc3c7934d31d8cca5fcdf676d10bcae0b0adfc5210f397"
+    ["2.1.311"]="804f385122f395d382cf3dec51e1bec1dd8e5c07078222781a1a251d46d236e5"
 )
 
 _claude_code_fetch_latest_version() {

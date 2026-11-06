@@ -1641,9 +1641,9 @@ _test_sha256_constants_are_64hex() {
             failed=1
         fi
     done
-    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.286]:-}"
+    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.311]:-}"
     if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
-        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.286]가 64자 hex가 아님: '${val}'" >&2
+        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.311]가 64자 hex가 아님: '${val}'" >&2
         failed=1
     fi
     # codex는 본체와 code-mode 헬퍼 둘 다 핀 버전 sha256이 있어야 한다.
@@ -1729,12 +1729,12 @@ describe "claude_code — M11 핀 상향"
 
 _test_claude_pin_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    assert_eq "2.1.286" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
-    assert_eq "2.1.286" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
+    assert_eq "2.1.311" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "2.1.311" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "CLAUDE_CODE_PIN_VERSION = 2.1.286 (M11)" _test_claude_pin_version
+it "CLAUDE_CODE_PIN_VERSION = 2.1.311 (M11)" _test_claude_pin_version
 
 _test_claude_download_uses_fetch_verified() {
     local sb; sb=$(make_sandbox); _setup "$sb"
