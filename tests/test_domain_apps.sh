@@ -946,6 +946,83 @@ _test_claude_rollback_swaps_inode() {
 }
 it "롤백 → 제자리 덮어쓰기 대신 rename 으로 교체 (실행 중 세션 보존)" _test_claude_rollback_swaps_inode
 
+# npm tarball은 mtime이 1985-10-26 고정이라 백업 mtime이 같거나 뒤섞인다 → 버전 번호로 골라야 한다
+_test_claude_rollback_picks_highest_version() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "2.0.0"
+    local v
+    for v in 1.2.0 1.10.0 2.0.0; do
+        printf '%s\n' "$v" > "${CLAUDE_CODE_PREFIX}/claude.bak.v${v}"
+        touch -d @0 "${CLAUDE_CODE_PREFIX}/claude.bak.v${v}"
+    done
+    # 실기기처럼 더 오래된 버전의 백업이 더 최근 mtime을 가진 경우
+    touch -d @100 "${CLAUDE_CODE_PREFIX}/claude.bak.v1.2.0"
+    _claude_code_install_wrapper() { :; }
+    app_rollback_claude_code >/dev/null
+    assert_eq "1.10.0" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "현재 제외 최고 버전 선택" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "1.10.0" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "해당 백업 내용으로 복원" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "인자 없는 롤백 → mtime이 아니라 버전 번호로 현재 제외 최고 버전 선택" _test_claude_rollback_picks_highest_version
+
+_test_claude_rollback_reinstalls_registered_version() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "2.1.311"
+    _claude_code_download_native() { _record_call "download $1"; printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; }
+    _claude_code_install_wrapper() { _record_call "install_wrapper"; }
+    app_rollback_claude_code "2.1.286" >/dev/null || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "download 2.1.286" || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "install_wrapper" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "2.1.286" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 갱신" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "백업 없는 지정 롤백 + sha256 등록 버전 → 검증 재설치" _test_claude_rollback_reinstalls_registered_version
+
+_test_claude_rollback_unregistered_no_download() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "2.1.311"
+    _claude_code_download_native() { _record_call "download $1"; }
+    local rc; app_rollback_claude_code "9.9.9" 2>/dev/null && rc=0 || rc=$?
+    assert_eq "1" "$rc" "미등록 버전은 실패" || { cleanup_sandbox "$sb"; return 1; }
+    assert_not_called "download" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "백업 없는 지정 롤백 + sha256 미등록 → 다운로드 없이 실패" _test_claude_rollback_unregistered_no_download
+
+_test_claude_upgrade_refuses_unknown_version() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    rm -f "${CLAUDE_CODE_VERSION_FILE}"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { _record_call "download $1"; }
+    local rc; app_upgrade_claude_code 2>/dev/null && rc=0 || rc=$?
+    assert_eq "1" "$rc" "버전 기록 없으면 return 1" || { cleanup_sandbox "$sb"; return 1; }
+    assert_not_called "download" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "binary" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "기존 바이너리 유지" \
+        || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "VERSION 없는 설치본 → 바이너리를 건드리지 않고 업그레이드 거부" _test_claude_upgrade_refuses_unknown_version
+
+_test_claude_upgrade_reports_rollback_failure() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    _claude_fake_install "1.0.0"
+    _claude_code_fetch_latest_version() { echo "2.0.0"; }
+    _claude_code_download_native() { printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; }
+    _claude_code_install_wrapper()  { :; }
+    _claude_code_smoke_check()      { return 1; }
+    app_rollback_claude_code()      { return 1; }
+    local rc err
+    err=$(app_upgrade_claude_code 2>&1 >/dev/null) && rc=0 || rc=$?
+    assert_eq "1" "$rc" "return 1" || { cleanup_sandbox "$sb"; return 1; }
+    assert_output_contains "$err" "자동 롤백 실패" || { cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "자동 롤백 실패 → 성공처럼 숨기지 않고 오류 보고" _test_claude_upgrade_reports_rollback_failure
+
 describe "app_verify — 설치본 무결성 확인"
 
 _test_app_verify_without_hook() {
@@ -1736,14 +1813,25 @@ _test_claude_pin_version() {
 }
 it "CLAUDE_CODE_PIN_VERSION = 2.1.311 (M11)" _test_claude_pin_version
 
+_test_claude_empty_pin_fails_without_network() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    # 파이프라인 안의 호출은 서브셸이라 _record_call로는 안 잡힌다 → 파일로 기록
+    curl() { : > "$sb/curl-called"; }
+    local rc; CLAUDE_CODE_PIN_VERSION="" _claude_code_fetch_latest_version >/dev/null 2>&1 && rc=0 || rc=$?
+    assert_nonzero "$rc" "핀이 비면 실패" || { cleanup_sandbox "$sb"; return 1; }
+    [ ! -e "$sb/curl-called" ] || { echo "[ASSERT] 핀이 비었는데 curl 호출" >&2; cleanup_sandbox "$sb"; return 1; }
+    cleanup_sandbox "$sb"
+}
+it "핀이 비면 npm latest를 조회하지 않고 실패" _test_claude_empty_pin_fails_without_network
+
 _test_claude_download_uses_fetch_verified() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local captured=""
     fetch_verified() { captured="$3"; printf 'tgz\n' > "$2"; }
     tar() { :; }
     mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
-    _claude_code_download_native "2.1.286"
-    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.286]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
+    _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION"
+    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.311]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }

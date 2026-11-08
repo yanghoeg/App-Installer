@@ -21,7 +21,7 @@ CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # 런처/네이티브 바이너리 회귀 항목 없음. 실기기에서 저장된 로그인으로 실제 요청 확인,
 # /login 재인증 2026-11-06 확인.
 # 회귀 시 롤백 절차는 위 문서 참조.
-# 해제하려면 빈 값으로 두면 npm registry의 latest를 다시 조회함.
+# 핀은 필수 — 비우면 설치·업그레이드가 실패한다("최신" 무검증 조회 금지).
 CLAUDE_CODE_PIN_VERSION="2.1.311"
 
 # 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
@@ -33,12 +33,11 @@ declare -gA CLAUDE_CODE_TARBALL_SHA256=(
 )
 
 _claude_code_fetch_latest_version() {
-    if [ -n "${CLAUDE_CODE_PIN_VERSION}" ]; then
-        printf '%s\n' "${CLAUDE_CODE_PIN_VERSION}"
-        return 0
+    if [ -z "${CLAUDE_CODE_PIN_VERSION}" ]; then
+        echo "[ERROR] CLAUDE_CODE_PIN_VERSION 필요 — 핀 없이 설치하지 않습니다" >&2
+        return 1
     fi
-    curl -sSLf "https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/latest" \
-        | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4
+    printf '%s\n' "${CLAUDE_CODE_PIN_VERSION}"
 }
 
 # 설치된 버전 조회 — 미설치/버전 파일 없으면 빈 문자열
@@ -170,18 +169,32 @@ _claude_code_smoke_check() (
 )
 
 # 백업된 이전 버전으로 되돌림 — 로그인 회귀 등 수동 롤백에 사용.
-# 사용: app_rollback_claude_code            → 사용 가능한 최신 백업으로
-#      app_rollback_claude_code 2.1.132    → 특정 버전으로
+# 사용: app_rollback_claude_code            → 현재 버전을 뺀 가장 높은 버전의 백업으로
+#      app_rollback_claude_code 2.1.286    → 특정 버전으로 (백업이 없으면 등록된 sha256으로 재설치)
 app_rollback_claude_code() {
     local target="${1:-}" bak_bin bak_pkg stage
     if [ -n "$target" ]; then
         bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${target}"
-        [ -f "$bak_bin" ] || { echo "[ERROR] 백업 없음: v${target}" >&2; return 1; }
+        if [ ! -f "$bak_bin" ]; then
+            # 해시가 등록된 버전만 다시 받는다 — 무검증 다운로드 금지
+            [ -n "${CLAUDE_CODE_TARBALL_SHA256[$target]:-}" ] \
+                || { echo "[ERROR] 백업 없음: v${target}" >&2; return 1; }
+            _claude_code_download_native "$target" || return 1
+            _claude_code_install_wrapper || return 1
+            echo "[INFO] v${target} 재설치로 롤백 완료"
+            return 0
+        fi
     else
-        # pipefail 아래에서 매치 없을 때 ls 실패 → || true로 흡수하고 빈 문자열 판정으로 넘김
-        bak_bin=$(ls -1t "${CLAUDE_CODE_PREFIX}"/claude.bak.v* 2>/dev/null | head -1 || true)
-        [ -n "$bak_bin" ] || { echo "[ERROR] 사용 가능한 백업이 없습니다" >&2; return 1; }
-        target=${bak_bin##*/claude.bak.v}
+        # 백업 mtime은 믿을 수 없다(npm tarball은 1985-10-26 고정) → 버전 번호로 고른다
+        local current f
+        current=$(_claude_code_installed_version)
+        target=$(for f in "${CLAUDE_CODE_PREFIX}"/claude.bak.v*; do
+                [ -f "$f" ] || continue
+                f=${f##*/claude.bak.v}
+                [ "$f" = "$current" ] || printf '%s\n' "$f"
+            done | sort -V | tail -1)
+        [ -n "$target" ] || { echo "[ERROR] 사용 가능한 백업이 없습니다" >&2; return 1; }
+        bak_bin="${CLAUDE_CODE_PREFIX}/claude.bak.v${target}"
     fi
     bak_pkg="${CLAUDE_CODE_PREFIX}/package.json.bak.v${target}"
     # 제자리 cp 금지 — download 와 같은 이유다. 실행 중 claude 의 mmap 페이지까지 덮여
@@ -213,6 +226,10 @@ app_upgrade_claude_code() {
     latest=$(_claude_code_fetch_latest_version)
     [ -z "$latest" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
     current=$(_claude_code_installed_version)
+    if [ -z "$current" ]; then
+        echo "[ERROR] 설치 버전 기록 없음 — 백업·롤백을 할 수 없어 업그레이드하지 않습니다. 재설치하세요." >&2
+        return 1
+    fi
     if [ "$current" = "$latest" ]; then
         echo "[INFO] 이미 최신 버전입니다 (${latest})"
         return 2
@@ -222,17 +239,20 @@ app_upgrade_claude_code() {
         return 1
     }
     _claude_code_download_native "$latest" || {
-        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        app_rollback_claude_code "$current" >/dev/null \
+            || echo "[ERROR] 자동 롤백 실패 — 수동 복원: app_rollback_claude_code ${current}" >&2
         return 1
     }
     if ! _claude_code_install_wrapper; then
         echo "[ERROR] Claude Code 실행 래퍼 설치 실패 — v${current}으로 롤백" >&2
-        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        app_rollback_claude_code "$current" >/dev/null \
+            || echo "[ERROR] 자동 롤백 실패 — 수동 복원: app_rollback_claude_code ${current}" >&2
         return 1
     fi
     if ! _claude_code_smoke_check; then
         echo "[ERROR] v${latest} 스모크 실패 — v${current}으로 롤백" >&2
-        [ -n "$current" ] && app_rollback_claude_code "$current" >/dev/null 2>&1
+        app_rollback_claude_code "$current" >/dev/null \
+            || echo "[ERROR] 자동 롤백 실패 — 수동 복원: app_rollback_claude_code ${current}" >&2
         return 1
     fi
 }
