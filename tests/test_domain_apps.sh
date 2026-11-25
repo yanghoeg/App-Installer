@@ -969,13 +969,13 @@ it "인자 없는 롤백 → mtime이 아니라 버전 번호로 현재 제외 �
 
 _test_claude_rollback_reinstalls_registered_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_fake_install "2.1.311"
+    _claude_fake_install "2.1.326"
     _claude_code_download_native() { _record_call "download $1"; printf '%s\n' "$1" > "${CLAUDE_CODE_VERSION_FILE}"; }
     _claude_code_install_wrapper() { _record_call "install_wrapper"; }
-    app_rollback_claude_code "2.1.286" >/dev/null || { cleanup_sandbox "$sb"; return 1; }
-    assert_was_called "download 2.1.286" || { cleanup_sandbox "$sb"; return 1; }
+    app_rollback_claude_code "2.1.311" >/dev/null || { cleanup_sandbox "$sb"; return 1; }
+    assert_was_called "download 2.1.311" || { cleanup_sandbox "$sb"; return 1; }
     assert_was_called "install_wrapper" || { cleanup_sandbox "$sb"; return 1; }
-    assert_eq "2.1.286" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 갱신" \
+    assert_eq "2.1.311" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 갱신" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
@@ -983,7 +983,7 @@ it "백업 없는 지정 롤백 + sha256 등록 버전 → 검증 재설치" _te
 
 _test_claude_rollback_unregistered_no_download() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    _claude_fake_install "2.1.311"
+    _claude_fake_install "2.1.326"
     _claude_code_download_native() { _record_call "download $1"; }
     local rc; app_rollback_claude_code "9.9.9" 2>/dev/null && rc=0 || rc=$?
     assert_eq "1" "$rc" "미등록 버전은 실패" || { cleanup_sandbox "$sb"; return 1; }
@@ -1718,9 +1718,9 @@ _test_sha256_constants_are_64hex() {
             failed=1
         fi
     done
-    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.311]:-}"
+    val="${CLAUDE_CODE_TARBALL_SHA256[2.1.326]:-}"
     if ! [[ "$val" =~ ^[0-9a-f]{64}$ ]]; then
-        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.311]가 64자 hex가 아님: '${val}'" >&2
+        echo "[ASSERT] CLAUDE_CODE_TARBALL_SHA256[2.1.326]가 64자 hex가 아님: '${val}'" >&2
         failed=1
     fi
     # codex는 본체와 code-mode 헬퍼 둘 다 핀 버전 sha256이 있어야 한다.
@@ -1806,12 +1806,12 @@ describe "claude_code — M11 핀 상향"
 
 _test_claude_pin_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    assert_eq "2.1.311" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
-    assert_eq "2.1.311" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
+    assert_eq "2.1.326" "$CLAUDE_CODE_PIN_VERSION" "핀 버전" || { cleanup_sandbox "$sb"; return 1; }
+    assert_eq "2.1.326" "$(_claude_code_fetch_latest_version)" "fetch_latest_version 출력" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
-it "CLAUDE_CODE_PIN_VERSION = 2.1.311 (M11)" _test_claude_pin_version
+it "CLAUDE_CODE_PIN_VERSION = 2.1.326 (M11)" _test_claude_pin_version
 
 _test_claude_empty_pin_fails_without_network() {
     local sb; sb=$(make_sandbox); _setup "$sb"
@@ -1831,7 +1831,7 @@ _test_claude_download_uses_fetch_verified() {
     tar() { :; }
     mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
     _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION"
-    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.311]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
+    assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.326]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
         || { cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }

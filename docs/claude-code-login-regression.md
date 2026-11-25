@@ -104,6 +104,23 @@ claude
 
 ## 변경 이력
 
+### 2026-11-25 — 핀 2.1.311 → 2.1.326
+
+- npm `@anthropic-ai/claude-code-linux-arm64`의 `stable` 채널을 따랐습니다(같은 날 `latest`·
+  `next`는 2.1.332). **보안 상향은 아닙니다** — 직전 핀 2.1.311 이후 새로 올라온 권고는
+  GHSA-5xjx-9qx6-jcrv(HIGH, `<2.1.251`) 하나뿐이고 직전 핀도 이미 그 위였습니다.
+- tarball SHA-256을 npm `integrity`(sha512)·`shasum`(sha1) 양쪽과 교차 대조해 등록했습니다.
+- 2.1.312~2.1.326 CHANGELOG에 런처/네이티브 바이너리/glibc 관련 회귀 항목은 없습니다.
+  네이티브 updater·`claude update` 관련 수정 2건은 self-update를 끈 이 설치 방식과 무관합니다.
+- Opus 5.5(`claude-opus-5-5`)는 **2.1.280**에 추가돼 직전 핀에서도 이미 쓸 수 있었습니다 —
+  이번 상향의 근거가 아닙니다.
+- 실기기(SM-F956N): `app_upgrade_claude_code`로 백업(`claude.bak.v2.1.311`)·교체·스모크 통과.
+  래퍼 경유 `claude --version` = 2.1.326, 환경 토큰 없이 저장된 로그인으로
+  `claude -p --model claude-opus-5-5` 실제 요청 성공. **`/login` 재인증은 미실시** —
+  기존 세션을 유지했습니다(기동 경고상 이 로그인은 2026-11-30~12-03 사이에 만료되므로
+  그때 `claude auth login`으로 함께 확인할 수 있습니다).
+  회귀 시 롤백: `app_rollback_claude_code 2.1.311`
+
 ### 2026-11-08 — 롤백·업그레이드 안전장치
 
 - 인자 없는 롤백을 mtime(`ls -t`) 대신 버전 번호로 선택. 실기기에서 `claude.bak.v2.1.286`의

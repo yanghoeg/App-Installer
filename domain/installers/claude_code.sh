@@ -20,9 +20,14 @@ CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # 신규 advisory 없음(최신 GHSA-pq7j-f95f-qfcv 하한 2.1.179). 2.1.287~2.1.311 CHANGELOG에
 # 런처/네이티브 바이너리 회귀 항목 없음. 실기기에서 저장된 로그인으로 실제 요청 확인,
 # /login 재인증 2026-11-06 확인.
+# 2026-11-25: 2.1.311 → 2.1.326 상향. npm `stable` 채널 추종(latest 2.1.332보다 보수적).
+# 2.1.311 이후 신규 advisory는 GHSA-5xjx-9qx6-jcrv(HIGH) 뿐이고 하한이 2.1.251이라 이미 해소된 상태다.
+# 2.1.312~2.1.326 CHANGELOG에 런처/네이티브 바이너리 회귀 항목 없음(네이티브 updater·`claude update`
+# 관련 수정 2건은 self-update를 끈 이 설치 방식과 무관).
+# Opus 5.5(`claude-opus-5-5`)는 2.1.280에 추가돼 이미 핀 이전부터 지원된다 — 이번 상향의 근거가 아니다.
 # 회귀 시 롤백 절차는 위 문서 참조.
 # 핀은 필수 — 비우면 설치·업그레이드가 실패한다("최신" 무검증 조회 금지).
-CLAUDE_CODE_PIN_VERSION="2.1.311"
+CLAUDE_CODE_PIN_VERSION="2.1.326"
 
 # 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
 # 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
@@ -30,6 +35,7 @@ declare -gA CLAUDE_CODE_TARBALL_SHA256=(
     ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
     ["2.1.286"]="ab87947d331c045aa6fc3c7934d31d8cca5fcdf676d10bcae0b0adfc5210f397"
     ["2.1.311"]="804f385122f395d382cf3dec51e1bec1dd8e5c07078222781a1a251d46d236e5"
+    ["2.1.326"]="04c707c086ee47fd5732c9c140df8d1dbf3167c4d5846b8a22f5acb7cfb9a584"
 )
 
 _claude_code_fetch_latest_version() {
