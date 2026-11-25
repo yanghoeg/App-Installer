@@ -113,6 +113,8 @@ EOF
 
 # settings.json에 self-updater 차단 env var 주입.
 # 기존 파일이 있으면 보존 — 사용자 설정 덮어쓰지 않음.
+# model은 당시 기본 Opus를 따른다(2026-11-25: claude-opus-5-5 — 4.8은 fast mode가
+# 2026-11-30 제거 예정이라 더 쓰지 않는다). 핀 상향 때 함께 점검할 값이다.
 _claude_code_configure_settings() {
     local settings_dir="${HOME}/.claude"
     local settings_file="${settings_dir}/settings.json"
@@ -120,7 +122,7 @@ _claude_code_configure_settings() {
     [ -f "${settings_file}" ] && return 0
     cat > "${settings_file}" << 'EOF'
 {
-  "model": "claude-opus-4-8",
+  "model": "claude-opus-5-5",
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   }
