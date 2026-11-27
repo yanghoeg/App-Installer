@@ -10,6 +10,16 @@ _PKGS_GPU_NATIVE=(
     mesa-vulkan-icd-swrast
 )
 
+_gpu_native_set_state() {
+    local state="$1" dir="$HOME/.config/termux-xfce" stage
+    mkdir -p "$dir" || return 1
+    stage=$(mktemp "$dir/.gpu-native.XXXXXX") || return 1
+    if ! printf '%s\n' "$state" > "$stage" || ! mv -fT -- "$stage" "$dir/gpu-native"; then
+        rm -f -- "$stage"
+        return 1
+    fi
+}
+
 app_install_gpu_native() {
     termux_pkg_enable_repo x11-repo || return 1
     local total=${#_PKGS_GPU_NATIVE[@]} i=0
@@ -23,6 +33,8 @@ app_install_gpu_native() {
         fi
     done
 
+    _gpu_native_set_state enabled || return 1
+
     # GPU 감지 로그
     local gpu_model
     gpu_model=$(cat /sys/class/kgsl/kgsl-3d0/gpu_model 2>/dev/null || echo "")
@@ -35,13 +47,16 @@ app_install_gpu_native() {
 }
 
 app_remove_gpu_native() {
-    # mesa 자체는 XFCE 의존성이라 유지, GPU 전용 패키지만 제거
-    for p in mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev mesa-demos; do
-        if termux_pkg_is_installed "$p"; then termux_pkg_remove "$p" || return 1; fi
-    done
-    return 0
+    # These packages are also used by Plasma and standalone Vulkan apps.
+    _gpu_native_set_state disabled || return 1
+    echo "[OK] X11 데스크톱 GPU 가속을 껐습니다. XFCE 재시작 후 적용됩니다."
 }
 
 app_is_installed_gpu_native() {
+    local state=''
+    if [ -r "$HOME/.config/termux-xfce/gpu-native" ]; then
+        IFS= read -r state < "$HOME/.config/termux-xfce/gpu-native" || true
+    fi
+    [ "$state" != disabled ] || return 1
     termux_pkg_is_installed mesa-vulkan-icd-freedreno
 }

@@ -104,7 +104,7 @@ app_remove_hangover() {
     if [ -x "$_WINE_BOX64_BIN" ]; then
         wine_backend_set box64
     else
-        rm -f "$_WINE_DISPATCHER" "$_WINE_BACKEND_CLI" "$_WINE_BACKEND_CONF"
+        wine_remove_frontend
     fi
 }
 

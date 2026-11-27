@@ -20,7 +20,7 @@ app_install_vscode() {
 app_remove_vscode() {
     proot_pkg_remove_vscode || return 1
     proot_pkg_autoremove || return 1
-    desktop_remove "code"
+    desktop_remove_proot "code"
 }
 
 app_is_installed_vscode() {

@@ -139,7 +139,7 @@ _codex_install_complete() {
 }
 
 _codex_install_wrapper() {
-    local stage
+    local stage before_publish="${1:-}"
     mkdir -p "${CODEX_BIN_PATH%/*}" || return 1
     stage=$(mktemp "${CODEX_BIN_PATH}.XXXXXX") || return 1
     if ! cat > "$stage" << EOF
@@ -155,7 +155,9 @@ EOF
         rm -f -- "$stage"
         return 1
     fi
-    if ! chmod +x "$stage" || ! mv -f -- "$stage" "$CODEX_BIN_PATH"; then
+    if ! chmod +x "$stage" || [ -d "$CODEX_BIN_PATH" ] ||
+       { [ -n "$before_publish" ] && ! "$before_publish"; } ||
+       ! mv -fT -- "$stage" "$CODEX_BIN_PATH"; then
         rm -f -- "$stage"
         return 1
     fi
@@ -171,12 +173,11 @@ _codex_remove_tur_pkg() {
 
 app_install_codex() {
     termux_pkg_install proot || return 1
-    _codex_remove_tur_pkg || return 1
     # Recover missing, mismatched or damaged helpers, including pre-manifest installs.
     if ! _codex_install_complete "$CODEX_PIN_VERSION"; then
         _codex_download "${CODEX_PIN_VERSION}" || return 1
     fi
-    _codex_install_wrapper || return 1
+    _codex_install_wrapper _codex_remove_tur_pkg || return 1
     echo "[Codex] 'codex' 실행 전 OPENAI_API_KEY 설정 또는 'codex login'이 필요합니다."
 }
 

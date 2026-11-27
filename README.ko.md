@@ -12,7 +12,7 @@
 ---
 
 [usix-termux](https://github.com/yanghoeg/usix-termux) 환경에서 동작하는 **앱 추가 설치/제거 GUI** 도구입니다.  
-yad notebook 탭 GUI(zenity 폴백)로 앱을 선택하면 proot(Ubuntu/Arch) 또는 Termux native에 자동으로 설치합니다.
+검색 가능한 YAD 목록에서 앱을 선택하면 proot(Ubuntu/Arch) 또는 Termux native에 설치합니다. YAD가 없으면 Zenity를 사용합니다.
 
 **테스트 기기**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
 
@@ -53,7 +53,7 @@ CLI에는 `upgrade`나 `rollback` 하위 명령이 없습니다.
 |----|-----------------|
 | Claude Code | `CLAUDE_CODE_PIN_VERSION`으로 갱신. 기록된 기존 버전을 백업하고 다운로드 후 `--version` 실행. 백업 실패 시 바이너리 교체 전에 중단. 다운로드·스모크 실패 시 해당 백업 복원 시도 |
 | Codex CLI | `CODEX_PIN_VERSION`으로 바이너리·`codex-code-mode-host` 헬퍼·래퍼 갱신. Claude Code의 백업·스모크·롤백 절차는 없음 |
-| Notion | 기존 AppImage 런처를 Termux Firefox 웹 런처로 교체. 이전 앱 디렉터리는 제거할 때까지 보존 |
+| Notion | 기존 AppImage 런처를 Termux Firefox 웹 런처로 교체. Notion을 제거할 때도 기존 proot의 `~/notion` 디렉터리를 보존 |
 
 그 외 설치된 항목은 제거할 수 있습니다. Claude Code의 스모크 검사는 `/login`을
 확인하지 않으며 신규 설치에는 이전 버전 백업이 없습니다. 수동 롤백과 실기기 검증은
@@ -107,11 +107,11 @@ GUI에서는 기존 설치가 감지될 때만 표시합니다. CLI 목록에는
 | `btop` | **btop** | 시각적 리소스 모니터 (htop 후속) | Termux native | root-repo 활성화 필요 |
 | `just`, `mise`, `hyperfine`, `tokei`, `direnv`, `watchexec` | **개발 CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv는 셸 hook 직접 추가 필요 |
 
-## 시스템 앱 (시스템 탭)
+## 시스템 앱
 
 | ID | 앱 | 설명 | 설치 위치 | 비고 |
 |----|----|------|-----------|------|
-| `gpu_native` | **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | X11 런처에서 가속 또는 소프트웨어 폴백 선택 |
+| `gpu_native` | **GPU 가속** | Adreno Vulkan + Zink OpenGL | Termux native | 제거 시 X11 가속을 끄고 공유 드라이버 패키지를 유지 |
 | `gpu_dev` | **GPU 개발 도구** | clvk, clinfo 등 | Termux native | |
 | `gpu_proot` | **GPU 가속 (proot)** | 컨테이너 Turnip + Zink | proot | Termux glibc KGSL Turnip(버전·sha256 고정)을 넣고 검증 후 활성화. Ubuntu 24.04·25.10·26.04는 OpenGL을 lfdevs Freedreno KGSL 빌드(`/opt/termux-xfce-mesa`, 고정)로 EGL 확인 후 전환 |
 | `chroot_ng` | **proot 가속 런타임 (chroot-ng)** | ptrace 없는 `prun` 실행 엔진 (실험적) | Termux native (소스 빌드) | 고정 커밋 빌드, 기기 판정·rootfs 실행 검사 통과 시 설치. `PRUN_RUNTIME=chroot-ng`일 때만 사용 |
@@ -120,7 +120,7 @@ GUI에서는 기존 설치가 감지될 때만 표시합니다. CLI 목록에는
 | `korean_locale` | **한글 로케일** | force_gettext.so 기반 UI 한글화 | Termux native | 부모 usix-termux 저장소와 번역 카탈로그 ZIP 필요 |
 | `nimf` | **한글 입력기 (nimf)** | nimf 한글 입력 | Termux native | 흡혈귀왕 빌드 |
 
-## Termux API 앱 (Termux API 탭)
+## Termux API 앱
 
 | ID | 앱 | 설명 | 설치 위치 | 비고 |
 |----|----|------|-----------|------|
@@ -249,7 +249,7 @@ proot 안의 `/etc/profile.d/termux-xfce-locale.sh`에 기록하고 구형 `.pro
 
 ```
 app-installer/
-├── install.sh                  ← yad notebook GUI (zenity 폴백; 설치·제거·업그레이드)
+├── install.sh                  ← 검색 가능한 YAD 목록 (Zenity 폴백)
 ├── app-install.sh              ← list/install/remove/status CLI
 ├── ports/
 │   └── pkg_manager.sh          ← 패키지 관리 계약 (인터페이스)

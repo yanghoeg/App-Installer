@@ -71,9 +71,9 @@ app_remove_dbeaver() {
     if has_proot_distro; then
         proot_exec sudo bash -c 'set -e; rm -f /usr/bin/dbeaver; rm -rf /opt/dbeaver' || return 1
     fi
-    desktop_remove "dbeaver"
+    desktop_remove_proot "dbeaver"
 }
 
 app_is_installed_dbeaver() {
-    desktop_is_registered "dbeaver"
+    desktop_is_registered_proot "dbeaver"
 }

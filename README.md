@@ -12,7 +12,7 @@
 ---
 
 A **GUI tool for installing and removing extra apps** in the [usix-termux](https://github.com/yanghoeg/usix-termux) environment.  
-Select an app from the yad notebook tabbed GUI (zenity fallback) and it installs automatically into proot (Ubuntu/Arch) or Termux native.
+Select an app in the searchable YAD list (with a Zenity fallback) to install it in proot (Ubuntu/Arch) or Termux native.
 
 **Tested devices**: Galaxy Fold6 (Adreno 750, SD 8 Gen3), Galaxy Tab S9 Ultra (Adreno 740, SD 8 Gen2)
 
@@ -53,7 +53,7 @@ An installed app with an `app_upgrade_<id>` handler offers **Upgrade** alongside
 |-----|------------------|
 | Claude Code | Update to `CLAUDE_CODE_PIN_VERSION`; back up the recorded installed version, download and run `--version`. Abort before replacing the binary if backup fails. On download/smoke failure, attempt to restore that backup |
 | Codex CLI | Update to `CODEX_PIN_VERSION`; replace the binary, the `codex-code-mode-host` helper and the wrapper, without Claude Code's backup/smoke/rollback flow |
-| Notion | Replace the old AppImage launcher with a Termux Firefox web launcher; keep the old app directory until removal |
+| Notion | Replace the old AppImage launcher with a Termux Firefox web launcher. Notion removal also preserves the old proot `~/notion` directory |
 
 Other installed entries offer removal. The Claude Code smoke check does not test
 `/login`. A fresh install has no previous-version backup. See the
@@ -109,11 +109,11 @@ detected; the CLI list still includes it.
 | `btop` | **btop** | Visual resource monitor (htop successor) | Termux native | needs root-repo enabled |
 | `just`, `mise`, `hyperfine`, `tokei`, `direnv`, `watchexec` | **Dev CLI** | just, mise, hyperfine, tokei, direnv, watchexec | Termux native | mise·direnv need manual shell hook |
 
-## System Apps (시스템 tab)
+## System Apps
 
 | ID | App | Description | Install target | Notes |
 |----|-----|-------------|----------------|-------|
-| `gpu_native` | **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | X11 launcher selects acceleration or software fallback |
+| `gpu_native` | **GPU Native Acceleration** | Adreno Vulkan + Zink OpenGL | Termux native | Removal disables X11 acceleration and keeps shared driver packages |
 | `gpu_dev` | **GPU Dev Tools** | clvk, clinfo, etc. | Termux native | |
 | `gpu_proot` | **GPU Acceleration (proot)** | Container Turnip + Zink | proot | Adds the pinned Termux glibc KGSL Turnip; activates only after the driver probe passes. On Ubuntu 24.04/25.10/26.04, OpenGL uses a pinned lfdevs Freedreno KGSL build in `/opt/termux-xfce-mesa` once an EGL check passes |
 | `chroot_ng` | **proot Accelerated Runtime (chroot-ng)** | ptrace-free `prun` engine (experimental) | Termux native (source build) | Pinned-commit build; installs only after the device probe and a rootfs run pass. Used only with `PRUN_RUNTIME=chroot-ng` |
@@ -254,7 +254,7 @@ Arch: nimf from AUR, with fcitx5 fallback). It writes
 
 ```
 app-installer/
-├── install.sh                  ← yad notebook GUI (zenity fallback; install/remove/upgrade)
+├── install.sh                  ← searchable YAD list (Zenity fallback)
 ├── app-install.sh              ← headless list/install/remove/status CLI
 ├── ports/
 │   └── pkg_manager.sh          ← package manager contract (interface)

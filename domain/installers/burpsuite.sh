@@ -34,9 +34,9 @@ app_remove_burpsuite() {
         sudo rm -f /usr/local/bin/BurpSuite /usr/local/bin/BurpSuiteCommunity
         ' || return 1
     fi
-    desktop_remove "burpsuite"
+    desktop_remove_proot "burpsuite"
 }
 
 app_is_installed_burpsuite() {
-    desktop_is_registered "burpsuite"
+    desktop_is_registered_proot "burpsuite"
 }

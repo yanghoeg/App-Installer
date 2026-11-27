@@ -86,6 +86,18 @@ _claude_review_assert_wrapper_intact() {
     if compgen -G "${CLAUDE_CODE_BIN_PATH}.*" >/dev/null; then return 1; fi
 }
 
+_test_failed_download_preserves_npm_claude() {
+    local sb; sb=$(make_sandbox); _claude_review_setup "$sb"
+    _claude_review_existing_wrapper
+    termux_pkg_enable_repo() { :; }
+    termux_pkg_install() { :; }
+    fetch_verified() { return 42; }
+    _claude_code_remove_npm_wrapper() { rm -f "$CLAUDE_CODE_BIN_PATH"; }
+    if app_install_claude_code; then return 1; fi
+    _claude_review_assert_wrapper_intact
+}
+it 'a failed Claude download leaves the npm Claude command in place' _test_failed_download_preserves_npm_claude
+
 _test_wrapper_failure_preserves_existing() {
     local sb; sb=$(make_sandbox); _claude_review_setup "$sb"
     _claude_review_existing_wrapper

@@ -61,9 +61,9 @@ app_remove_thorium() {
         rm -f /usr/share/icons/hicolor/*/apps/thorium-browser.png
         ' || return 1
     fi
-    desktop_remove "thorium-browser"
+    desktop_remove_proot "thorium-browser"
 }
 
 app_is_installed_thorium() {
-    desktop_is_registered "thorium-browser"
+    desktop_is_registered_proot "thorium-browser"
 }

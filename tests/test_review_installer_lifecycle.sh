@@ -16,7 +16,7 @@ _life_setup() {
     source "$_LIFE_ROOT/domain/installers/chroot_ng.sh"
     has_proot_distro() { return 0; }
     desktop_register_proot() { printf 'desktop-register\n' >> "$LIFE_TRACE"; }
-    desktop_remove() { printf 'desktop-remove\n' >> "$LIFE_TRACE"; }
+    desktop_remove_proot() { printf 'desktop-remove\n' >> "$LIFE_TRACE"; }
     fetch_verified_src() {
         printf '%s\n' 'fetch_verified() { printf "fixture\n" > "$2"; }'
     }

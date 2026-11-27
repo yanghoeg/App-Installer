@@ -29,7 +29,7 @@ CLAUDE_CODE_VERSION_FILE="${CLAUDE_CODE_PREFIX}/VERSION"
 # 핀은 필수 — 비우면 설치·업그레이드가 실패한다("최신" 무검증 조회 금지).
 CLAUDE_CODE_PIN_VERSION="2.1.326"
 
-# 핀 버전 tarball의 sha256 — 미등록 버전은 검증을 생략한다(fetch_verified가 WARN).
+# 설치할 버전의 tarball SHA-256은 반드시 등록한다.
 # 버전을 올릴 때: 새 tarball의 sha256(npm integrity sha512와 대조)을 여기에 추가할 것.
 declare -gA CLAUDE_CODE_TARBALL_SHA256=(
     ["2.1.261"]="12a0a7edd9a0c111ef500db3697a69efd05aefc868b74a12b78d9df0062377e6"
@@ -59,22 +59,29 @@ _claude_code_installed_version() {
 _claude_code_download_native() {
     local version="$1"
     local url="https://registry.npmjs.org/${CLAUDE_CODE_NPM_PKG}/-/claude-code-linux-arm64-${version}.tgz"
-    mkdir -p "${CLAUDE_CODE_PREFIX}"
     # staging 은 반드시 PREFIX 안 — rename 하려면 같은 파일시스템이어야 한다
-    local stage="${CLAUDE_CODE_PREFIX}/.stage"
-    rm -rf "$stage" && mkdir -p "$stage" || return 1
+    local stage sha="${CLAUDE_CODE_TARBALL_SHA256[$version]:-}"
+    if ! [[ "$sha" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "[ERROR] Claude Code SHA-256이 등록되지 않은 버전입니다: $version" >&2
+        return 1
+    fi
+    mkdir -p "${CLAUDE_CODE_PREFIX}" || return 1
+    stage=$(mktemp -d "${CLAUDE_CODE_PREFIX}/.stage.XXXXXX") || return 1
     local tarball="${stage}/native.tgz"
-    fetch_verified "$url" "$tarball" "${CLAUDE_CODE_TARBALL_SHA256[$version]:-}" \
+    fetch_verified "$url" "$tarball" "$sha" \
         || { rm -rf "$stage"; return 1; }
-    tar xzf "$tarball" -C "$stage" --strip-components=1 || { rm -rf "$stage"; return 1; }
-    rm -f "$tarball"
+    if ! tar xzf "$tarball" -C "$stage" --strip-components=1 ||
+       [ ! -s "$stage/claude" ] || ! chmod 755 "$stage/claude" ||
+       ! rm -f "$tarball"; then
+        rm -rf "$stage"
+        return 1
+    fi
     local f
     for f in "$stage"/*; do
         [ -e "$f" ] || continue
         mv -f "$f" "${CLAUDE_CODE_PREFIX}/${f##*/}" || { rm -rf "$stage"; return 1; }
     done
-    rm -rf "$stage"
-    chmod +x "${CLAUDE_CODE_PREFIX}/claude"
+    rm -rf "$stage" || return 1
     printf '%s\n' "$version" > "${CLAUDE_CODE_VERSION_FILE}"
 }
 
@@ -90,7 +97,7 @@ _claude_code_remove_npm_wrapper() {
 # `claude -p "여러 단어"`가 첫 단어만 받는다 → grun이 하는 준비(glibc PATH·locale)만 직접 하고
 # ld.so에 "$@"를 그대로 넘긴다.
 _claude_code_install_wrapper() {
-    local stage
+    local stage before_publish="${1:-}"
     # Write beside the live wrapper so rename publishes a complete executable.
     # Failed writes/chmod must leave an existing launcher usable.
     stage=$(mktemp "${CLAUDE_CODE_BIN_PATH}.XXXXXX") || return 1
@@ -105,10 +112,12 @@ EOF
         rm -f "$stage"
         return 1
     fi
-    chmod 755 "$stage" && mv -f "$stage" "${CLAUDE_CODE_BIN_PATH}" || {
+    if ! chmod 755 "$stage" || [ -d "$CLAUDE_CODE_BIN_PATH" ] ||
+       { [ -n "$before_publish" ] && ! "$before_publish"; } ||
+       ! mv -fT -- "$stage" "$CLAUDE_CODE_BIN_PATH"; then
         rm -f "$stage"
         return 1
-    }
+    fi
 }
 
 # settings.json에 self-updater 차단 env var 주입.
@@ -133,12 +142,10 @@ EOF
 app_install_claude_code() {
     termux_pkg_enable_repo glibc-repo || return 1
     termux_pkg_install glibc-runner || return 1
-    _claude_code_remove_npm_wrapper || return 1
     local version
-    version=$(_claude_code_fetch_latest_version)
-    [ -z "$version" ] && { echo "[ERROR] claude-code 버전 조회 실패" >&2; return 1; }
+    version=$(_claude_code_fetch_latest_version) || return 1
     _claude_code_download_native "$version" || return 1
-    _claude_code_install_wrapper || return 1
+    _claude_code_install_wrapper _claude_code_remove_npm_wrapper || return 1
     _claude_code_configure_settings || return 1
 }
 

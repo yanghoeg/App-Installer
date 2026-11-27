@@ -704,15 +704,20 @@ _test_gpu_dev_remove_rc0_when_last_missing() {
 }
 it "gpu_dev 제거: 마지막 패키지가 이미 없어도 rc 0" _test_gpu_dev_remove_rc0_when_last_missing
 
-_test_gpu_native_remove_rc0_when_last_missing() {
-    local sb rc; sb=$(make_sandbox); _setup "$sb"
-    # app_remove_gpu_native 목록 마지막 항목(mesa-demos)만 미설치로 남긴다
-    MOCK_INSTALLED_PKGS="mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev"
-    rc=0; app_remove_gpu_native || rc=$?
-    assert_zero "$rc" "마지막 패키지(mesa-demos)가 이미 없어도 rc 0"
+_test_gpu_native_disable_keeps_packages() {
+    local sb; sb=$(make_sandbox); _setup "$sb"
+    MOCK_INSTALLED_PKGS="mesa-vulkan-icd-freedreno vulkan-loader-generic mesa-vulkan-icd-swrast mesa-dev mesa-demos plasma-desktop"
+    app_is_installed_gpu_native
+    app_remove_gpu_native
+    app_remove_gpu_native
+    assert_not_called 'termux_pkg_remove'
+    if app_is_installed_gpu_native; then return 1; fi
+    assert_eq disabled "$(cat "$HOME/.config/termux-xfce/gpu-native")"
+    app_install_gpu_native
+    app_is_installed_gpu_native
     cleanup_sandbox "$sb"
 }
-it "gpu_native 제거: 마지막 패키지가 이미 없어도 rc 0" _test_gpu_native_remove_rc0_when_last_missing
+it "gpu_native는 공유 패키지를 남기고 X11 GPU 가속을 끈다" _test_gpu_native_disable_keeps_packages
 
 _test_korean_input_remove_rc0_when_last_missing() {
     local sb rc; sb=$(make_sandbox); _setup "$sb"
@@ -803,10 +808,9 @@ _test_claude_download_writes_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     # fetch_verified는 빈 파일을 실패로 보므로(무결성 계약) 실제로 내용을 만드는 stub을 쓴다
     fetch_verified() { printf 'tgz\n' > "$2"; }
-    tar()  { :; }   # 압축해제 성공 흉내
-    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
-    _claude_code_download_native "9.9.9"
-    assert_eq "9.9.9" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 파일 내용"
+    tar() { printf 'binary\n' > "$4/claude"; }
+    _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION"
+    assert_eq "$CLAUDE_CODE_PIN_VERSION" "$(cat "${CLAUDE_CODE_VERSION_FILE}")" "VERSION 파일 내용"
     cleanup_sandbox "$sb"
 }
 it "download → VERSION 파일에 버전 기록" _test_claude_download_writes_version
@@ -816,7 +820,7 @@ _test_claude_download_tar_failure_propagates() {
     fetch_verified() { printf 'tgz\n' > "$2"; }  # 다운로드(성공+검증통과) 흉내
     tar()  { return 1; } # 압축해제 실패 흉내
     local rc=0
-    _claude_code_download_native "9.9.9" >/dev/null 2>&1 || rc=$?
+    _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION" >/dev/null 2>&1 || rc=$?
     assert_nonzero "$rc" "tar 실패 시 _claude_code_download_native가 실패해야 함" || { cleanup_sandbox "$sb"; return 1; }
     [ ! -f "${CLAUDE_CODE_VERSION_FILE}" ] || { echo "[ASSERT] tar 실패인데 VERSION 파일이 기록됨" >&2; cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
@@ -1640,10 +1644,8 @@ _test_contract_install_success_for_all_ids() {
             claude_code)
                 # 실다운로드 회피 — fetch_verified는 빈 파일을 무결성 실패로 보므로 내용을 만든다
                 fetch_verified() { printf 'tgz\n' > "$2"; }
-                tar()  { :; }
+                tar() { printf 'binary\n' > "$4/claude"; }
                 npm()  { return 1; }
-                mkdir -p "${CLAUDE_CODE_PREFIX}"
-                : > "${CLAUDE_CODE_PREFIX}/claude"
                 ;;
             nimf)
                 fetch_verified() { printf 'deb\n' > "$2"; }
@@ -1828,8 +1830,7 @@ _test_claude_download_uses_fetch_verified() {
     local sb; sb=$(make_sandbox); _setup "$sb"
     local captured=""
     fetch_verified() { captured="$3"; printf 'tgz\n' > "$2"; }
-    tar() { :; }
-    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
+    tar() { printf 'binary\n' > "$4/claude"; }
     _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION"
     assert_eq "${CLAUDE_CODE_TARBALL_SHA256[2.1.326]}" "$captured" "핀 버전 sha256이 fetch_verified로 전달됨" \
         || { cleanup_sandbox "$sb"; return 1; }
@@ -1837,18 +1838,14 @@ _test_claude_download_uses_fetch_verified() {
 }
 it "download → 등록된 sha256을 fetch_verified에 넘긴다" _test_claude_download_uses_fetch_verified
 
-_test_claude_download_unknown_version_skips_sha() {
+_test_claude_download_rejects_unknown_version() {
     local sb; sb=$(make_sandbox); _setup "$sb"
-    local captured="UNSET"
-    fetch_verified() { captured="${3:-}"; printf 'tgz\n' > "$2"; }
-    tar() { :; }
-    mkdir -p "${CLAUDE_CODE_PREFIX}"; : > "${CLAUDE_CODE_PREFIX}/claude"
-    _claude_code_download_native "9.9.9"
-    assert_eq "" "$captured" "미등록 버전은 빈 sha(검증 생략)로 넘어가야 함" \
-        || { cleanup_sandbox "$sb"; return 1; }
+    fetch_verified() { touch "$sb/fetch-called"; }
+    if _claude_code_download_native "9.9.9"; then return 1; fi
+    [ ! -e "$sb/fetch-called" ]
     cleanup_sandbox "$sb"
 }
-it "미등록 버전 → 빈 sha256(검증 생략)" _test_claude_download_unknown_version_skips_sha
+it "SHA-256 미등록 버전은 다운로드를 시작하지 않는다" _test_claude_download_rejects_unknown_version
 
 describe "claude_code — 래퍼 LD_PRELOAD 해제 + 세션 보존 스왑"
 
@@ -1890,15 +1887,15 @@ _test_claude_download_swaps_by_rename() {
     printf 'old\n' > "${CLAUDE_CODE_PREFIX}/claude"
     local old_ino; old_ino=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
     fetch_verified() { printf 'tgz\n' > "$2"; }
-    tar() { printf 'new\n' > "${CLAUDE_CODE_PREFIX}/.stage/claude"; }   # 압축해제 흉내
-    _claude_code_download_native "9.9.9" || { cleanup_sandbox "$sb"; return 1; }
+    tar() { printf 'new\n' > "$4/claude"; }
+    _claude_code_download_native "$CLAUDE_CODE_PIN_VERSION" || { cleanup_sandbox "$sb"; return 1; }
     assert_eq "new" "$(cat "${CLAUDE_CODE_PREFIX}/claude")" "새 바이너리로 교체됨" \
         || { cleanup_sandbox "$sb"; return 1; }
     local new_ino; new_ino=$(stat -c %i "${CLAUDE_CODE_PREFIX}/claude")
     [ "$old_ino" != "$new_ino" ] || {
         echo "[ASSERT] inode가 그대로 — 제자리 덮어쓰기라 실행 중 세션이 깨진다" >&2
         cleanup_sandbox "$sb"; return 1; }
-    [ ! -d "${CLAUDE_CODE_PREFIX}/.stage" ] || {
+    ! compgen -G "${CLAUDE_CODE_PREFIX}/.stage.*" >/dev/null || {
         echo "[ASSERT] staging 디렉터리가 남았다" >&2; cleanup_sandbox "$sb"; return 1; }
     cleanup_sandbox "$sb"
 }
@@ -1984,8 +1981,8 @@ _test_failed_removal_for_current_id() {
     esac
     cleanup_sandbox "$sb"
 }
-for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev gpu_native hangover \
-    inkscape korean_input korean_proot libreoffice llama_cpp nautilus nimf notion \
+for _remove_id in audacity btop burpsuite codex dbeaver gimp gpu_dev hangover \
+    inkscape korean_input korean_proot libreoffice llama_cpp nautilus nimf \
     notepadpp onepassword sasm sevenzip sumatrapdf teams thorium thunderbird \
     tor_browser vlc vscode wayvnc wine winmerge; do
     it "$_remove_id preserves failure and skips launcher cleanup" _test_failed_removal_for_current_id

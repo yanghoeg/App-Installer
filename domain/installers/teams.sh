@@ -24,9 +24,9 @@ app_remove_teams() {
         proot_pkg_remove teams-for-linux || return 1
         proot_pkg_autoremove || return 1
     fi
-    desktop_remove "teams"
+    desktop_remove_proot "teams"
 }
 
 app_is_installed_teams() {
-    desktop_is_registered "teams"
+    desktop_is_registered_proot "teams"
 }

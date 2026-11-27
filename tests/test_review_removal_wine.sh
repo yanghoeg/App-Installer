@@ -69,7 +69,8 @@ _test_native_launcher_removal() {
     for pair in tor_browser:tor dbeaver:dbeaver burpsuite:burpsuite thorium:thorium-browser \
         sasm:sasm teams:teams nautilus:nautilus libreoffice:libreoffice-writer; do
         id=${pair%%:*}; launcher=${pair#*:}
-        touch "$PREFIX/share/applications/$launcher.desktop" "$HOME/Desktop/$launcher.desktop"
+        printf '[Desktop Entry]\nExec=prun-gui "%s" -- %s\n' "$launcher" "$launcher" > "$PREFIX/share/applications/$launcher.desktop"
+        cp "$PREFIX/share/applications/$launcher.desktop" "$HOME/Desktop/$launcher.desktop"
         "app_remove_$id"
         "app_remove_$id"
         [ ! -e "$PREFIX/share/applications/$launcher.desktop" ]
@@ -291,9 +292,22 @@ _test_retired_app_visibility_depends_on_existing_install() {
     _review_setup
     if app_can_install tor_browser; then return 1; fi
     if app_is_visible tor_browser; then return 1; fi
-    touch "$PREFIX/share/applications/tor.desktop"
+    printf '[Desktop Entry]\nExec=bash -c "prun /opt/tor-browser/Browser/start-tor-browser &"\n' > "$PREFIX/share/applications/tor.desktop"
     app_is_visible tor_browser
     app_can_install notion
+}
+
+_test_existing_unmanaged_wine_is_preserved() {
+    _review_setup
+    printf '#!%s\nexec "$HOME/custom-wine-staging/wine" "$@"\n' "$_REVIEW_BASH" > "$_WINE_DISPATCHER"
+    chmod +x "$_WINE_DISPATCHER"
+    cp -p "$_WINE_DISPATCHER" "$HOME/original-wine"
+    wine_write_dispatcher
+    cmp "$HOME/original-wine" "$_WINE_DISPATCHER"
+    [ ! -e "$_WINE_BOX64_BIN" ]
+    wine_remove_frontend
+    cmp "$HOME/original-wine" "$_WINE_DISPATCHER"
+    [ -x "$_WINE_DISPATCHER" ]
 }
 
 describe 'review — idempotent removal and failure preservation'
@@ -309,6 +323,7 @@ it 'a host Wine dispatcher cannot suppress container installation' _test_wine_ig
 it 'generated proot wrapper invokes the actual container Wine path' _test_wine_wrapper_uses_container_binary
 it 'Wine execution skips login IME hooks, preserves argv and avoids a doomed server' _test_wine_exec_skips_login_hooks_and_preserves_arguments
 it 'source-installed Box64 is cleaned up without a package database entry' _test_wine_removal_deletes_source_box64_without_package_entry
+it 'installing or removing a Wine backend preserves an unmanaged wine command' _test_existing_unmanaged_wine_is_preserved
 describe 'review — session support and retired app visibility'
 it 'wayvnc rejects X11, unknown/KWin sockets and accepts an external Sway session' _test_wayvnc_requires_supported_live_session
 it 'retired apps are shown only while an existing install remains' _test_retired_app_visibility_depends_on_existing_install

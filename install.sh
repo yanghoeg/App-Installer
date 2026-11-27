@@ -3,7 +3,7 @@
 # App Installer — 진입점 + DI 컨테이너
 # =============================================================================
 # 사용법: bash install.sh [wine]
-#   wine  — Wine 탭만 단독 표시 (Windows 프로그램 설치 UI)
+#   wine  — Wine 앱만 표시 (Windows 프로그램 설치 UI)
 # 환경변수: PROOT_DISTRO, PROOT_USER (없으면 config 파일에서 로드)
 
 set -euo pipefail
@@ -107,7 +107,8 @@ _ask_installed_action() {
 }
 
 _category_in_tab() {
-    local category="$1" tab_categories="$2"
+    local category="$1" tab_categories="$2" _c
+    local -a _cats
     IFS=',' read -ra _cats <<< "$tab_categories"
     for _c in "${_cats[@]}"; do
         [ "$_c" = "$category" ] && return 0
@@ -124,72 +125,27 @@ _status_icon() {
 }
 
 # -----------------------------------------------------------------------------
-# yad notebook 탭 GUI
+# yad 검색 목록
 # -----------------------------------------------------------------------------
-_run_yad_notebook() {
-    local _KEY=$$
-    local _title="App Installer"
-    local _subtitle="proot: ${PROOT_DISTRO:-none} · user: ${PROOT_USER:-}"
-
-    if [ -n "$_FILTER" ]; then
-        _run_yad_flat "Wine App Installer" "Windows 프로그램을 선택하세요:"
-        return
-    fi
-
-    local _tab_num=0
-    local _tab_args=()
-    for _group in "${TAB_GROUPS[@]}"; do
-        IFS='|' read -r _tab_label _tab_cats <<< "$_group"
-        _tab_num=$((_tab_num + 1))
-        _tab_args+=(--tab="$_tab_label")
-
-        (
-            local rows=("➡️" "" "앱을 클릭하여 선택" "" "")
-            for _entry in "${APP_REGISTRY[@]}"; do
-                IFS='|' read -r _id _name _category _desc <<< "$_entry"
-                _category_in_tab "$_category" "$_tab_cats" || continue
-                app_is_visible "$_id" || continue
-                rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
-            done
-
-            [ ${#rows[@]} -gt 0 ] && yad --plug=$_KEY --tabnum=$_tab_num --list \
-                --column='  :TEXT' \
-                --column='분류:TEXT' \
-                --column='이름:TEXT' \
-                --column='설명:TEXT' \
-                --column='ID:HD' \
-                --search-column=3 \
-                --print-column=5 \
-                --separator="" \
-                --tooltip-column=4 \
-                --expand-column=4 \
-                "${rows[@]}" 2>/dev/null
-        ) &
-    done
-
-    local result
-    result=$(yad --notebook --key=$_KEY \
-        "${_tab_args[@]}" \
-        --tab-pos=top \
-        --title="$_title" \
-        --text="$_subtitle" \
-        --width=1000 --height=620 --center --borders=8 \
-        --button="설치/제거!gtk-apply:0" \
-        --button="닫기!gtk-cancel:1" \
-        2>/dev/null) || return 1
-
-    echo "$result" | tr -d '| \t' | sed '/^$/d' | head -1
-}
-
 _run_yad_flat() {
-    local _title="$1" _text="$2"
-    local rows=()
+    local _title="App Installer" _text="proot: ${PROOT_DISTRO:-none} · user: ${PROOT_USER:-}"
+    local _group _entry _id _name _category _desc
+    local -a rows=()
 
-    for _entry in "${APP_REGISTRY[@]}"; do
-        IFS='|' read -r _id _name _category _desc <<< "$_entry"
-        [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
-        app_is_visible "$_id" || continue
-        rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+    if [ "$_FILTER" = Wine ]; then
+        _title="Wine App Installer"
+        _text="Windows 프로그램을 선택하세요."
+    fi
+    # One list owns both the selection and the Apply button. A notebook asks
+    # every embedded list to print its selection and requires X11.
+    for _group in "${TAB_GROUPS[@]}"; do
+        for _entry in "${APP_REGISTRY[@]}"; do
+            IFS='|' read -r _id _name _category _desc <<< "$_entry"
+            [ -n "$_FILTER" ] && [ "$_category" != "$_FILTER" ] && continue
+            _category_in_tab "$_category" "${_group#*|}" || continue
+            app_is_visible "$_id" || continue
+            rows+=("$(_status_icon "$_id")" "$_category" "$_name" "$_desc" "$_id")
+        done
     done
 
     yad --list \
@@ -237,12 +193,17 @@ _run_zenity() {
 # -----------------------------------------------------------------------------
 while true; do
     if [ "$UI" = yad ]; then
-        chosen_id=$(_run_yad_notebook) || exit 0
+        chosen_id=$(_run_yad_flat) || exit 0
     else
         chosen_id=$(_run_zenity) || exit 0
     fi
 
     [ -z "$chosen_id" ] && continue
+    if ! [[ "$chosen_id" =~ ^[a-z0-9_]+$ ]] ||
+       ! declare -F "app_install_$chosen_id" >/dev/null; then
+        _notify error "오류" "앱을 하나 선택하세요."
+        continue
+    fi
 
     if app_is_installed "$chosen_id"; then
         # 업그레이드 지원 앱은 제거/업그레이드 선택, 그 외는 바로 제거

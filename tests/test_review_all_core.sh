@@ -214,6 +214,19 @@ _test_all_codex_unknown_helper_hash_is_rejected() {
     _all_codex_original
 }
 
+_test_codex_download_failure_preserves_tur() {
+    _all_core_setup
+    source "$_ALL_CORE_APP/domain/installers/codex.sh"
+    printf '#!%s\nprintf tur-codex\n' "$BASH" > "$CODEX_BIN_PATH"
+    chmod +x "$CODEX_BIN_PATH"
+    termux_pkg_install() { :; }
+    termux_pkg_is_installed() { [ "$1" = codex ]; }
+    termux_pkg_remove() { rm -f "$CODEX_BIN_PATH"; }
+    fetch_verified() { return 42; }
+    if app_install_codex; then return 1; fi
+    assert_eq tur-codex "$("$CODEX_BIN_PATH")"
+}
+
 _all_miniforge_setup() {
     _all_core_setup
     export PROOT_DISTRO=ubuntu PROOT_USER=testuser PROOT_ROOTFS_BASE="$_ALL_CORE_SB/rootfs"
@@ -299,6 +312,7 @@ it 'Codex helper publication failure restores binaries and manifest' _test_all_c
 it 'Codex manifest publication failure restores binaries and manifest' _test_all_codex_manifest_publication_failure
 it 'Codex repairs executable stale helpers and missing helpers' _test_all_codex_corrupted_helper_is_repaired
 it 'Codex refuses helper downloads without a pinned hash' _test_all_codex_unknown_helper_hash_is_rejected
+it 'a failed Codex download leaves the installed TUR command usable' _test_codex_download_failure_preserves_tur
 it 'Miniforge repairs partial prefixes and skips healthy installs' _test_all_miniforge_incomplete_prefix_recovers
 it 'Miniforge restores a partial prefix after installer failure and allows retry' _test_all_miniforge_failed_install_preserves_prefix
 it 'Miniforge preserves an existing prefix when downloading fails' _test_all_miniforge_failed_download_preserves_prefix

@@ -224,7 +224,8 @@ it 'retired Tor is hidden when absent and CLI rejects new installation' _test_cl
 _test_cli_existing_retired_app_can_be_removed() {
     local sb; sb=$(make_sandbox); _cli_setup "$sb"
     export PROOT_DISTRO=""
-    touch "$PREFIX/share/applications/tor.desktop" "$HOME/Desktop/tor.desktop"
+    printf '[Desktop Entry]\nExec=bash -c "prun /opt/tor-browser/Browser/start-tor-browser &"\n' > "$PREFIX/share/applications/tor.desktop"
+    cp "$PREFIX/share/applications/tor.desktop" "$HOME/Desktop/tor.desktop"
     _cli list 브라우저 > "$sb/list.log"
     assert_file_contains "$sb/list.log" '^tor_browser[[:space:]]'
     _cli status tor_browser > "$sb/status.log"
@@ -241,6 +242,40 @@ _test_cli_existing_retired_app_can_be_removed() {
     cleanup_sandbox "$sb"
 }
 it 'existing retired Tor remains visible and native-only CLI removes its leftovers' _test_cli_existing_retired_app_can_be_removed
+
+_test_yad_selects_one_app_on_wayland() {
+    local sb; sb=$(make_sandbox); _cli_setup "$sb"
+    export WAYLAND_DISPLAY=wayland-test PROOT_DISTRO=''
+    unset DISPLAY
+    {
+        printf '#!%s\n' "$_CLI_BASH"
+        cat <<'STUB'
+case "$1" in
+    --plug*|--notebook) printf 'wrong-dialog\n' >> "$TEST_TRACE"; exit 4 ;;
+    --list)
+        count=0
+        [ ! -f "$HOME/dialog-count" ] || read -r count < "$HOME/dialog-count"
+        printf '%s\n' "$((count + 1))" > "$HOME/dialog-count"
+        case "$count" in
+            0) printf 'vlc\nthunderbird\n' ;;
+            1) printf 'vlc\n' ;;
+            *) exit 1 ;;
+        esac ;;
+    --error) printf 'rejected-output\n' >> "$TEST_TRACE" ;;
+    --info) : ;;
+    *) exit 4 ;;
+esac
+STUB
+    } > "$sb/bin/yad"
+    chmod +x "$sb/bin/yad"
+    "$_CLI_BASH" "$APP_DIR/install.sh" > "$sb/gui.log" 2>&1
+    assert_file_contains "$TEST_TRACE" '^rejected-output$'
+    if grep -Eq '^wrong-dialog$|^pkg install .*thunderbird' "$TEST_TRACE"; then return 1; fi
+    assert_file_exists "$PREFIX/share/applications/vlc.desktop"
+    assert_eq 1 "$(grep -c '^pkg install .*vlc' "$TEST_TRACE")"
+    cleanup_sandbox "$sb"
+}
+it 'the Wayland GUI uses one YAD list and dispatches only one valid selection' _test_yad_selects_one_app_on_wayland
 
 _test_cli_failed_remove_keeps_launchers() {
     local sb; sb=$(make_sandbox); _cli_setup "$sb"

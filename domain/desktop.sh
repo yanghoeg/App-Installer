@@ -13,19 +13,102 @@ _desktop_exec_quote() {
     printf '"%s"' "$arg"
 }
 
+_desktop_proot_exec_prefix() {
+    case "${PROOT_DISTRO:-}" in ubuntu|archlinux) ;; *) return 1 ;; esac
+    [[ "${PROOT_USER:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || return 1
+    printf 'env PRUN_DISTRO=%s PRUN_USER=%s ' "$PROOT_DISTRO" "$PROOT_USER"
+}
+
+_desktop_proot_legacy_target() {
+    local file="$1" config="$HOME/.config/termux-xfce/config" distro user
+    grep -Eq '^Exec=(prun(-gui)? |bash -c "prun(-gui)? )' "$file" 2>/dev/null || return 1
+    # Old launchers followed the saved default. Do not claim one when an
+    # App Installer invocation explicitly selected a different container.
+    [ -f "$config" ] || return 0
+    distro=$(grep -m1 '^PROOT_DISTRO=' "$config" | cut -d= -f2- | tr -d "\"'" || true)
+    user=$(grep -m1 '^PROOT_USER=' "$config" | cut -d= -f2- | tr -d "\"'" || true)
+    [ "$distro" = "${PROOT_DISTRO:-}" ] && { [ -z "$user" ] || [ "$user" = "${PROOT_USER:-}" ]; }
+}
+
+_desktop_proot_matches() {
+    local file="$1" command_prefix="$2"
+    [ -f "$file" ] || return 1
+    if [ -n "$command_prefix" ] &&
+       grep -Eq "^Exec=${command_prefix}(prun(-gui)? |bash -c \"prun(-gui)? )" "$file" 2>/dev/null; then
+        return 0
+    fi
+    _desktop_proot_legacy_target "$file"
+}
+
+# The callers run in a subshell, which releases fd 9 after publication.
+_desktop_lock_proot_menu() {
+    command -v flock >/dev/null 2>&1 || return 0
+    mkdir -p "$PREFIX/share/applications" || return 1
+    exec 9>"$PREFIX/share/applications/.proot-menu.lock" || return 1
+    flock 9
+}
+
+_desktop_proot_lookup_id() {
+    local id="$1" dir="$PREFIX/share/applications" command_prefix suffix
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    if [ -n "$command_prefix" ]; then
+        suffix="${id}--${PROOT_DISTRO}--${PROOT_USER}"
+        if _desktop_proot_matches "$dir/$suffix.desktop" "$command_prefix"; then
+            printf '%s\n' "$suffix"
+            return 0
+        fi
+    fi
+    _desktop_proot_matches "$dir/$id.desktop" "$command_prefix" || return 1
+    printf '%s\n' "$id"
+}
+
+_desktop_proot_create_id() {
+    local id="$1" existing candidate file command_prefix occupied
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    existing=$(_desktop_proot_lookup_id "$id") || existing="$id"
+    local -a candidates=("$existing")
+    if [ -n "$command_prefix" ] && [ "$existing" = "$id" ]; then
+        candidates+=("${id}--${PROOT_DISTRO}--${PROOT_USER}")
+    fi
+    for candidate in "${candidates[@]}"; do
+        occupied=false
+        for file in "$PREFIX/share/applications/$candidate.desktop" "$HOME/Desktop/$candidate.desktop"; do
+            if { [ -e "$file" ] || [ -L "$file" ]; } && ! _desktop_proot_matches "$file" "$command_prefix"; then
+                occupied=true
+                break
+            fi
+        done
+        if [ "$occupied" = false ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # The command is already in Desktop Entry Exec syntax. Avoid bash -c so field
 # codes and quoted arguments keep their meaning and no shell is involved.
-desktop_register_proot() {
+desktop_register_proot() (
     local app_id="$1" name="$2" cmd="$3"
+    local command_prefix
     shift 3
-    desktop_register "$app_id" "$name" "prun-gui $(_desktop_exec_quote "${name//%/%%}") -- $cmd" "$@"
-}
+    _desktop_lock_proot_menu || return 1
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    app_id=$(_desktop_proot_create_id "$app_id") || return 1
+    desktop_register "$app_id" "$name" "${command_prefix}prun-gui $(_desktop_exec_quote "${name//%/%%}") -- $cmd" "$@"
+)
 
 # Unwrap only the shell form emitted by older installers. Never evaluate it.
 _desktop_proot_exec() {
-    local cmd="$1" quoted="$2" body label_pattern
+    local cmd="$1" quoted="$2" command_prefix="$3" body label_pattern
     case "$cmd" in
-        prun-gui\ *) printf '%s' "$cmd"; return 0 ;;
+        env\ PRUN_DISTRO=*\ PRUN_USER=*\ *)
+            # A same-file import may already have an explicit target.
+            [ -z "$command_prefix" ] || [[ "$cmd" == "$command_prefix"* ]] || return 1
+            printf '%s' "$cmd"
+            return 0
+            ;;
+        prun-gui\ *) printf '%s%s' "$command_prefix" "$cmd"; return 0 ;;
         prun\ *) cmd="${cmd#prun }" ;;
         'bash -c "prun '*)
             body="${cmd#bash -c \"}"
@@ -56,12 +139,12 @@ _desktop_proot_exec() {
             ;;
     esac
     [ -n "$cmd" ] || return 1
-    printf 'prun-gui %s -- %s' "$quoted" "$cmd"
+    printf '%sprun-gui %s -- %s' "$command_prefix" "$quoted" "$cmd"
 }
 
 # $2: name used in warnings (defaults to the file; imports pass their source).
 desktop_rewrite_for_proot() {
-    local file="$1" label="${2:-$1}" name=App line content='' quoted cmd stage target
+    local file="$1" label="${2:-$1}" command_prefix="${3:-}" name=App line content='' quoted cmd
     [ -f "$file" ] && [ -r "$file" ] || return 1
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in Name=*) name="${line#Name=}"; break ;; esac
@@ -71,7 +154,7 @@ desktop_rewrite_for_proot() {
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
             Exec=*)
-                cmd=$(_desktop_proot_exec "${line#Exec=}" "$quoted") || {
+                cmd=$(_desktop_proot_exec "${line#Exec=}" "$quoted" "$command_prefix") || {
                     echo "[WARN] 안전하게 변환할 수 없는 proot 런처: $label" >&2
                     return 1
                 }
@@ -82,15 +165,24 @@ desktop_rewrite_for_proot() {
         esac
         content+="$line"$'\n'
     done < "$file" || return 1
+    _desktop_replace "$file" "$content"
+}
+
+_desktop_replace() {
+    local file="$1" content="$2" stage target trusted
     # An unchanged launcher keeps its inode, links and Xfce trust checksum.
     printf '%s' "$content" | cmp -s - "$file" && return 0
     # Replace the link target so a linked desktop icon stays a link.
     target=$(readlink -f -- "$file") || return 1
     stage=$(mktemp "${target}.XXXXXX") || return 1
+    trusted=$(gio info -a metadata::trusted "$file" 2>/dev/null) || trusted=''
     if ! cp -p -- "$target" "$stage" || ! printf '%s' "$content" > "$stage" ||
        ! mv -f -- "$stage" "$target"; then
         rm -f -- "$stage"
         return 1
+    fi
+    if [[ "$trusted" == *'metadata::trusted: true'* ]]; then
+        gio set "$file" metadata::trusted true 2>/dev/null || true
     fi
 }
 
@@ -98,11 +190,25 @@ desktop_rewrite_for_proot() {
 # prun-gui, in any form, is left as it is: rewriting it would change the
 # checksum behind its Xfce trust mark.
 desktop_migrate_proot_launcher() {
-    local file="$1" line legacy=false
+    local file="$1" command_prefix="${2:-}" line content='' legacy=false
     [ -f "$file" ] && [ -r "$file" ] || return 1
+    if [ -n "$command_prefix" ]; then
+        # Keep existing Exec quoting and Desktop Actions while binding the
+        # launchers that depended on the old default.
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                Exec=prun\ *|Exec=prun-gui\ *|'Exec=bash -c "prun '*|'Exec=bash -c "prun-gui '*)
+                    line="Exec=${command_prefix}${line#Exec=}"
+                    legacy=true ;;
+            esac
+            content+="$line"$'\n'
+        done < "$file"
+        [ "$legacy" = false ] || _desktop_replace "$file" "$content"
+        return $?
+    fi
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
-            Exec=*prun-gui*) return 0 ;;
+            Exec=env\ PRUN_DISTRO=*|Exec=*prun-gui*) return 0 ;;
             Exec=prun\ *|'Exec=bash -c "prun '*) legacy=true ;;
         esac
     done < "$file" || return 1
@@ -141,7 +247,7 @@ desktop_resolve_proot_source() {
 
 # Stage the entire import so failed reads, copies or rewrites preserve the menu.
 desktop_import_proot() {
-    local file="$1" rootfs="$2" destination="$3" source stage
+    local file="$1" rootfs="$2" destination="$3" source stage command_prefix
     case "$file" in
         "$rootfs"/*) source=$(desktop_resolve_proot_source "$file" "$rootfs") || return 1 ;;
         *) source="$file" ;;
@@ -149,12 +255,20 @@ desktop_import_proot() {
     [ -f "$source" ] && [ -r "$source" ] || return 1
     mkdir -p -- "${destination%/*}" || return 1
     stage=$(mktemp "${destination%/*}/.desktop-import.XXXXXX") || return 1
-    if ! cp -p -- "$source" "$stage" || ! desktop_rewrite_for_proot "$stage" "$file" ||
-       ! mv -f -- "$stage" "$destination"; then
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    if ! cp -p -- "$source" "$stage" || ! desktop_rewrite_for_proot "$stage" "$file" "$command_prefix" ||
+       ! mv -fT -- "$stage" "$destination"; then
         rm -f -- "$stage"
         return 1
     fi
 }
+
+desktop_import_proot_into_menu() (
+    local file="$1" rootfs="$2" id="${1##*/}"
+    _desktop_lock_proot_menu || return 1
+    id=$(_desktop_proot_create_id "${id%.desktop}") || return 1
+    desktop_import_proot "$file" "$rootfs" "$PREFIX/share/applications/$id.desktop"
+)
 
 # .desktop 파일 등록 (Termux apps 메뉴 + Desktop)
 # $1=app_id  $2=name  $3=exec_cmd  $4=icon  $5=categories  [$6=extra_fields]
@@ -231,15 +345,14 @@ desktop_copy_from_proot() {
     local rootfs
     rootfs=$(_proot_rootfs) || return 1
     [ -n "$rootfs" ] && [ -d "$rootfs" ] || return 1
-    local desktop fname copied=0
+    local desktop copied=0
 
     mkdir -p "${PREFIX}/share/applications" || return 1
     for desktop in "${rootfs}/usr/share/applications"/${app_prefix}*.desktop; do
         [ -e "$desktop" ] || [ -L "$desktop" ] || continue
-        fname="${desktop##*/}"
         # Skip an entry that cannot be imported (a dangling link, an empty Exec)
         # rather than stopping with the menu half imported.
-        if desktop_import_proot "$desktop" "$rootfs" "${PREFIX}/share/applications/${fname}"; then
+        if desktop_import_proot_into_menu "$desktop" "$rootfs"; then
             copied=$((copied + 1))
         else
             echo "[WARN] 메뉴로 가져오지 못한 항목을 건너뜁니다: ${desktop#"$rootfs"}" >&2
@@ -268,4 +381,41 @@ desktop_remove_prefix() {
 desktop_is_registered() {
     local app_id="$1"
     [ -e "${PREFIX}/share/applications/${app_id}.desktop" ]
+}
+
+desktop_is_registered_proot() {
+    _desktop_proot_lookup_id "$1" >/dev/null
+}
+
+desktop_remove_proot() (
+    local command_prefix file id
+    _desktop_lock_proot_menu || return 1
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    local -a ids=("$1")
+    if [ -n "$command_prefix" ]; then ids+=("$1--${PROOT_DISTRO}--${PROOT_USER}"); fi
+    for id in "${ids[@]}"; do
+        for file in "$HOME/Desktop/$id.desktop" "$PREFIX/share/applications/$id.desktop"; do
+            _desktop_proot_matches "$file" "$command_prefix" || continue
+            rm -f -- "$file" || return 1
+        done
+    done
+)
+
+desktop_remove_proot_prefix() (
+    local file command_prefix
+    _desktop_lock_proot_menu || return 1
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    for file in "$HOME/Desktop/$1"*.desktop "$PREFIX/share/applications/$1"*.desktop; do
+        _desktop_proot_matches "$file" "$command_prefix" || continue
+        rm -f -- "$file" || return 1
+    done
+)
+
+desktop_is_registered_proot_prefix() {
+    local file command_prefix
+    command_prefix=$(_desktop_proot_exec_prefix) || command_prefix=''
+    for file in "$PREFIX/share/applications/$1"*.desktop; do
+        if _desktop_proot_matches "$file" "$command_prefix"; then return 0; fi
+    done
+    return 1
 }

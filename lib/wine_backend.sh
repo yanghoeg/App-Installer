@@ -356,18 +356,36 @@ ENVEOF
 }
 
 # $PREFIX/bin/wine — 활성 백엔드로 위임하는 디스패처
+_wine_dispatcher_managed() {
+    [ -f "$_WINE_DISPATCHER" ] && [ ! -L "$_WINE_DISPATCHER" ] &&
+        grep -Fxq '# termux-xfce-wine-dispatcher' "$_WINE_DISPATCHER"
+}
+
+wine_remove_frontend() {
+    if _wine_dispatcher_managed; then rm -f -- "$_WINE_DISPATCHER" || return 1; fi
+    rm -f -- "$_WINE_BACKEND_CLI" "$_WINE_BACKEND_CONF"
+}
+
 wine_write_dispatcher() {
+    local stage
     mkdir -p "${PREFIX}/bin" || return 1
 
-    # 마이그레이션: 백엔드 분리 이전 설치는 $PREFIX/bin/wine 자체가 box64 래퍼였다.
-    # 디스패처로 덮어쓰기 전에 wine-box64로 옮겨 보존한다.
-    # (wine-staging 문자열로 우리 래퍼임을 확인 — 다른 패키지의 wine은 건드리지 않는다)
-    if [ -f "$_WINE_DISPATCHER" ] && [ ! -e "$_WINE_BOX64_BIN" ] \
-       && grep -q 'wine-staging' "$_WINE_DISPATCHER" 2>/dev/null; then
-        mv "$_WINE_DISPATCHER" "$_WINE_BOX64_BIN" && chmod +x "$_WINE_BOX64_BIN"
+    if { [ -e "$_WINE_DISPATCHER" ] || [ -L "$_WINE_DISPATCHER" ]; } &&
+       ! _wine_dispatcher_managed; then
+        if [ -f "$_WINE_DISPATCHER" ] && [ ! -L "$_WINE_DISPATCHER" ] &&
+           grep -Fxq -e 'exec grun "$HOME/.wine-staging/bin/wine64" "$@"' \
+               -e '# Wine wrapper — prun을 통해 proot 내 wine-staging 실행' "$_WINE_DISPATCHER"; then
+            if [ ! -e "$_WINE_BOX64_BIN" ] && [ ! -L "$_WINE_BOX64_BIN" ]; then
+                cp -p -- "$_WINE_DISPATCHER" "$_WINE_BOX64_BIN" || return 1
+            fi
+        else
+            echo "[WARN] 기존 wine 명령을 보존합니다. wine-box64 또는 wine-hangover를 사용하세요." >&2
+            return 0
+        fi
     fi
 
-    cat > "$_WINE_DISPATCHER" << 'DISPEOF'
+    stage=$(mktemp "$_WINE_DISPATCHER.XXXXXX") || return 1
+    if ! cat > "$stage" << 'DISPEOF'
 #!/data/data/com.termux/files/usr/bin/bash
 # termux-xfce-wine-dispatcher
 # Wine 디스패처 — 활성 백엔드로 위임한다.
@@ -397,7 +415,14 @@ fi
 
 exec "$PREFIX/bin/wine-$_b" "$@"
 DISPEOF
-    chmod +x "$_WINE_DISPATCHER"
+    then
+        rm -f -- "$stage"
+        return 1
+    fi
+    if ! chmod 755 "$stage" || ! mv -fT -- "$stage" "$_WINE_DISPATCHER"; then
+        rm -f -- "$stage"
+        return 1
+    fi
 }
 
 # $PREFIX/bin/wine-backend — 사용자용 전환 CLI

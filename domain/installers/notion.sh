@@ -13,9 +13,8 @@ app_install_notion() {
 app_upgrade_notion() { app_install_notion; }
 
 app_remove_notion() {
-    if has_proot_distro; then
-        proot_exec rm -rf notion || return 1
-    fi
+    # Current installs own only this launcher. Older installations used a
+    # generic directory name that cannot identify who owns its contents.
     desktop_remove "notion"
 }
 

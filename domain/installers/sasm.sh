@@ -33,9 +33,9 @@ app_remove_sasm() {
         esac
         if [ -f "$bashrc" ]; then sed -i '/alias sasm=/d' "$bashrc" || return 1; fi
     fi
-    desktop_remove "sasm"
+    desktop_remove_proot "sasm"
 }
 
 app_is_installed_sasm() {
-    desktop_is_registered "sasm"
+    desktop_is_registered_proot "sasm"
 }

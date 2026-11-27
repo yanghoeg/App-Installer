@@ -402,7 +402,7 @@ _wine_remove_launchers() {
     if [ -x "$_WINE_HANGOVER_BIN" ]; then
         wine_backend_set hangover
     else
-        rm -f "$_WINE_DISPATCHER" "$_WINE_BACKEND_CLI" "$_WINE_BACKEND_CONF"
+        wine_remove_frontend
     fi
 }
 

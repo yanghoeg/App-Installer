@@ -15,9 +15,9 @@ app_remove_nautilus() {
     if has_proot_distro; then
         proot_pkg_purge nautilus || return 1
     fi
-    desktop_remove "nautilus"
+    desktop_remove_proot "nautilus"
 }
 
 app_is_installed_nautilus() {
-    desktop_is_registered "nautilus"
+    desktop_is_registered_proot "nautilus"
 }

@@ -15,9 +15,9 @@ app_remove_libreoffice() {
         proot_pkg_remove_libreoffice || return 1
         proot_pkg_autoremove || return 1
     fi
-    desktop_remove_prefix "libreoffice"
+    desktop_remove_proot_prefix "libreoffice"
 }
 
 app_is_installed_libreoffice() {
-    desktop_is_registered "libreoffice-base"
+    desktop_is_registered_proot_prefix "libreoffice"
 }
